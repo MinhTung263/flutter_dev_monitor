@@ -1,3 +1,8 @@
+## 1.0.1
+
+* Add complete README with setup guide and API reference.
+* Add example app demonstrating all features.
+
 ## 1.0.0
 
 * Initial release.
