@@ -1,0 +1,20 @@
+name: flutter_dev_monitor_example
+description: Example app for flutter_dev_monitor package.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_dev_monitor:
+    path: ../
+  dio: ^5.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
