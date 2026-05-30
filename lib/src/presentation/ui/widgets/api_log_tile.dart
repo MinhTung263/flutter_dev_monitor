@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../model/monitor_model.dart';
+import '../../../domain/api_log_item.dart';
 import '../theme/monitor_theme.dart';
 
 class ApiLogTile extends StatefulWidget {
