@@ -8,8 +8,9 @@ void main() {
 
 // ── Dio setup ────────────────────────────────────────────────────────────────
 
+// 1. Add the interceptor to capture all API calls.
 final dio = Dio(BaseOptions(baseUrl: 'https://jsonplaceholder.typicode.com'))
-  ..interceptors.add(MonitorInterceptor());
+  ..interceptors.add(DevMonitor.interceptor);
 
 // ── App root ─────────────────────────────────────────────────────────────────
 
@@ -21,12 +22,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Monitor Example',
       debugShowCheckedModeBanner: false,
-      // 1. Register the navigator observer to track screen transitions.
-      navigatorObservers: [MonitorNavigatorObserver()],
-      home: FpsOverlay(
-        // 2. Wrap your root widget with FpsOverlay to show the floating HUD.
-        child: const HomeScreen(),
-      ),
+      // 2. These two params are all you need — no FpsOverlay wrapper required.
+      navigatorObservers: [DevMonitor.observer],
+      builder: DevMonitor.appBuilder,
+      home: const HomeScreen(),
     );
   }
 }

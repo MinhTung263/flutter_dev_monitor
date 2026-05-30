@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 import '../widgets/api_log_tile.dart';
-import '../../model/monitor_model.dart';
+import '../../../domain/api_log_item.dart';
 import '../widgets/fps_chart.dart';
 import '../widgets/hardware_grid.dart';
 import '../widgets/metrics_bar.dart';

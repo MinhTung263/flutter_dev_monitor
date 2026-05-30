@@ -26,36 +26,25 @@ dependencies:
 ### 1. Add the Dio interceptor
 
 ```dart
-final dio = Dio()..interceptors.add(MonitorInterceptor());
+final dio = Dio()..interceptors.add(DevMonitor.interceptor);
 ```
 
 All requests made through this `Dio` instance are automatically captured.
 
-### 2. Register the navigator observer
+### 2. Configure `MaterialApp`
 
 ```dart
 MaterialApp(
-  navigatorObservers: [MonitorNavigatorObserver()],
-  home: ...,
+  navigatorObservers: [DevMonitor.observer],
+  builder: DevMonitor.appBuilder,
+  home: const HomeScreen(),
 )
 ```
 
-This tracks which screen is active so API logs are grouped by route.
+- `DevMonitor.observer` tracks the active route so API logs are grouped by screen.
+- `DevMonitor.appBuilder` injects the draggable FPS/RAM overlay automatically — no need to wrap `home` with `FpsOverlay`.
 
-### 3. Wrap your root widget with `FpsOverlay`
-
-```dart
-MaterialApp(
-  navigatorObservers: [MonitorNavigatorObserver()],
-  home: FpsOverlay(
-    child: const HomeScreen(),
-  ),
-)
-```
-
-A draggable HUD appears on screen showing real-time FPS and memory.
-
-### 4. Open the dashboard
+### 3. Open the dashboard
 
 Navigate to `MonitorDashboardPage` from anywhere — a button in your AppBar works well:
 
@@ -82,7 +71,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dev_monitor/flutter_dev_monitor.dart';
 
 final dio = Dio(BaseOptions(baseUrl: 'https://jsonplaceholder.typicode.com'))
-  ..interceptors.add(MonitorInterceptor());
+  ..interceptors.add(DevMonitor.interceptor);
 
 void main() => runApp(const MyApp());
 
@@ -92,8 +81,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorObservers: [MonitorNavigatorObserver()],
-      home: FpsOverlay(child: const HomeScreen()),
+      navigatorObservers: [DevMonitor.observer],
+      builder: DevMonitor.appBuilder,
+      home: const HomeScreen(),
     );
   }
 }
@@ -164,13 +154,14 @@ final monitorProvider = ChangeNotifierProvider((_) => MonitorController.instance
 
 ## API reference
 
-| Class | Description |
+| Class / Member | Description |
 |---|---|
-| `MonitorInterceptor` | Dio interceptor — add to your `Dio` instance |
-| `MonitorNavigatorObserver` | Navigator observer — pass to `MaterialApp.navigatorObservers` |
-| `FpsOverlay` | Wraps your widget tree; shows the draggable HUD |
+| `DevMonitor.interceptor` | Singleton `MonitorInterceptor` — add to your `Dio` instance |
+| `DevMonitor.observer` | Singleton `MonitorNavigatorObserver` — pass to `navigatorObservers` |
+| `DevMonitor.appBuilder` | `TransitionBuilder` — pass to `MaterialApp.builder` to inject the overlay |
 | `MonitorDashboardPage` | Full dashboard — push as a named route |
 | `MonitorController` | Singleton `ChangeNotifier` with all observable state |
+| `FpsOverlay` | Low-level overlay widget — use `DevMonitor.appBuilder` instead |
 
 ### `FpsOverlay` parameters
 

@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 
-import '../controller/monitor_controller.dart';
-import '../model/monitor_model.dart';
-import '../navigation/monitor_navigator_observer.dart';
+import '../presentation/controller/monitor_controller.dart';
+import '../domain/api_log_item.dart';
+import '../presentation/navigation/monitor_navigator_observer.dart';
 
 class MonitorInterceptor extends Interceptor {
   @override
