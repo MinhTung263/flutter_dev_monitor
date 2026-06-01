@@ -34,6 +34,8 @@ class MonitorMetricsBar extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               _ErrorPill(count: screenErrorCount),
+              const SizedBox(width: 8),
+              _JankPill(count: ctrl.jankFrameCount),
             ],
           ),
         );
@@ -66,9 +68,9 @@ class _PhasePill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.07),
+          color: color.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Row(
           children: [
@@ -128,15 +130,55 @@ class _ErrorPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('ERRORS',
+              style: TextStyle(
+                  color: color.withValues(alpha: 0.7),
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.4)),
+          const SizedBox(height: 3),
+          Text('$count',
+              style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace')),
+        ],
+      ),
+    );
+  }
+}
+
+class _JankPill extends StatelessWidget {
+  final int count;
+  const _JankPill({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasJank = count > 0;
+    final color =
+        hasJank ? MonitorColors.statusSlow : MonitorColors.secondaryText;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('JANK',
               style: TextStyle(
                   color: color.withValues(alpha: 0.7),
                   fontSize: 8,

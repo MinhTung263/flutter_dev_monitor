@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart';
 import '../../core/monitor_constants.dart';
 import '../../data/hardware_datasource.dart';
 import '../../domain/api_log_item.dart';
+import '../../domain/error_log_item.dart';
 import '../navigation/monitor_navigator_observer.dart';
 import 'api_log_controller.dart';
+import 'error_log_controller.dart';
 import 'fps_controller.dart';
 import 'hardware_controller.dart';
 
@@ -24,6 +26,7 @@ class MonitorController extends ChangeNotifier {
   final _apiLog = ApiLogController();
   final _fps = FpsController();
   final _hardware = HardwareController();
+  final _errorLog = ErrorLogController();
   final _datasource = HardwareDatasource();
 
   Timer? _hardwareTimer;
@@ -52,10 +55,16 @@ class MonitorController extends ChangeNotifier {
   double get currentFps => _fps.currentFps;
   double get currentBuildMs => _fps.currentBuildMs;
   double get currentGpuMs => _fps.currentGpuMs;
+  int get jankFrameCount => _fps.jankFrameCount;
   Map<String, List<double>> get fpsHistoryMap => _fps.fpsHistoryMap;
   List<double> get overlayFpsHistory => _fps.overlayFpsHistory;
   List<double> get overlayGpuHistory => _fps.overlayGpuHistory;
   List<double> get overlayBuildHistory => _fps.overlayBuildHistory;
+
+  // ── Expose error log state ────────────────────────────────────────────
+
+  List<ErrorLogItem> get errorLogs => _errorLog.errors;
+  int get flutterErrorCount => _errorLog.count;
 
   // ── Expose hardware state ─────────────────────────────────────────────
 
@@ -71,6 +80,30 @@ class MonitorController extends ChangeNotifier {
   void _init() {
     _loadDeviceModel();
     _startHardwareMonitoring();
+    _hookFlutterErrors();
+  }
+
+  void _hookFlutterErrors() {
+    final originalOnError = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      _errorLog.addError(
+        details.exceptionAsString(),
+        details.stack?.toString() ?? '',
+        ErrorLogItem.typeFlutter,
+      );
+      notifyListeners();
+      originalOnError?.call(details);
+    };
+
+    PlatformDispatcher.instance.onError = (error, stack) {
+      _errorLog.addError(
+        error.toString(),
+        stack.toString(),
+        ErrorLogItem.typeDart,
+      );
+      notifyListeners();
+      return false;
+    };
   }
 
   @override
@@ -123,6 +156,7 @@ class MonitorController extends ChangeNotifier {
     _apiLog.clearAll();
     _fps.clearAll();
     _hardware.clearAll();
+    _errorLog.clearAll();
     notifyListeners();
   }
 
@@ -148,6 +182,8 @@ class MonitorController extends ChangeNotifier {
   void addOverlaySamples(double fps, double gpuMs, double buildMs) {
     _fps.addOverlaySamples(fps, gpuMs, buildMs);
   }
+
+  void recordJankFrame() => _fps.recordJankFrame();
 
   void addFpsSample(String screenName, double fps) {
     if (screenName.isEmpty || screenName == MonitorConstants.unknownRoute) return;

@@ -1,41 +1,82 @@
 import 'package:flutter/material.dart';
 
 abstract class MonitorColors {
-  static const Color pageBackground = Color(0xFFF4F6F9);
-  static const Color surface = Colors.white;
-  static const Color expandedDetailBg = Color(0xFFF8FAFC);
-  static const Color metricsBarBg = Color(0xFFEBF0F5);
-  static const Color dropdownBg = Color(0xFFF0F2F5);
-  static const Color border = Color(0xFFE2E8F0);
+  static final ValueNotifier<bool> isDarkNotifier = ValueNotifier<bool>(true);
 
-  static const Color primaryText = Color(0xFF1A1D23);
-  static const Color secondaryText = Color(0xFF64748B);
+  static bool get isDark => isDarkNotifier.value;
+  static set isDark(bool v) => isDarkNotifier.value = v;
 
-  static const Color statusSuccess = Color(0xFF2E7D32);
-  static const Color statusError = Color(0xFFD32F2F);
-  static const Color statusSlow = Color(0xFFE65100);
+  // ── Backgrounds ───────────────────────────────────────────────────────
+  static Color get pageBackground =>
+      isDark ? const Color(0xFF0D1117) : const Color(0xFFF4F6F9);
+  static Color get surface => isDark ? const Color(0xFF161B22) : Colors.white;
+  static Color get expandedDetailBg =>
+      isDark ? const Color(0xFF1C2128) : const Color(0xFFF8FAFC);
+  static Color get metricsBarBg =>
+      isDark ? const Color(0xFF0D1117) : const Color(0xFFEBF0F5);
+  static Color get dropdownBg =>
+      isDark ? const Color(0xFF21262D) : const Color(0xFFF0F2F5);
+  static Color get border =>
+      isDark ? const Color(0xFF30363D) : const Color(0xFFE2E8F0);
+  // Subtle separator lines (thinner visual weight than border)
+  static Color get divider =>
+      isDark ? const Color(0xFF30363D) : const Color(0xFFF1F4F9);
 
-  static const Color initPhase = Color(0xFFE65100);
-  static const Color refreshPhase = Color(0xFF00796B);
+  // ── Text ─────────────────────────────────────────────────────────────
+  static Color get primaryText =>
+      isDark ? const Color(0xFFE6EDF3) : const Color(0xFF1A1D23);
+  static Color get secondaryText =>
+      isDark ? const Color(0xFF7D8590) : const Color(0xFF64748B);
 
-  static const Color methodGet = Color(0xFF1976D2);
-  static const Color methodPost = Color(0xFF388E3C);
+  // ── Status ───────────────────────────────────────────────────────────
+  static Color get statusSuccess =>
+      isDark ? const Color(0xFF3FB950) : const Color(0xFF2E7D32);
+  static Color get statusError =>
+      isDark ? const Color(0xFFF85149) : const Color(0xFFD32F2F);
+  static Color get statusSlow =>
+      isDark ? const Color(0xFFD29922) : const Color(0xFFE65100);
 
-  static const Color metricTotal = Color(0xFF0288D1);
-  static const Color metricInit = Color(0xFFE65100);
-  static const Color metricRefresh = Color(0xFF00796B);
+  // ── Phase ─────────────────────────────────────────────────────────────
+  static Color get initPhase =>
+      isDark ? const Color(0xFFD29922) : const Color(0xFFE65100);
+  static Color get refreshPhase =>
+      isDark ? const Color(0xFF3FB950) : const Color(0xFF00796B);
 
-  static const Color orderBadgeBg = Color(0xFFE2E8F0);
-  static const Color orderBadgeText = Color(0xFF64748B);
+  // ── Methods ───────────────────────────────────────────────────────────
+  static Color get methodGet =>
+      isDark ? const Color(0xFF58A6FF) : const Color(0xFF1976D2);
+  static Color get methodPost =>
+      isDark ? const Color(0xFF3FB950) : const Color(0xFF388E3C);
 
-  static const Color callerName = Color(0xFF7B61FF);
+  // ── Metrics ───────────────────────────────────────────────────────────
+  static Color get metricTotal =>
+      isDark ? const Color(0xFF58A6FF) : const Color(0xFF0288D1);
+  static Color get metricInit =>
+      isDark ? const Color(0xFFD29922) : const Color(0xFFE65100);
+  static Color get metricRefresh =>
+      isDark ? const Color(0xFF3FB950) : const Color(0xFF00796B);
 
-  static const Color slowBannerBg = Color(0xFFFFF3E0);
-  static const Color slowBannerBorder = Color(0xFFFFB74D);
+  // ── Badges ────────────────────────────────────────────────────────────
+  static Color get orderBadgeBg =>
+      isDark ? const Color(0xFF21262D) : const Color(0xFFE2E8F0);
+  static Color get orderBadgeText =>
+      isDark ? const Color(0xFF7D8590) : const Color(0xFF64748B);
+  static Color get callerName =>
+      isDark ? const Color(0xFFA5D6FF) : const Color(0xFF7B61FF);
 
-  static const Color fpsLine = Color(0xFF0EA5E9);
-  static const Color fpsDot = Color(0xFFEF4444);
+  // ── Slow banner ───────────────────────────────────────────────────────
+  static Color get slowBannerBg =>
+      isDark ? const Color(0xFF2D1F00) : const Color(0xFFFFF3E0);
+  static Color get slowBannerBorder =>
+      isDark ? const Color(0xFFD29922) : const Color(0xFFFFB74D);
 
+  // ── Charts ────────────────────────────────────────────────────────────
+  static Color get fpsLine =>
+      isDark ? const Color(0xFF58A6FF) : const Color(0xFF0EA5E9);
+  static Color get fpsDot =>
+      isDark ? const Color(0xFFF85149) : const Color(0xFFEF4444);
+
+  // ── Overlay (floating HUD — always dark) ─────────────────────────────
   static const Color overlayBg = Color(0xEE0A0A0A);
   static const Color overlayPanelBg = Color(0xFF0D0D0D);
   static const Color overlayButtonBg = Color(0xFF1A1A1A);

@@ -2,6 +2,7 @@ class FpsController {
   double currentFps = 0.0;
   double currentBuildMs = 0.0;
   double currentGpuMs = 0.0;
+  int jankFrameCount = 0;
 
   Map<String, List<double>> fpsHistoryMap = {};
   final List<double> overlayFpsHistory = [];
@@ -39,6 +40,10 @@ class FpsController {
     currentGpuMs = gpuMs;
   }
 
+  void recordJankFrame() {
+    jankFrameCount++;
+  }
+
   void clearOverlayHistory() {
     overlayFpsHistory.clear();
     overlayGpuHistory.clear();
@@ -49,6 +54,7 @@ class FpsController {
 
   void clearAll() {
     fpsHistoryMap = {};
+    jankFrameCount = 0;
     clearOverlayHistory();
   }
 }

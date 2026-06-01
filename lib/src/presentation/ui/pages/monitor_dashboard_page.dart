@@ -4,9 +4,11 @@ import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 import '../widgets/api_log_tile.dart';
 import '../../../domain/api_log_item.dart';
+import '../../../domain/error_log_item.dart';
 import '../widgets/fps_chart.dart';
 import '../widgets/hardware_grid.dart';
 import '../widgets/metrics_bar.dart';
+import '../widgets/ram_chart.dart';
 
 class MonitorDashboardPage extends StatefulWidget {
   final String initialScreen;
@@ -19,6 +21,9 @@ class MonitorDashboardPage extends StatefulWidget {
 class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   late String _selectedScreen;
   bool _chartExpanded = true;
+  bool _ramChartExpanded = false;
+  bool _showErrors = false;
+  String _filterMode = 'ALL';
 
   MonitorController get _ctrl => MonitorController.instance;
 
@@ -43,75 +48,162 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   }
 
   void _onScreenChanged(String screen) {
-    setState(() => _selectedScreen = screen);
+    setState(() {
+      _selectedScreen = screen;
+      _filterMode = 'ALL';
+    });
     _ctrl.updateDashboardView(screen);
+  }
+
+  List<ApiLogItem> _applyFilter(List<ApiLogItem> logs) {
+    switch (_filterMode) {
+      case 'SLOW':
+        return logs.where((l) => l.isSlow).toList();
+      case 'ERR':
+        return logs.where((l) => !l.isSuccess).toList();
+      case 'GET':
+        return logs.where((l) => l.method == 'GET').toList();
+      case 'POST':
+        return logs.where((l) => l.method == 'POST').toList();
+      default:
+        return logs;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final logs = _ctrl.apiLogs;
-    final errorCount = logs.where((l) => !l.isSuccess).length;
-    final screens = List<String>.from(_ctrl.fpsHistoryMap.keys);
-    if (!screens.contains(_selectedScreen) && _selectedScreen.isNotEmpty) {
-      screens.add(_selectedScreen);
-    }
+    return ValueListenableBuilder<bool>(
+      valueListenable: MonitorColors.isDarkNotifier,
+      builder: (context, _, __) => _buildPage(context),
+    );
+  }
+
+  Widget _buildPage(BuildContext context) {
+    final allLogs = _ctrl.apiLogs;
+    final filteredLogs = _applyFilter(allLogs);
+    final errorCount = allLogs.where((l) => !l.isSuccess).length;
+    final flutterErrors = _ctrl.errorLogs;
 
     return Scaffold(
       backgroundColor: MonitorColors.pageBackground,
-      appBar: _buildAppBar(),
+      appBar: _buildAppBar(context),
       body: Column(
         children: [
           _DashboardHeader(
             screen: _selectedScreen,
-            screens: screens,
-            chartData: List<double>.from(
-                _ctrl.fpsHistoryMap[_selectedScreen] ?? []),
+            chartData:
+                List<double>.from(_ctrl.fpsHistoryMap[_selectedScreen] ?? []),
             chartExpanded: _chartExpanded,
             onChartToggle: () =>
                 setState(() => _chartExpanded = !_chartExpanded),
-            onScreenChanged: _onScreenChanged,
+            ramChartData:
+                List<double>.from(_ctrl.ramHistoryMap[_selectedScreen] ?? []),
+            ramChartExpanded: _ramChartExpanded,
+            onRamChartToggle: () =>
+                setState(() => _ramChartExpanded = !_ramChartExpanded),
+            totalRam: _ctrl.totalRam,
           ),
           MonitorMetricsBar(screenErrorCount: errorCount),
-          _LogSectionHeader(screen: _selectedScreen, count: logs.length),
+          _LogTabHeader(
+            screen: _selectedScreen,
+            apiCount: allLogs.length,
+            flutterErrorCount: flutterErrors.length,
+            showErrors: _showErrors,
+            onToggle: (v) => setState(() {
+              _showErrors = v;
+              _filterMode = 'ALL';
+            }),
+          ),
+          if (!_showErrors)
+            _FilterBar(
+              allLogs: allLogs,
+              activeFilter: _filterMode,
+              onChanged: (v) => setState(() => _filterMode = v),
+            ),
           Expanded(
-            child: logs.isEmpty
-                ? const _EmptyState()
-                : _GroupedLogList(logs: logs),
+            child: _showErrors
+                ? (flutterErrors.isEmpty
+                    ? const _EmptyErrorState()
+                    : _ErrorList(errors: flutterErrors))
+                : (filteredLogs.isEmpty
+                    ? const _EmptyState()
+                    : _GroupedLogList(logs: filteredLogs)),
           ),
         ],
       ),
     );
   }
 
-  AppBar _buildAppBar() {
+  void _openScreenPicker(BuildContext context) {
+    final screens = List<String>.from(_ctrl.fpsHistoryMap.keys);
+    if (!screens.contains(_selectedScreen) && _selectedScreen.isNotEmpty) {
+      screens.add(_selectedScreen);
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ScreenPickerSheet(
+        screens: screens,
+        selected: _selectedScreen,
+        onSelected: (s) {
+          _onScreenChanged(s);
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+
+  AppBar _buildAppBar(BuildContext context) {
     return AppBar(
-      title: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.monitor_heart_outlined,
-              size: 15, color: MonitorColors.fpsLine),
-          SizedBox(width: 8),
-          Text('IN-APP MONITOR',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.8,
-                  color: MonitorColors.primaryText)),
-        ],
+      title: GestureDetector(
+        onTap: () => _openScreenPicker(context),
+        behavior: HitTestBehavior.opaque,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: 8,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(
+                _selectedScreen,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
+                    color: MonitorColors.primaryText),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(Icons.keyboard_arrow_down_rounded,
+                color: MonitorColors.secondaryText),
+          ],
+        ),
       ),
       centerTitle: true,
       backgroundColor: MonitorColors.surface,
       elevation: 0,
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
-      iconTheme: const IconThemeData(color: MonitorColors.secondaryText),
+      iconTheme: IconThemeData(color: MonitorColors.secondaryText),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
-        child: Container(color: MonitorColors.border, height: 1),
+        child: Container(height: 1, color: MonitorColors.divider),
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.restart_alt,
+          icon: Icon(
+            MonitorColors.isDark
+                ? Icons.light_mode_outlined
+                : Icons.dark_mode_outlined,
+            color: MonitorColors.secondaryText,
+            size: 20,
+          ),
+          onPressed: () => MonitorColors.isDark = !MonitorColors.isDark,
+        ),
+        IconButton(
+          icon: Icon(Icons.restart_alt,
               color: MonitorColors.statusError, size: 22),
           onPressed: () {
             _ctrl.clearAll();
@@ -124,23 +216,27 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   }
 }
 
-// ─── Dashboard header ─────────────────────────────────────────────────────
+// ─── Dashboard header ─────────────────────────────────────────────────────────
 
 class _DashboardHeader extends StatelessWidget {
   final String screen;
-  final List<String> screens;
   final List<double> chartData;
   final bool chartExpanded;
   final VoidCallback onChartToggle;
-  final ValueChanged<String> onScreenChanged;
+  final List<double> ramChartData;
+  final bool ramChartExpanded;
+  final VoidCallback onRamChartToggle;
+  final double totalRam;
 
   const _DashboardHeader({
     required this.screen,
-    required this.screens,
     required this.chartData,
     required this.chartExpanded,
     required this.onChartToggle,
-    required this.onScreenChanged,
+    required this.ramChartData,
+    required this.ramChartExpanded,
+    required this.onRamChartToggle,
+    required this.totalRam,
   });
 
   @override
@@ -150,14 +246,11 @@ class _DashboardHeader extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _ScreenSelectorRow(
-              screen: screen,
-              screens: screens,
-              onScreenChanged: onScreenChanged),
-          _HBorder(),
           MonitorHardwareGrid(currentScreen: screen),
           _HBorder(),
           _ChartHeader(
+            label: 'FPS HISTORY',
+            iconColor: MonitorColors.fpsLine,
             sampleCount: chartData.length,
             expanded: chartExpanded,
             onToggle: onChartToggle,
@@ -168,6 +261,19 @@ class _DashboardHeader extends StatelessWidget {
               child: FpsChartWidget(history: chartData),
             ),
           _HBorder(),
+          _ChartHeader(
+            label: 'RAM HISTORY',
+            iconColor: const Color(0xFFF472B6),
+            sampleCount: ramChartData.length,
+            expanded: ramChartExpanded,
+            onToggle: onRamChartToggle,
+          ),
+          if (ramChartExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: RamChartWidget(history: ramChartData, totalRam: totalRam),
+            ),
+          _HBorder(),
         ],
       ),
     );
@@ -175,14 +281,19 @@ class _DashboardHeader extends StatelessWidget {
 }
 
 class _ChartHeader extends StatelessWidget {
+  final String label;
+  final Color iconColor;
   final int sampleCount;
   final bool expanded;
   final VoidCallback onToggle;
 
-  const _ChartHeader(
-      {required this.sampleCount,
-      required this.expanded,
-      required this.onToggle});
+  const _ChartHeader({
+    required this.label,
+    required this.iconColor,
+    required this.sampleCount,
+    required this.expanded,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -192,23 +303,37 @@ class _ChartHeader extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            const Icon(Icons.show_chart, size: 13, color: MonitorColors.fpsLine),
-            const SizedBox(width: 6),
-            const Text('FPS HISTORY',
-                style: TextStyle(
-                    color: MonitorColors.secondaryText,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5)),
+            Container(
+              width: 3,
+              height: 14,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                  color: iconColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5),
+            ),
             const Spacer(),
-            Text('$sampleCount samples',
-                style: const TextStyle(
-                    color: MonitorColors.secondaryText,
-                    fontSize: 9,
-                    fontFamily: 'monospace')),
-            const SizedBox(width: 6),
-            Icon(expanded ? Icons.expand_less : Icons.expand_more,
-                color: MonitorColors.secondaryText, size: 16),
+            Text(
+              '$sampleCount samples',
+              style: TextStyle(
+                  color: MonitorColors.secondaryText,
+                  fontSize: 9,
+                  fontFamily: 'monospace'),
+            ),
+            SizedBox(width: 6),
+            Icon(
+              expanded ? Icons.expand_less : Icons.expand_more,
+              color: MonitorColors.secondaryText,
+              size: 16,
+            ),
           ],
         ),
       ),
@@ -217,97 +342,10 @@ class _ChartHeader extends StatelessWidget {
 }
 
 class _HBorder extends StatelessWidget {
-  const _HBorder();
+  _HBorder();
   @override
   Widget build(BuildContext context) =>
-      Container(height: 1, color: MonitorColors.border);
-}
-
-// ─── Screen selector row ─────────────────────────────────────────────────
-
-class _ScreenSelectorRow extends StatelessWidget {
-  final String screen;
-  final List<String> screens;
-  final ValueChanged<String> onScreenChanged;
-
-  const _ScreenSelectorRow({
-    required this.screen,
-    required this.screens,
-    required this.onScreenChanged,
-  });
-
-  void _openPicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _ScreenPickerSheet(
-        screens: screens,
-        selected: screen,
-        onSelected: (s) {
-          onScreenChanged(s);
-          Navigator.of(context).pop();
-        },
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.filter_list_outlined,
-                  size: 12, color: MonitorColors.secondaryText),
-              SizedBox(width: 5),
-              Text('Screen',
-                  style: TextStyle(
-                      color: MonitorColors.secondaryText,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.3)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          InkWell(
-            onTap: () => _openPicker(context),
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: MonitorColors.pageBackground,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: MonitorColors.border),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(screen,
-                        style: const TextStyle(
-                            color: MonitorColors.primaryText,
-                            fontSize: 12,
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.w600),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.unfold_more,
-                      size: 16, color: MonitorColors.secondaryText),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+      Container(height: 1, color: MonitorColors.divider);
 }
 
 class _ScreenPickerSheet extends StatelessWidget {
@@ -324,7 +362,7 @@ class _ScreenPickerSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: MonitorColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -344,22 +382,22 @@ class _ScreenPickerSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Row(
               children: [
-                const Icon(Icons.smartphone_outlined,
+                Icon(Icons.smartphone_outlined,
                     size: 16, color: MonitorColors.secondaryText),
-                const SizedBox(width: 8),
-                const Text('Select screen',
+                SizedBox(width: 8),
+                Text('Select screen',
                     style: TextStyle(
                         color: MonitorColors.primaryText,
                         fontSize: 14,
                         fontWeight: FontWeight.bold)),
                 const Spacer(),
                 Text('${screens.length} screens',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: MonitorColors.secondaryText, fontSize: 11)),
               ],
             ),
           ),
-          Container(height: 1, color: MonitorColors.border),
+          Container(height: 1, color: MonitorColors.divider),
           ConstrainedBox(
             constraints: BoxConstraints(
               maxHeight: MediaQuery.of(context).size.height * 0.45,
@@ -368,7 +406,7 @@ class _ScreenPickerSheet extends StatelessWidget {
               shrinkWrap: true,
               itemCount: screens.length,
               separatorBuilder: (_, __) =>
-                  Container(height: 1, color: MonitorColors.border),
+                  Container(height: 1, color: MonitorColors.divider),
               itemBuilder: (_, i) {
                 final s = screens[i];
                 final isSelected = s == selected;
@@ -376,7 +414,7 @@ class _ScreenPickerSheet extends StatelessWidget {
                   onTap: () => onSelected(s),
                   child: Container(
                     color: isSelected
-                        ? MonitorColors.metricTotal.withValues(alpha: 0.06)
+                        ? MonitorColors.metricTotal.withValues(alpha: 0.08)
                         : null,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
@@ -391,7 +429,7 @@ class _ScreenPickerSheet extends StatelessWidget {
                               ? MonitorColors.metricTotal
                               : MonitorColors.border,
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: 12),
                         Expanded(
                           child: Text(s,
                               style: TextStyle(
@@ -407,7 +445,7 @@ class _ScreenPickerSheet extends StatelessWidget {
                               overflow: TextOverflow.ellipsis),
                         ),
                         if (isSelected)
-                          const Icon(Icons.check,
+                          Icon(Icons.check,
                               size: 16, color: MonitorColors.metricTotal),
                       ],
                     ),
@@ -423,72 +461,174 @@ class _ScreenPickerSheet extends StatelessWidget {
   }
 }
 
-// ─── Log section header ───────────────────────────────────────────────────
+// ─── Log tab header (API / ERRORS toggle) ─────────────────────────────────────
 
-class _LogSectionHeader extends StatelessWidget {
+class _LogTabHeader extends StatelessWidget {
   final String screen;
-  final int count;
-  const _LogSectionHeader({required this.screen, required this.count});
+  final int apiCount;
+  final int flutterErrorCount;
+  final bool showErrors;
+  final ValueChanged<bool> onToggle;
+
+  const _LogTabHeader({
+    required this.screen,
+    required this.apiCount,
+    required this.flutterErrorCount,
+    required this.showErrors,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: MonitorColors.pageBackground,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      child: Row(
+      color: MonitorColors.surface,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.api_outlined,
-              size: 12, color: MonitorColors.secondaryText),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text('API CALLS  ·  $screen',
-                style: const TextStyle(
-                    color: MonitorColors.secondaryText,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.8,
-                    fontFamily: 'monospace'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-          ),
-          if (count > 0)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: MonitorColors.metricTotal.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text('$count',
-                  style: const TextStyle(
-                      color: MonitorColors.metricTotal,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _TabButton(
+                  label: 'API',
+                  count: apiCount,
+                  icon: Icons.api_outlined,
+                  active: !showErrors,
+                  activeColor: MonitorColors.metricTotal,
+                  onTap: () => onToggle(false),
+                ),
+                _TabButton(
+                  label: 'ERRORS',
+                  count: flutterErrorCount,
+                  icon: Icons.bug_report_outlined,
+                  active: showErrors,
+                  activeColor: MonitorColors.statusError,
+                  onTap: () => onToggle(true),
+                ),
+                const Spacer(),
+                Text(
+                  screen,
+                  style: TextStyle(
+                      color: MonitorColors.secondaryText,
                       fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace')),
+                      fontFamily: 'monospace'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
+          ),
+          Container(height: 1, color: MonitorColors.divider),
         ],
       ),
     );
   }
 }
 
-// ─── Empty state ─────────────────────────────────────────────────────────
+class _TabButton extends StatelessWidget {
+  final String label;
+  final int count;
+  final IconData icon;
+  final bool active;
+  final Color activeColor;
+  final VoidCallback onTap;
+
+  const _TabButton({
+    required this.label,
+    required this.count,
+    required this.icon,
+    required this.active,
+    required this.activeColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? activeColor : MonitorColors.secondaryText;
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 11, color: color),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: active ? FontWeight.bold : FontWeight.w500,
+                      letterSpacing: 0.3),
+                ),
+                if (count > 0) ...[
+                  const SizedBox(width: 5),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color:
+                          activeColor.withValues(alpha: active ? 0.18 : 0.07),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                          color: active
+                              ? activeColor
+                              : MonitorColors.secondaryText,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Container(
+            height: 2,
+            color: active ? activeColor : Colors.transparent,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Empty states ─────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.api_outlined, size: 36, color: MonitorColors.border),
-          SizedBox(height: 10),
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: MonitorColors.border.withValues(alpha: 0.5),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.api_outlined,
+                size: 26, color: MonitorColors.secondaryText),
+          ),
+          SizedBox(height: 12),
           Text('No API calls yet',
-              style:
-                  TextStyle(color: MonitorColors.secondaryText, fontSize: 12)),
-          SizedBox(height: 3),
+              style: TextStyle(
+                  color: MonitorColors.secondaryText,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
+          SizedBox(height: 4),
           Text('on this screen',
               style: TextStyle(color: MonitorColors.border, fontSize: 11)),
         ],
@@ -497,18 +637,20 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ─── Grouped log list ────────────────────────────────────────────────────
+// ─── Grouped log list ─────────────────────────────────────────────────────────
 
 class _HeaderData {
   final String phase;
   final int refreshCycle;
   final int callCount;
   final int totalDuration;
+  final int totalBytes;
   const _HeaderData({
     required this.phase,
     required this.refreshCycle,
     required this.callCount,
     required this.totalDuration,
+    required this.totalBytes,
   });
 }
 
@@ -524,13 +666,14 @@ class _GroupedLogList extends StatelessWidget {
       final key = '${log.phase}_${log.refreshCycle}';
       if (key != prevKey) {
         prevKey = key;
-        final groupLogs =
-            logs.where((l) => l.phase == log.phase && l.refreshCycle == log.refreshCycle);
+        final groupLogs = logs.where(
+            (l) => l.phase == log.phase && l.refreshCycle == log.refreshCycle);
         items.add(_HeaderData(
           phase: log.phase,
           refreshCycle: log.refreshCycle,
           callCount: groupLogs.fold(0, (s, l) => s + l.callCount),
           totalDuration: groupLogs.fold(0, (s, l) => s + l.duration),
+          totalBytes: groupLogs.fold(0, (s, l) => s + l.responseBytes),
         ));
       }
       items.add(log);
@@ -554,21 +697,365 @@ class _GroupedLogList extends StatelessWidget {
   }
 }
 
+// ─── Filter bar ──────────────────────────────────────────────────────────────
+
+class _FilterBar extends StatelessWidget {
+  final List<ApiLogItem> allLogs;
+  final String activeFilter;
+  final ValueChanged<String> onChanged;
+
+  const _FilterBar({
+    required this.allLogs,
+    required this.activeFilter,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final slowCount = allLogs.where((l) => l.isSlow).length;
+    final errCount = allLogs.where((l) => !l.isSuccess).length;
+    final getCount = allLogs.where((l) => l.method == 'GET').length;
+    final postCount = allLogs.where((l) => l.method == 'POST').length;
+
+    return Container(
+      color: MonitorColors.pageBackground,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _FilterChip(
+              label: 'ALL',
+              count: allLogs.length,
+              active: activeFilter == 'ALL',
+              color: MonitorColors.metricTotal,
+              onTap: () => onChanged('ALL'),
+            ),
+            if (slowCount > 0) ...[
+              SizedBox(width: 6),
+              _FilterChip(
+                label: 'SLOW',
+                count: slowCount,
+                active: activeFilter == 'SLOW',
+                color: MonitorColors.statusSlow,
+                onTap: () => onChanged('SLOW'),
+              ),
+            ],
+            if (errCount > 0) ...[
+              SizedBox(width: 6),
+              _FilterChip(
+                label: 'ERR',
+                count: errCount,
+                active: activeFilter == 'ERR',
+                color: MonitorColors.statusError,
+                onTap: () => onChanged('ERR'),
+              ),
+            ],
+            if (getCount > 0) ...[
+              SizedBox(width: 6),
+              _FilterChip(
+                label: 'GET',
+                count: getCount,
+                active: activeFilter == 'GET',
+                color: MonitorColors.methodGet,
+                onTap: () => onChanged('GET'),
+              ),
+            ],
+            if (postCount > 0) ...[
+              SizedBox(width: 6),
+              _FilterChip(
+                label: 'POST',
+                count: postCount,
+                active: activeFilter == 'POST',
+                color: MonitorColors.methodPost,
+                onTap: () => onChanged('POST'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool active;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.count,
+    required this.active,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? color.withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color:
+                active ? color.withValues(alpha: 0.55) : MonitorColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                  color: active ? color : MonitorColors.secondaryText,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.3),
+            ),
+            SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: (active ? color : MonitorColors.secondaryText)
+                    .withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                    color: active ? color : MonitorColors.secondaryText,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Error list ───────────────────────────────────────────────────────────────
+
+class _EmptyErrorState extends StatelessWidget {
+  const _EmptyErrorState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: MonitorColors.border.withValues(alpha: 0.5),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.bug_report_outlined,
+                size: 26, color: MonitorColors.secondaryText),
+          ),
+          SizedBox(height: 12),
+          Text('No Flutter errors',
+              style: TextStyle(
+                  color: MonitorColors.secondaryText,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
+          SizedBox(height: 4),
+          Text('caught yet',
+              style: TextStyle(color: MonitorColors.border, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorList extends StatelessWidget {
+  final List<ErrorLogItem> errors;
+  const _ErrorList({required this.errors});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+      itemCount: errors.length,
+      itemBuilder: (_, i) => _ErrorLogTile(error: errors[i]),
+    );
+  }
+}
+
+class _ErrorLogTile extends StatefulWidget {
+  final ErrorLogItem error;
+  const _ErrorLogTile({required this.error});
+
+  @override
+  State<_ErrorLogTile> createState() => _ErrorLogTileState();
+}
+
+class _ErrorLogTileState extends State<_ErrorLogTile> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.error;
+    final ts = e.timestamp;
+    final timeStr =
+        '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
+    final isFlutter = e.type == ErrorLogItem.typeFlutter;
+    final typeColor =
+        isFlutter ? MonitorColors.statusSlow : MonitorColors.statusError;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: MonitorColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: MonitorColors.statusError.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: MonitorColors.orderBadgeBg,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text('#${e.id}',
+                            style: TextStyle(
+                                color: MonitorColors.orderBadgeText,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'monospace')),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: typeColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(3),
+                          border: Border.all(
+                              color: typeColor.withValues(alpha: 0.30),
+                              width: 0.5),
+                        ),
+                        child: Text(e.type,
+                            style: TextStyle(
+                                color: typeColor,
+                                fontSize: 7,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3)),
+                      ),
+                      const Spacer(),
+                      Text(timeStr,
+                          style: TextStyle(
+                              color: MonitorColors.secondaryText,
+                              fontSize: 10,
+                              fontFamily: 'monospace')),
+                      SizedBox(width: 8),
+                      Icon(_expanded ? Icons.expand_less : Icons.expand_more,
+                          color: MonitorColors.secondaryText, size: 16),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    e.message,
+                    style: TextStyle(
+                        color: MonitorColors.statusError,
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w500,
+                        height: 1.4),
+                    maxLines: _expanded ? null : 2,
+                    overflow: _expanded
+                        ? TextOverflow.visible
+                        : TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded && e.stackTrace.isNotEmpty) ...[
+            Container(height: 1, color: MonitorColors.divider),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: MonitorColors.expandedDetailBg,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(8),
+                  bottomRight: Radius.circular(8),
+                ),
+              ),
+              child: SelectionArea(
+                child: Text(
+                  e.stackTrace.split('\n').take(20).join('\n'),
+                  style: TextStyle(
+                      color: MonitorColors.secondaryText,
+                      fontSize: 9.5,
+                      fontFamily: 'monospace',
+                      height: 1.5),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _SectionHeader extends StatelessWidget {
   final _HeaderData data;
   const _SectionHeader({required this.data});
 
+  static String _fmtBytes(int bytes) {
+    if (bytes <= 0) return '';
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)}MB';
+  }
+
+  String _sectionSummary(_HeaderData d) {
+    final size = _fmtBytes(d.totalBytes);
+    final parts = ['${d.callCount} calls'];
+    if (size.isNotEmpty) parts.add(size);
+    parts.add('${d.totalDuration}ms');
+    return parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final isRefresh = data.phase == ApiLogItem.phaseRefresh;
-    final color = isRefresh ? MonitorColors.metricRefresh : MonitorColors.metricInit;
+    final color =
+        isRefresh ? MonitorColors.metricRefresh : MonitorColors.metricInit;
     final label = isRefresh ? 'ACTION #${data.refreshCycle}' : 'INIT';
 
     return Container(
       margin: const EdgeInsets.only(top: 8, bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(6),
         border: Border(left: BorderSide(color: color, width: 3)),
       ),
@@ -586,9 +1073,9 @@ class _SectionHeader extends StatelessWidget {
           ),
           const Spacer(),
           Text(
-            '${data.callCount} calls · ${data.totalDuration}ms',
+            _sectionSummary(data),
             style: TextStyle(
-              color: color.withValues(alpha: 0.75),
+              color: color.withValues(alpha: 0.70),
               fontSize: 9,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w600,

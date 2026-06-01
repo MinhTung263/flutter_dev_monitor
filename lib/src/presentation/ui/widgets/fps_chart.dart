@@ -57,7 +57,7 @@ class _FpsChartWidgetState extends State<FpsChartWidget> {
           children: [
             _FpsStatCard(
                 label: 'Avg', value: avgVal.toStringAsFixed(1), color: MonitorColors.fpsLine),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             _FpsStatCard(
               label: 'Min',
               value: minVal.toStringAsFixed(1),
@@ -65,12 +65,12 @@ class _FpsChartWidgetState extends State<FpsChartWidget> {
                   ? MonitorColors.statusError
                   : MonitorColors.secondaryText,
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             _FpsStatCard(
                 label: 'Max', value: maxVal.toStringAsFixed(1), color: MonitorColors.statusSuccess),
           ],
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         Container(
           height: 120,
           width: double.infinity,
@@ -98,7 +98,7 @@ class _FpsChartWidgetState extends State<FpsChartWidget> {
                     padding: const EdgeInsets.only(right: 44, left: 8, top: 10, bottom: 6),
                     child: CustomPaint(
                       size: Size(overflows ? dataWidth : available, 104),
-                      painter: _FpsChartPainter(history: h, maxFps: maxFpsCeil, stepX: stepX),
+                      painter: _FpsChartPainter(history: h, maxFps: maxFpsCeil, stepX: stepX, isDark: MonitorColors.isDark),
                     ),
                   ),
                   _FpsYAxis(maxFpsCeil: maxFpsCeil),
@@ -125,14 +125,14 @@ class _FpsStatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: MonitorColors.border),
         ),
         child: Row(
           children: [
             Text(label,
-                style: const TextStyle(
+                style: TextStyle(
                     color: MonitorColors.secondaryText,
                     fontSize: 9,
                     fontWeight: FontWeight.w500)),
@@ -176,7 +176,7 @@ class _FpsYAxis extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: labels
               .map((v) => Text('$v',
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: MonitorColors.secondaryText,
                       fontSize: 8,
                       fontWeight: FontWeight.bold,
@@ -192,8 +192,14 @@ class _FpsChartPainter extends CustomPainter {
   final List<double> history;
   final double maxFps;
   final double stepX;
+  final bool isDark;
 
-  const _FpsChartPainter({required this.history, required this.maxFps, required this.stepX});
+  const _FpsChartPainter({
+    required this.history,
+    required this.maxFps,
+    required this.stepX,
+    required this.isDark,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -264,6 +270,7 @@ class _FpsChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _FpsChartPainter old) =>
+      old.isDark != isDark ||
       old.history.length != history.length ||
       old.maxFps != maxFps ||
       (history.isNotEmpty &&

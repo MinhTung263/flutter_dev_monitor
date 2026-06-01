@@ -15,7 +15,11 @@ class MonitorInterceptor extends Interceptor {
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    _sendToMonitor(response.requestOptions, response.statusCode ?? 200);
+    _sendToMonitor(
+      response.requestOptions,
+      response.statusCode ?? 200,
+      responseBytes: _estimateBytes(response),
+    );
     super.onResponse(response, handler);
   }
 
@@ -25,7 +29,8 @@ class MonitorInterceptor extends Interceptor {
     super.onError(err, handler);
   }
 
-  void _sendToMonitor(RequestOptions options, int statusCode) {
+  void _sendToMonitor(RequestOptions options, int statusCode,
+      {int responseBytes = 0}) {
     final startTime = options.extra['request_time'] as int? ??
         DateTime.now().millisecondsSinceEpoch;
     final callerName = options.extra['caller_name'] as String? ?? 'unknown';
@@ -36,10 +41,20 @@ class MonitorInterceptor extends Interceptor {
       method: options.method,
       statusCode: statusCode,
       duration: DateTime.now().millisecondsSinceEpoch - startTime,
+      responseBytes: responseBytes,
       screen: MonitorNavigatorObserver.currentRoute,
       timestamp: DateTime.now(),
       callerName: callerName,
     ));
+  }
+
+  int _estimateBytes(Response response) {
+    final contentLength =
+        int.tryParse(response.headers.value('content-length') ?? '') ?? 0;
+    if (contentLength > 0) return contentLength;
+    final data = response.data;
+    if (data is String) return data.length;
+    return 0;
   }
 
   String _extractCallerName(String trace) {

@@ -87,15 +87,15 @@ class _CollapsedRow extends StatelessWidget {
                 _MethodBadge(method: log.method),
                 const Spacer(),
                 _DurationLabel(duration: log.duration, isSlow: log.isSlow, color: statusColor),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Icon(expanded ? Icons.expand_less : Icons.expand_more,
                     color: MonitorColors.secondaryText, size: 16),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             SelectionArea(
               child: Text(log.url,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: MonitorColors.primaryText,
                       fontSize: 11.5,
                       fontFamily: 'monospace',
@@ -103,7 +103,7 @@ class _CollapsedRow extends StatelessWidget {
                       height: 1.3)),
             ),
             if (log.hasCallerName) ...[
-              const SizedBox(height: 4),
+              SizedBox(height: 4),
               _CallerRow(callerName: log.callerName, color: MonitorColors.secondaryText),
             ],
           ],
@@ -134,7 +134,7 @@ class _ExpandedDetail extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (log.isSlow) _SlowBanner(duration: log.duration),
-              const Text('EXECUTION TIMELINE',
+              Text('EXECUTION TIMELINE',
                   style: TextStyle(
                       color: MonitorColors.secondaryText,
                       fontSize: 9,
@@ -156,12 +156,14 @@ class _ExpandedDetail extends StatelessWidget {
               ),
               _TimelineStep(
                 title: 'Payload Response',
-                subtitle: 'HTTP ${log.statusCode} — Data synchronized.',
+                subtitle: log.hasResponseSize
+                    ? 'HTTP ${log.statusCode} — ${log.responseSizeFormatted}'
+                    : 'HTTP ${log.statusCode} — Data synchronized.',
                 timeStr: 'Done',
                 isLast: true,
                 color: log.isSuccess ? MonitorColors.statusSuccess : MonitorColors.statusError,
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Container(color: MonitorColors.border, height: 1),
               const SizedBox(height: 6),
               _LogFooter(log: log),
@@ -184,7 +186,7 @@ class _OrderBadge extends StatelessWidget {
       decoration: BoxDecoration(
           color: MonitorColors.orderBadgeBg, borderRadius: BorderRadius.circular(4)),
       child: Text('#$order',
-          style: const TextStyle(
+          style: TextStyle(
               color: MonitorColors.orderBadgeText,
               fontSize: 9,
               fontWeight: FontWeight.bold,
@@ -246,7 +248,7 @@ class _DurationLabel extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 fontFamily: 'monospace')),
         if (isSlow)
-          const Text('⚠ SLOW',
+          Text('⚠ SLOW',
               style: TextStyle(
                   color: MonitorColors.statusSlow, fontSize: 7, fontWeight: FontWeight.bold)),
       ],
@@ -319,12 +321,12 @@ class _SlowBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: MonitorColors.statusSlow, size: 16),
-          const SizedBox(width: 8),
+          Icon(Icons.warning_amber_rounded, color: MonitorColors.statusSlow, size: 16),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               'Warning: Operation took ${(duration / 1000).toStringAsFixed(2)}s — risk of UI jank.',
-              style: const TextStyle(
+              style: TextStyle(
                   color: MonitorColors.statusSlow, fontSize: 10, fontWeight: FontWeight.w500),
             ),
           ),
@@ -375,19 +377,19 @@ class _TimelineStep extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: MonitorColors.primaryText,
                       fontSize: 11,
                       fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text(subtitle,
-                  style: const TextStyle(color: MonitorColors.secondaryText, fontSize: 10)),
+                  style: TextStyle(color: MonitorColors.secondaryText, fontSize: 10)),
               const SizedBox(height: 4),
             ],
           ),
         ),
         Text(timeStr,
-            style: const TextStyle(
+            style: TextStyle(
                 color: MonitorColors.secondaryText,
                 fontSize: 10.5,
                 fontFamily: 'monospace',
@@ -407,22 +409,22 @@ class _LogFooter extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('${log.screen}  ·  ${log.phase}',
-            style: const TextStyle(
+            style: TextStyle(
                 color: MonitorColors.secondaryText,
                 fontSize: 10,
                 fontFamily: 'monospace'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis),
         if (log.hasCallerName) ...[
-          const SizedBox(height: 3),
+          SizedBox(height: 3),
           Row(
             children: [
-              const Icon(Icons.call_made, size: 10, color: MonitorColors.callerName),
-              const SizedBox(width: 4),
+              Icon(Icons.call_made, size: 10, color: MonitorColors.callerName),
+              SizedBox(width: 4),
               Expanded(
                 child: SelectionArea(
                   child: Text(log.callerName,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: MonitorColors.callerName,
                           fontSize: 10,
                           fontFamily: 'monospace',

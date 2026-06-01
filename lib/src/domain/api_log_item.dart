@@ -7,6 +7,7 @@ class ApiLogItem {
   final String method;
   final int statusCode;
   final int duration;
+  final int responseBytes;
   final String screen;
   final DateTime timestamp;
   final String callerName;
@@ -23,6 +24,7 @@ class ApiLogItem {
     required this.duration,
     required this.screen,
     required this.timestamp,
+    this.responseBytes = 0,
     this.callerName = 'unknown',
     this.phase = phaseInit,
     this.callCount = 1,
@@ -34,11 +36,22 @@ class ApiLogItem {
   bool get isRefresh => phase == phaseRefresh;
   bool get hasCallerName => callerName.isNotEmpty && callerName != 'unknown';
   bool get hasMultipleCalls => callCount > 1;
+  bool get hasResponseSize => responseBytes > 0;
+
+  String get responseSizeFormatted {
+    if (responseBytes <= 0) return '';
+    if (responseBytes < 1024) return '${responseBytes}B';
+    if (responseBytes < 1024 * 1024) {
+      return '${(responseBytes / 1024).toStringAsFixed(1)}KB';
+    }
+    return '${(responseBytes / (1024 * 1024)).toStringAsFixed(2)}MB';
+  }
 
   ApiLogItem copyWith({
     int? orderNumber,
     int? statusCode,
     int? duration,
+    int? responseBytes,
     int? callCount,
     String? phase,
     int? refreshCycle,
@@ -49,6 +62,7 @@ class ApiLogItem {
       method: method,
       statusCode: statusCode ?? this.statusCode,
       duration: duration ?? this.duration,
+      responseBytes: responseBytes ?? this.responseBytes,
       screen: screen,
       timestamp: timestamp,
       callerName: callerName,

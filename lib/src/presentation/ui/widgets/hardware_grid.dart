@@ -102,7 +102,7 @@ class _HardwareStat extends StatelessWidget {
                     letterSpacing: 0.5)),
             const Spacer(),
             Text(value,
-                style: const TextStyle(
+                style: TextStyle(
                     color: MonitorColors.primaryText,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,

@@ -4,6 +4,7 @@ import 'dart:ui' show FramePhase;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../../core/monitor_constants.dart';
 import '../../controller/monitor_controller.dart';
 import '../../navigation/monitor_navigator_observer.dart';
 import '../pages/monitor_dashboard_page.dart';
@@ -105,10 +106,16 @@ class _FpsOverlayState extends State<FpsOverlay>
     for (final t in timings) {
       _vsyncHistory.add(Duration(
           microseconds: t.timestampInMicroseconds(FramePhase.buildStart)));
-      final buildMs = t.buildDuration.inMicroseconds / 1000.0;
+      final buildUs = t.buildDuration.inMicroseconds;
+      final rasterUs = t.rasterDuration.inMicroseconds;
+      // Count frames that exceed 16.67ms budget (60fps threshold)
+      if (buildUs + rasterUs > 16667) {
+        _ctrl.recordJankFrame();
+      }
+      final buildMs = buildUs / 1000.0;
       if (buildMs >= 0.5) {
         _buildAccumMs += buildMs;
-        _gpuAccumMs += t.rasterDuration.inMicroseconds / 1000.0;
+        _gpuAccumMs += rasterUs / 1000.0;
         _timingBatchCount++;
       }
     }
@@ -257,6 +264,7 @@ class _PillBadge extends StatelessWidget {
           final fps = ctrl.currentFps;
           final memMb = ctrl.currentRam;
           final apiCount = ctrl.currentPhaseApiCount;
+          final jankCount = ctrl.jankFrameCount;
           final jank = fps < 50 && fps > 0;
           final fpsColor =
               jank ? MonitorColors.overlayAlert : MonitorColors.overlayFps;
@@ -303,6 +311,16 @@ class _PillBadge extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                             fontFamily: 'monospace',
                             height: 1.1)),
+                    if (jankCount > 0) ...[
+                      const SizedBox(width: 5),
+                      Text('⚡$jankCount',
+                          style: const TextStyle(
+                              color: MonitorColors.overlayGpu,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'monospace',
+                              height: 1.1)),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 3),
@@ -501,11 +519,14 @@ class _DetailsPanel extends StatelessWidget {
                       icon: Icons.close,
                       iconColor: Colors.white.withValues(alpha: 0.80)),
                   const SizedBox(height: 10),
-                  _ActionButton(
-                      onTap: onOpenDashboard,
-                      icon: Icons.fullscreen_exit_rounded,
-                      iconColor: Colors.white.withValues(alpha: 0.80)),
-                  const SizedBox(height: 10),
+                  if (MonitorNavigatorObserver.currentRoute !=
+                      MonitorConstants.dashboardRoute) ...[
+                    _ActionButton(
+                        onTap: onOpenDashboard,
+                        icon: Icons.fullscreen_exit_rounded,
+                        iconColor: Colors.white.withValues(alpha: 0.80)),
+                    const SizedBox(height: 10),
+                  ],
                   _ActionButton(
                       onTap: onClear,
                       icon: Icons.cleaning_services,
