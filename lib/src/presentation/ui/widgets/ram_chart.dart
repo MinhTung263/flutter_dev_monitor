@@ -21,17 +21,27 @@ class RamChartWidget extends StatelessWidget {
         height: 60,
         alignment: Alignment.center,
         child: Text('No RAM data for this screen',
-            style: TextStyle(
-                color: MonitorColors.secondaryText, fontSize: 11)),
+            style: TextStyle(color: MonitorColors.secondaryText, fontSize: 11)),
       );
     }
 
     final maxVal = history.reduce((a, b) => a > b ? a : b);
     final minVal = history.reduce((a, b) => a < b ? a : b);
     final avgVal = history.reduce((a, b) => a + b) / history.length;
-    final chartMax =
-        totalRam > 0 ? totalRam : (maxVal * 1.4).clamp(1.0, double.infinity);
+    final curVal = history.last;
+    // Auto-scale to actual usage so the chart isn't flat at the bottom
+    // (device total RAM can be 8+ GB while app only uses ~200–400 MB).
+    // Keep at least 256 MB ceiling so an idle app doesn't look huge.
+    final chartMax = (maxVal * 1.4).clamp(256.0, double.infinity);
     final isHighMem = totalRam > 0 && maxVal > totalRam * 0.8;
+
+    final usagePct = totalRam > 0 ? curVal / totalRam * 100 : 0.0;
+    final usageStr = totalRam > 0 ? '${usagePct.toStringAsFixed(1)}%' : '--';
+    final deviceStr = totalRam <= 0
+        ? '--'
+        : totalRam >= 1024
+            ? '${(totalRam / 1024).toStringAsFixed(1)} GB'
+            : '${totalRam.toStringAsFixed(0)} MB';
 
     return Column(
       children: [
@@ -51,6 +61,20 @@ class RamChartWidget extends StatelessWidget {
                 label: 'Max',
                 value: '${maxVal.toStringAsFixed(0)}MB',
                 color: isHighMem ? MonitorColors.statusError : _kRamColor),
+          ],
+        ),
+        SizedBox(height: 6),
+        Row(
+          children: [
+            _RamStatCard(
+                label: 'USAGE',
+                value: usageStr,
+                color: isHighMem ? MonitorColors.statusError : _kRamColor),
+            SizedBox(width: 8),
+            _RamStatCard(
+                label: 'DEVICE',
+                value: deviceStr,
+                color: MonitorColors.secondaryText),
           ],
         ),
         SizedBox(height: 10),
@@ -73,7 +97,9 @@ class RamChartWidget extends StatelessWidget {
                     child: CustomPaint(
                       size: Size(constraints.maxWidth - hPad, 76),
                       painter: _RamChartPainter(
-                          history: history, maxVal: chartMax, isDark: MonitorColors.isDark),
+                          history: history,
+                          maxVal: chartMax,
+                          isDark: MonitorColors.isDark),
                     ),
                   ),
                   _RamYAxis(maxVal: chartMax, totalRam: totalRam),
@@ -148,8 +174,7 @@ class _RamYAxis extends StatelessWidget {
         decoration: BoxDecoration(
           color: MonitorColors.expandedDetailBg.withValues(alpha: 0.92),
           borderRadius: const BorderRadius.only(
-              topRight: Radius.circular(8),
-              bottomRight: Radius.circular(8)),
+              topRight: Radius.circular(8), bottomRight: Radius.circular(8)),
           border: Border(
               left: BorderSide(
                   color: MonitorColors.border.withValues(alpha: 0.5))),
@@ -205,8 +230,7 @@ class _RamChartPainter extends CustomPainter {
       for (int i = 0; i < n; i++)
         Offset(
           i * stepX,
-          size.height -
-              (history[i].clamp(0.0, maxVal) / maxVal * size.height),
+          size.height - (history[i].clamp(0.0, maxVal) / maxVal * size.height),
         ),
     ];
 

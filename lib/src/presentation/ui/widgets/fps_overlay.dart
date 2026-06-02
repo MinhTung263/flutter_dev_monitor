@@ -389,10 +389,7 @@ class _DetailsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
     final dpr = MediaQuery.of(context).devicePixelRatio;
-    final physW = (size.width * dpr).round();
-    final physH = (size.height * dpr).round();
     final ctrl = MonitorController.instance;
     final rawModel = ctrl.deviceModel.isNotEmpty
         ? ctrl.deviceModel
@@ -436,54 +433,41 @@ class _DetailsPanel extends StatelessWidget {
                   border: Border.all(
                       color: Colors.white.withValues(alpha: 0.12), width: 0.5),
                 ),
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
+                padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Device info — single compact row
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Flexible(
-                          child: Text(deviceName,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontFamily: 'monospace',
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.3)),
+                          child: Text(
+                            osVersion.isNotEmpty
+                                ? '$deviceName · $osVersion'
+                                : deviceName,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.70),
+                                fontSize: 9,
+                                fontFamily: 'monospace',
+                                height: 1.2),
+                          ),
                         ),
                         const SizedBox(width: 4),
-                        Text('[$physW×$physH]',
-                            style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.65),
-                                fontSize: 9,
-                                fontFamily: 'monospace',
-                                height: 1.3)),
+                        Text(
+                          '${dpr.toStringAsFixed(1)}x ${hz.round()}Hz',
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              fontSize: 8,
+                              fontFamily: 'monospace',
+                              height: 1.2),
+                        ),
                       ],
                     ),
-                    Row(
-                      children: [
-                        if (osVersion.isNotEmpty)
-                          Text(osVersion,
-                              style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.5),
-                                  fontSize: 9,
-                                  fontFamily: 'monospace',
-                                  height: 1.3)),
-                        const Spacer(),
-                        Text('${dpr.toStringAsFixed(1)}x  ${hz.round()}Hz',
-                            style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.38),
-                                fontSize: 9,
-                                fontFamily: 'monospace',
-                                height: 1.3)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    _divider(),
                     const SizedBox(height: 5),
+                    _divider(),
+                    const SizedBox(height: 4),
                     _metricRow('Pre', '${buildMs.toStringAsFixed(2)}ms',
                         _cBuild, buildHist, 2),
                     _metricRow('GPU', '${gpuMs.toStringAsFixed(2)}ms', _cGpu,
@@ -493,11 +477,11 @@ class _DetailsPanel extends StatelessWidget {
                     _metricRow('API', '$apiCount calls', _cApi, [], 0),
                     _metricRow(
                         'FPS', fps.toStringAsFixed(2), fpsColor, fpsHist, 2),
-                    const SizedBox(height: 5),
-                    _divider(),
                     const SizedBox(height: 4),
+                    _divider(),
+                    const SizedBox(height: 3),
                     SizedBox(
-                      height: 34,
+                      height: 28,
                       width: double.infinity,
                       child: CustomPaint(
                         painter: _SparklinePainter(
@@ -530,7 +514,8 @@ class _DetailsPanel extends StatelessWidget {
                   _ActionButton(
                       onTap: onClear,
                       icon: Icons.cleaning_services,
-                      iconColor: const Color(0xFFFF5555).withValues(alpha: 0.80),
+                      iconColor:
+                          const Color(0xFFFF5555).withValues(alpha: 0.80),
                       borderColor:
                           const Color(0xFFFF5555).withValues(alpha: 0.30)),
                 ],
@@ -549,31 +534,31 @@ class _DetailsPanel extends StatelessWidget {
       List<double> history, int decimals) {
     final range = _rangeStr(history, decimals);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      padding: const EdgeInsets.symmetric(vertical: 1.0),
       child: Row(
         children: [
           Text('$label: ',
               style: TextStyle(
                   color: color,
-                  fontSize: 11,
+                  fontSize: 10,
                   fontFamily: 'monospace',
                   fontWeight: FontWeight.w600,
-                  height: 1.4)),
+                  height: 1.2)),
           Text(value,
               style: TextStyle(
                   color: color,
-                  fontSize: 11,
+                  fontSize: 10,
                   fontFamily: 'monospace',
                   fontWeight: FontWeight.w700,
-                  height: 1.4)),
+                  height: 1.2)),
           if (range.isNotEmpty) ...[
             const Spacer(),
             Text(range,
                 style: TextStyle(
                     color: color.withValues(alpha: 0.65),
-                    fontSize: 10,
+                    fontSize: 9,
                     fontFamily: 'monospace',
-                    height: 1.4)),
+                    height: 1.2)),
           ],
         ],
       ),
@@ -649,8 +634,8 @@ class _SparklinePainter extends CustomPainter {
         highIsGood: true);
   }
 
-  void _drawFilled(Canvas canvas, Size size, List<double> data, double maxVal,
-      Color color,
+  void _drawFilled(
+      Canvas canvas, Size size, List<double> data, double maxVal, Color color,
       {required bool highIsGood}) {
     if (data.length < 2) return;
     final n = data.length;
@@ -687,8 +672,8 @@ class _SparklinePainter extends CustomPainter {
           ..strokeJoin = StrokeJoin.round);
   }
 
-  void _drawLine(Canvas canvas, Size size, List<double> data, double maxVal,
-      Color color,
+  void _drawLine(
+      Canvas canvas, Size size, List<double> data, double maxVal, Color color,
       {required bool highIsGood}) {
     if (data.length < 2) return;
     final n = data.length;

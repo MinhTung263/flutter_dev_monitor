@@ -186,7 +186,8 @@ class MonitorController extends ChangeNotifier {
   void recordJankFrame() => _fps.recordJankFrame();
 
   void addFpsSample(String screenName, double fps) {
-    if (screenName.isEmpty || screenName == MonitorConstants.unknownRoute) return;
+    if (screenName.isEmpty || screenName == MonitorConstants.unknownRoute)
+      return;
     if (screenName != MonitorConstants.dashboardRoute) {
       MonitorNavigatorObserver.currentContentRoute = screenName;
     }

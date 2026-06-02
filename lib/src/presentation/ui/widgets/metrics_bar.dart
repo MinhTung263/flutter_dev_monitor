@@ -36,6 +36,8 @@ class MonitorMetricsBar extends StatelessWidget {
               _ErrorPill(count: screenErrorCount),
               const SizedBox(width: 8),
               _JankPill(count: ctrl.jankFrameCount),
+              const SizedBox(width: 8),
+              _RamPill(ramMb: ctrl.currentRam, totalMb: ctrl.totalRam),
             ],
           ),
         );
@@ -97,8 +99,7 @@ class _PhasePill extends StatelessWidget {
             ),
             if (!isEmpty)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
@@ -146,6 +147,48 @@ class _ErrorPill extends StatelessWidget {
                   letterSpacing: 0.4)),
           const SizedBox(height: 3),
           Text('$count',
+              style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace')),
+        ],
+      ),
+    );
+  }
+}
+
+class _RamPill extends StatelessWidget {
+  final double ramMb;
+  final double totalMb;
+  const _RamPill({required this.ramMb, required this.totalMb});
+
+  @override
+  Widget build(BuildContext context) {
+    const kRamColor = Color(0xFFF472B6);
+    final isHigh = totalMb > 0 && ramMb > totalMb * 0.8;
+    final color = isHigh ? MonitorColors.statusError : kRamColor;
+    final label = ramMb < 1 ? '--' : '${ramMb.toStringAsFixed(0)}M';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('RAM',
+              style: TextStyle(
+                  color: color.withValues(alpha: 0.7),
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.4)),
+          const SizedBox(height: 3),
+          Text(label,
               style: TextStyle(
                   color: color,
                   fontSize: 12,
