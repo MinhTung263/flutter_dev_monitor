@@ -1,10 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 abstract class MonitorColors {
+  static const _channel = MethodChannel('flutter_dev_monitor/system_monitor');
+
   static final ValueNotifier<bool> isDarkNotifier = ValueNotifier<bool>(true);
 
   static bool get isDark => isDarkNotifier.value;
-  static set isDark(bool v) => isDarkNotifier.value = v;
+  static set isDark(bool v) {
+    isDarkNotifier.value = v;
+    _channel.invokeMethod<void>('setTheme', v).catchError((_) {});
+  }
+
+  /// Called automatically by [MonitorController] on first use — no manual
+  /// init needed. Updates [isDarkNotifier] once the native read completes.
+  static Future<void> load() async {
+    try {
+      final saved = await _channel.invokeMethod<bool>('getTheme');
+      if (saved != null) isDarkNotifier.value = saved;
+    } catch (_) {}
+  }
 
   // ── Backgrounds ───────────────────────────────────────────────────────
   static Color get pageBackground =>

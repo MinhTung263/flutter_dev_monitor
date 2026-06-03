@@ -87,49 +87,57 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     return Scaffold(
       backgroundColor: MonitorColors.pageBackground,
       appBar: _buildAppBar(context),
-      body: Column(
-        children: [
-          _DashboardHeader(
-            screen: _selectedScreen,
-            chartData:
-                List<double>.from(_ctrl.fpsHistoryMap[_selectedScreen] ?? []),
-            chartExpanded: _chartExpanded,
-            onChartToggle: () =>
-                setState(() => _chartExpanded = !_chartExpanded),
-            ramChartData:
-                List<double>.from(_ctrl.ramHistoryMap[_selectedScreen] ?? []),
-            ramChartExpanded: _ramChartExpanded,
-            onRamChartToggle: () =>
-                setState(() => _ramChartExpanded = !_ramChartExpanded),
-            totalRam: _ctrl.totalRam,
-          ),
-          MonitorMetricsBar(screenErrorCount: errorCount),
-          _LogTabHeader(
-            screen: _selectedScreen,
-            apiCount: allLogs.length,
-            flutterErrorCount: flutterErrors.length,
-            showErrors: _showErrors,
-            onToggle: (v) => setState(() {
-              _showErrors = v;
-              _filterMode = 'ALL';
-            }),
-          ),
-          if (!_showErrors)
-            _FilterBar(
-              allLogs: allLogs,
-              activeFilter: _filterMode,
-              onChanged: (v) => setState(() => _filterMode = v),
+      body: NestedScrollView(
+        // Header slides away when scrolling down
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverToBoxAdapter(
+            child: _DashboardHeader(
+              screen: _selectedScreen,
+              chartData: List<double>.from(
+                  _ctrl.fpsHistoryMap[_selectedScreen] ?? []),
+              chartExpanded: _chartExpanded,
+              onChartToggle: () =>
+                  setState(() => _chartExpanded = !_chartExpanded),
+              ramChartData: List<double>.from(
+                  _ctrl.ramHistoryMap[_selectedScreen] ?? []),
+              ramChartExpanded: _ramChartExpanded,
+              onRamChartToggle: () =>
+                  setState(() => _ramChartExpanded = !_ramChartExpanded),
+              totalRam: _ctrl.totalRam,
             ),
-          Expanded(
-            child: _showErrors
-                ? (flutterErrors.isEmpty
-                    ? const _EmptyErrorState()
-                    : _ErrorList(errors: flutterErrors))
-                : (filteredLogs.isEmpty
-                    ? const _EmptyState()
-                    : _GroupedLogList(logs: filteredLogs)),
           ),
         ],
+        // Body stays pinned — MetricsBar + TabHeader + FilterBar always visible
+        body: Column(
+          children: [
+            MonitorMetricsBar(screenErrorCount: errorCount),
+            _LogTabHeader(
+              screen: _selectedScreen,
+              apiCount: allLogs.length,
+              flutterErrorCount: flutterErrors.length,
+              showErrors: _showErrors,
+              onToggle: (v) => setState(() {
+                _showErrors = v;
+                _filterMode = 'ALL';
+              }),
+            ),
+            if (!_showErrors)
+              _FilterBar(
+                allLogs: allLogs,
+                activeFilter: _filterMode,
+                onChanged: (v) => setState(() => _filterMode = v),
+              ),
+            Expanded(
+              child: _showErrors
+                  ? (flutterErrors.isEmpty
+                      ? const _EmptyErrorState()
+                      : _ErrorList(errors: flutterErrors))
+                  : (filteredLogs.isEmpty
+                      ? const _EmptyState()
+                      : _GroupedLogList(logs: filteredLogs)),
+            ),
+          ],
+        ),
       ),
     );
   }

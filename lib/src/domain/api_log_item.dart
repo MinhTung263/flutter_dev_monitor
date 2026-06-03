@@ -13,8 +13,12 @@ class ApiLogItem {
   final String callerName;
   final String phase;
   final int callCount;
-  // Which refresh cycle this log belongs to (0 = init, 1+ = refresh cycles)
   final int refreshCycle;
+  final Map<String, String> queryParams;
+  final Map<String, String> requestHeaders;
+  final String? requestBody;
+  final Map<String, String> responseHeaders;
+  final String? responseBody;
 
   const ApiLogItem({
     required this.orderNumber,
@@ -29,6 +33,11 @@ class ApiLogItem {
     this.phase = phaseInit,
     this.callCount = 1,
     this.refreshCycle = 0,
+    this.queryParams = const {},
+    this.requestHeaders = const {},
+    this.requestBody,
+    this.responseHeaders = const {},
+    this.responseBody,
   });
 
   bool get isSuccess => statusCode >= 200 && statusCode < 300;
@@ -69,6 +78,11 @@ class ApiLogItem {
       phase: phase ?? this.phase,
       callCount: callCount ?? this.callCount,
       refreshCycle: refreshCycle ?? this.refreshCycle,
+      queryParams: queryParams,
+      requestHeaders: requestHeaders,
+      requestBody: requestBody,
+      responseHeaders: responseHeaders,
+      responseBody: responseBody,
     );
   }
 }

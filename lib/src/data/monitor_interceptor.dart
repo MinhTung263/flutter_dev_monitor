@@ -1,15 +1,24 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
-import '../presentation/controller/monitor_controller.dart';
 import '../domain/api_log_item.dart';
+import '../presentation/controller/monitor_controller.dart';
 import '../presentation/navigation/monitor_navigator_observer.dart';
 
 class MonitorInterceptor extends Interceptor {
+  static const int _maxBodyChars = 8 * 1024; // 8 KB output cap
+  static const int _maxArrayItems = 25;       // max list items to serialize
+  static const int _maxMapKeys = 40;          // max map keys to serialize
+
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     options.extra['caller_name'] =
         _extractCallerName(StackTrace.current.toString());
     options.extra['request_time'] = DateTime.now().millisecondsSinceEpoch;
+    options.extra['req_headers'] = _flattenHeaders(options.headers);
+    options.extra['query_params'] = _flattenMap(options.queryParameters);
+    options.extra['req_body'] = _encodeBody(options.data);
     super.onRequest(options, handler);
   }
 
@@ -19,42 +28,138 @@ class MonitorInterceptor extends Interceptor {
       response.requestOptions,
       response.statusCode ?? 200,
       responseBytes: _estimateBytes(response),
+      responseHeaders: _flattenListHeaders(response.headers.map),
+      responseBody: _encodeBody(response.data),
     );
     super.onResponse(response, handler);
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    _sendToMonitor(err.requestOptions, err.response?.statusCode ?? 500);
+    _sendToMonitor(
+      err.requestOptions,
+      err.response?.statusCode ?? 500,
+      responseHeaders: err.response != null
+          ? _flattenListHeaders(err.response!.headers.map)
+          : const {},
+      responseBody: err.response != null
+          ? _encodeBody(err.response!.data)
+          : null,
+    );
     super.onError(err, handler);
   }
 
-  void _sendToMonitor(RequestOptions options, int statusCode,
-      {int responseBytes = 0}) {
+  void _sendToMonitor(
+    RequestOptions options,
+    int statusCode, {
+    int responseBytes = 0,
+    Map<String, String> responseHeaders = const {},
+    String? responseBody,
+  }) {
     final startTime = options.extra['request_time'] as int? ??
         DateTime.now().millisecondsSinceEpoch;
-    final callerName = options.extra['caller_name'] as String? ?? 'unknown';
 
     MonitorController.instance.addLog(ApiLogItem(
       orderNumber: 0,
-      url: options.path,
+      url: options.uri.toString(),
       method: options.method,
       statusCode: statusCode,
       duration: DateTime.now().millisecondsSinceEpoch - startTime,
       responseBytes: responseBytes,
       screen: MonitorNavigatorObserver.currentRoute,
       timestamp: DateTime.now(),
-      callerName: callerName,
+      callerName: options.extra['caller_name'] as String? ?? 'unknown',
+      queryParams: options.extra['query_params'] as Map<String, String>? ?? {},
+      requestHeaders:
+          options.extra['req_headers'] as Map<String, String>? ?? {},
+      requestBody: options.extra['req_body'] as String?,
+      responseHeaders: responseHeaders,
+      responseBody: responseBody,
     ));
   }
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
   int _estimateBytes(Response response) {
-    final contentLength =
-        int.tryParse(response.headers.value('content-length') ?? '') ?? 0;
-    if (contentLength > 0) return contentLength;
+    final cl = int.tryParse(response.headers.value('content-length') ?? '') ?? 0;
+    if (cl > 0) return cl;
     final data = response.data;
     if (data is String) return data.length;
     return 0;
+  }
+
+  Map<String, String> _flattenHeaders(Map<String, dynamic> map) {
+    final result = <String, String>{};
+    for (final e in map.entries) {
+      final v = e.value;
+      result[e.key] = v is List ? v.join(', ') : v.toString();
+    }
+    return result;
+  }
+
+  Map<String, String> _flattenListHeaders(Map<String, List<String>> map) {
+    return map.map((k, v) => MapEntry(k, v.join(', ')));
+  }
+
+  Map<String, String> _flattenMap(Map<String, dynamic> map) {
+    return map.map((k, v) => MapEntry(k, v.toString()));
+  }
+
+  String? _encodeBody(dynamic data) {
+    if (data == null) return null;
+    try {
+      if (data is String) {
+        if (data.isEmpty) return null;
+        // Truncate raw string BEFORE parsing to prevent OOM
+        final src = data.length > _maxBodyChars
+            ? data.substring(0, _maxBodyChars)
+            : data;
+        try {
+          final formatted =
+              const JsonEncoder.withIndent('  ').convert(jsonDecode(src));
+          return formatted.length > _maxBodyChars
+              ? '${formatted.substring(0, _maxBodyChars)}\n// … (truncated)'
+              : formatted;
+        } catch (_) {
+          return data.length > _maxBodyChars
+              ? '${src}\n// … (${data.length} chars total, truncated)'
+              : data;
+        }
+      }
+
+      // Limit LIST size BEFORE serializing — prevents OOM on large arrays
+      if (data is List) {
+        if (data.isEmpty) return '[]';
+        final isTrunc = data.length > _maxArrayItems;
+        final sample =
+            isTrunc ? data.take(_maxArrayItems).toList() : data;
+        final encoded = const JsonEncoder.withIndent('  ').convert(sample);
+        final note =
+            isTrunc ? '\n// … ${data.length - _maxArrayItems} more items' : '';
+        return encoded.length > _maxBodyChars
+            ? '${encoded.substring(0, _maxBodyChars)}\n// … (truncated)$note'
+            : '$encoded$note';
+      }
+
+      // Limit MAP key count BEFORE serializing
+      if (data is Map) {
+        if (data.isEmpty) return '{}';
+        final isTrunc = data.length > _maxMapKeys;
+        final sample = isTrunc
+            ? Map.fromEntries(data.entries.take(_maxMapKeys))
+            : data;
+        final encoded = const JsonEncoder.withIndent('  ').convert(sample);
+        final note =
+            isTrunc ? '\n// … ${data.length - _maxMapKeys} more keys' : '';
+        return encoded.length > _maxBodyChars
+            ? '${encoded.substring(0, _maxBodyChars)}\n// … (truncated)$note'
+            : '$encoded$note';
+      }
+
+      return data.toString();
+    } catch (_) {
+      return null;
+    }
   }
 
   String _extractCallerName(String trace) {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../core/monitor_constants.dart';
+import '../ui/theme/monitor_theme.dart';
 import '../../data/hardware_datasource.dart';
 import '../../domain/api_log_item.dart';
 import '../../domain/error_log_item.dart';
@@ -81,6 +82,7 @@ class MonitorController extends ChangeNotifier {
     _loadDeviceModel();
     _startHardwareMonitoring();
     _hookFlutterErrors();
+    MonitorColors.load(); // fire-and-forget: restores persisted theme
   }
 
   void _hookFlutterErrors() {

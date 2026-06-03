@@ -389,7 +389,10 @@ class _DetailsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final mq = MediaQuery.of(context);
+    final dpr = mq.devicePixelRatio;
+    final physW = (mq.size.width * dpr).round();
+    final physH = (mq.size.height * dpr).round();
     final ctrl = MonitorController.instance;
     final rawModel = ctrl.deviceModel.isNotEmpty
         ? ctrl.deviceModel
@@ -406,7 +409,7 @@ class _DetailsPanel extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: ListenableBuilder(
-        listenable: ctrl,
+        listenable: Listenable.merge([ctrl, MonitorColors.isDarkNotifier]),
         builder: (context, _) {
           final fps = ctrl.currentFps;
           final buildMs = ctrl.currentBuildMs;
@@ -419,7 +422,48 @@ class _DetailsPanel extends StatelessWidget {
           final buildHist = List<double>.from(ctrl.overlayBuildHistory);
 
           final jank = fps < 50 && fps > 0;
-          final fpsColor = jank ? _cJank : _cFps;
+
+          // Theme-aware colors
+          final dark = MonitorColors.isDark;
+
+          // Panel structure
+          final panelBg =
+              dark ? const Color(0xFF0D0D0D) : const Color(0xFFF1F5F9);
+          final panelBorderColor = dark
+              ? Colors.white.withValues(alpha: 0.12)
+              : const Color(0xFFCBD5E1);
+          final panelBorderW = dark ? 0.5 : 1.0;
+          final panelShadow = dark
+              ? <BoxShadow>[]
+              : [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.10),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3))
+                ];
+
+          // Text
+          final infoTxt = dark
+              ? Colors.white.withValues(alpha: 0.70)
+              : const Color(0xFF334155);
+          final subtleTxt = dark
+              ? Colors.white.withValues(alpha: 0.35)
+              : const Color(0xFF94A3B8);
+          final divColor = dark
+              ? Colors.white.withValues(alpha: 0.20)
+              : const Color(0xFFE2E8F0);
+          final btnIconColor = dark
+              ? Colors.white.withValues(alpha: 0.80)
+              : const Color(0xFF475569);
+
+          // Metric accent colors — darker variants in light mode for readability
+          final mFps = dark ? _cFps : const Color(0xFF16A34A);
+          final mJank = dark ? _cJank : const Color(0xFFDC2626);
+          final mGpu = dark ? _cGpu : const Color(0xFFEA580C);
+          final mBuild = dark ? _cBuild : const Color(0xFFD97706);
+          final mMem = dark ? _cMem : const Color(0xFFDB2777);
+          final mApi = dark ? _cApi : const Color(0xFF2563EB);
+          final mFpsActive = jank ? mJank : mFps;
 
           return Row(
             mainAxisSize: MainAxisSize.min,
@@ -428,37 +472,65 @@ class _DetailsPanel extends StatelessWidget {
               Container(
                 width: 210,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D0D0D),
+                  color: panelBg,
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12), width: 0.5),
+                  border:
+                      Border.all(color: panelBorderColor, width: panelBorderW),
+                  boxShadow: panelShadow,
                 ),
                 padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Device info — single compact row
+                    // Row 1: device name + resolution
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Flexible(
                           child: Text(
-                            osVersion.isNotEmpty
-                                ? '$deviceName · $osVersion'
-                                : deviceName,
+                            deviceName,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.70),
+                                color: infoTxt,
                                 fontSize: 9,
                                 fontFamily: 'monospace',
+                                fontWeight: FontWeight.w700,
                                 height: 1.2),
                           ),
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${dpr.toStringAsFixed(1)}x ${hz.round()}Hz',
+                          '[${physW}×${physH}]',
                           style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.35),
+                              color: subtleTxt,
+                              fontSize: 8,
+                              fontFamily: 'monospace',
+                              height: 1.2),
+                        ),
+                      ],
+                    ),
+                    // Row 2: OS version + DPR / Hz
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (osVersion.isNotEmpty)
+                          Flexible(
+                            child: Text(
+                              osVersion,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: subtleTxt,
+                                  fontSize: 8,
+                                  fontFamily: 'monospace',
+                                  height: 1.2),
+                            ),
+                          ),
+                        const Spacer(),
+                        Text(
+                          '${dpr.toStringAsFixed(1)}x  ${hz.round()}Hz',
+                          style: TextStyle(
+                              color: subtleTxt,
                               fontSize: 8,
                               fontFamily: 'monospace',
                               height: 1.2),
@@ -466,19 +538,19 @@ class _DetailsPanel extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 5),
-                    _divider(),
+                    Container(height: 0.5, color: divColor),
                     const SizedBox(height: 4),
-                    _metricRow('Pre', '${buildMs.toStringAsFixed(2)}ms',
-                        _cBuild, buildHist, 2),
-                    _metricRow('GPU', '${gpuMs.toStringAsFixed(2)}ms', _cGpu,
+                    _metricRow('Pre', '${buildMs.toStringAsFixed(2)}ms', mBuild,
+                        buildHist, 2),
+                    _metricRow('GPU', '${gpuMs.toStringAsFixed(2)}ms', mGpu,
                         gpuHist, 2),
                     _metricRow(
-                        'Mem', '${memMb.toStringAsFixed(1)}MB', _cMem, [], 1),
-                    _metricRow('API', '$apiCount calls', _cApi, [], 0),
+                        'Mem', '${memMb.toStringAsFixed(1)}MB', mMem, [], 1),
+                    _metricRow('API', '$apiCount calls', mApi, [], 0),
                     _metricRow(
-                        'FPS', fps.toStringAsFixed(2), fpsColor, fpsHist, 2),
+                        'FPS', fps.toStringAsFixed(2), mFpsActive, fpsHist, 2),
                     const SizedBox(height: 4),
-                    _divider(),
+                    Container(height: 0.5, color: divColor),
                     const SizedBox(height: 3),
                     SizedBox(
                       height: 28,
@@ -488,6 +560,7 @@ class _DetailsPanel extends StatelessWidget {
                           fpsHistory: fpsHist,
                           gpuHistory: gpuHist,
                           maxFps: hz,
+                          isDark: dark,
                         ),
                       ),
                     ),
@@ -501,14 +574,14 @@ class _DetailsPanel extends StatelessWidget {
                   _ActionButton(
                       onTap: onCollapse,
                       icon: Icons.close,
-                      iconColor: Colors.white.withValues(alpha: 0.80)),
+                      iconColor: btnIconColor),
                   const SizedBox(height: 10),
                   if (MonitorNavigatorObserver.currentRoute !=
                       MonitorConstants.dashboardRoute) ...[
                     _ActionButton(
                         onTap: onOpenDashboard,
                         icon: Icons.fullscreen_exit_rounded,
-                        iconColor: Colors.white.withValues(alpha: 0.80)),
+                        iconColor: btnIconColor),
                     const SizedBox(height: 10),
                   ],
                   _ActionButton(
@@ -526,9 +599,6 @@ class _DetailsPanel extends StatelessWidget {
       ),
     );
   }
-
-  static Widget _divider() =>
-      Container(height: 0.5, color: Colors.white.withValues(alpha: 0.20));
 
   static Widget _metricRow(String label, String value, Color color,
       List<double> history, int decimals) {
@@ -587,16 +657,20 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = MonitorColors.isDark;
+    final bg = dark ? const Color(0xFF1A1A1A) : MonitorColors.surface;
+    final defaultBorder =
+        dark ? Colors.white.withValues(alpha: 0.15) : MonitorColors.border;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
+          color: bg,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: borderColor ?? Colors.white.withValues(alpha: 0.15),
+            color: borderColor ?? defaultBorder,
             width: 0.5,
           ),
         ),
@@ -612,11 +686,14 @@ class _SparklinePainter extends CustomPainter {
   final List<double> fpsHistory;
   final List<double> gpuHistory;
   final double maxFps;
+  final bool isDark;
 
-  const _SparklinePainter(
-      {required this.fpsHistory,
-      required this.gpuHistory,
-      required this.maxFps});
+  const _SparklinePainter({
+    required this.fpsHistory,
+    required this.gpuHistory,
+    required this.maxFps,
+    required this.isDark,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -625,7 +702,8 @@ class _SparklinePainter extends CustomPainter {
       Offset(0, refY),
       Offset(size.width, refY),
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.06)
+        ..color =
+            isDark ? Colors.white.withValues(alpha: 0.06) : MonitorColors.border
         ..strokeWidth = 0.5,
     );
     _drawFilled(canvas, size, fpsHistory, maxFps, const Color(0xFF4ADE80),
@@ -697,6 +775,7 @@ class _SparklinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SparklinePainter old) =>
+      old.isDark != isDark ||
       old.fpsHistory.length != fpsHistory.length ||
       (fpsHistory.isNotEmpty &&
           old.fpsHistory.isNotEmpty &&

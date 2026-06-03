@@ -12,9 +12,18 @@ public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
     }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        if call.method == "getSystemHardware" {
+        switch call.method {
+        case "getSystemHardware":
             result(getIosHardwareStats())
-        } else {
+        case "getTheme":
+            let saved = UserDefaults.standard.object(forKey: "flutter_dev_monitor_dark_theme")
+            result(saved as? Bool ?? true)
+        case "setTheme":
+            if let isDark = call.arguments as? Bool {
+                UserDefaults.standard.set(isDark, forKey: "flutter_dev_monitor_dark_theme")
+            }
+            result(nil)
+        default:
             result(FlutterMethodNotImplemented)
         }
     }

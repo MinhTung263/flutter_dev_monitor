@@ -82,6 +82,12 @@ class ApiLogController {
           callerName: item.callerName,
           phase: newPhase,
           refreshCycle: cycle,
+          responseBytes: item.responseBytes,
+          queryParams: item.queryParams,
+          requestHeaders: item.requestHeaders,
+          requestBody: item.requestBody,
+          responseHeaders: item.responseHeaders,
+          responseBody: item.responseBody,
         ));
       }
     } else {
@@ -109,6 +115,12 @@ class ApiLogController {
           callerName: item.callerName,
           phase: newPhase,
           refreshCycle: 0,
+          responseBytes: item.responseBytes,
+          queryParams: item.queryParams,
+          requestHeaders: item.requestHeaders,
+          requestBody: item.requestBody,
+          responseHeaders: item.responseHeaders,
+          responseBody: item.responseBody,
         ));
       }
     }
