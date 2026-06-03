@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 import '../widgets/api_log_tile.dart';
 import '../../../domain/api_log_item.dart';
 import '../../../domain/error_log_item.dart';
-import '../../../domain/local_read_item.dart';
+import '../../../domain/route_log_item.dart';
+import '../../controller/route_log_controller.dart';
 import '../widgets/fps_chart.dart';
 import '../widgets/hardware_grid.dart';
 import '../widgets/metrics_bar.dart';
@@ -24,7 +24,8 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   late String _selectedScreen;
   bool _chartExpanded = true;
   bool _ramChartExpanded = false;
-  int _activeTab = 0; // 0=API  1=LOCAL  2=ERRORS
+  bool _rebuildExpanded = false;
+  int _activeTab = 0; // 0=API  1=ROUTES  2=ERRORS
   String _filterMode = 'ALL';
 
   MonitorController get _ctrl => MonitorController.instance;
@@ -86,7 +87,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     final filteredLogs = _applyFilter(allLogs);
     final errorCount = allLogs.where((l) => !l.isSuccess).length;
     final flutterErrors = _ctrl.errorLogs;
-    final localReads = _ctrl.localReads;
+    final routeLogs = _ctrl.routeLogs;
 
     return Scaffold(
       backgroundColor: MonitorColors.pageBackground,
@@ -108,6 +109,11 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
               onRamChartToggle: () =>
                   setState(() => _ramChartExpanded = !_ramChartExpanded),
               totalRam: _ctrl.totalRam,
+              rebuildEntries:
+                  _ctrl.rebuildCountsForScreen(_selectedScreen),
+              rebuildExpanded: _rebuildExpanded,
+              onRebuildToggle: () =>
+                  setState(() => _rebuildExpanded = !_rebuildExpanded),
             ),
           ),
         ],
@@ -118,7 +124,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
             _LogTabHeader(
               screen: _selectedScreen,
               apiCount: allLogs.length,
-              localCount: localReads.length,
+              routeCount: routeLogs.length,
               errorCount: flutterErrors.length,
               activeTab: _activeTab,
               onTabChanged: (i) => setState(() {
@@ -134,9 +140,9 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
               ),
             Expanded(
               child: switch (_activeTab) {
-                1 => localReads.isEmpty
-                    ? const _EmptyLocalState()
-                    : _LocalReadList(reads: localReads),
+                1 => routeLogs.isEmpty
+                    ? const _EmptyRouteState()
+                    : _RouteLogList(logs: routeLogs),
                 2 => flutterErrors.isEmpty
                     ? const _EmptyErrorState()
                     : _ErrorList(errors: flutterErrors),
@@ -248,6 +254,9 @@ class _DashboardHeader extends StatelessWidget {
   final bool ramChartExpanded;
   final VoidCallback onRamChartToggle;
   final double totalRam;
+  final List<MapEntry<String, int>> rebuildEntries;
+  final bool rebuildExpanded;
+  final VoidCallback onRebuildToggle;
 
   const _DashboardHeader({
     required this.screen,
@@ -258,6 +267,9 @@ class _DashboardHeader extends StatelessWidget {
     required this.ramChartExpanded,
     required this.onRamChartToggle,
     required this.totalRam,
+    required this.rebuildEntries,
+    required this.rebuildExpanded,
+    required this.onRebuildToggle,
   });
 
   @override
@@ -295,6 +307,20 @@ class _DashboardHeader extends StatelessWidget {
               child: RamChartWidget(history: ramChartData, totalRam: totalRam),
             ),
           _HBorder(),
+          _ChartHeader(
+            label: 'WIDGET REBUILDS',
+            iconColor: const Color(0xFFA78BFA),
+            sampleCount: rebuildEntries.fold(0, (s, e) => s + e.value),
+            countSuffix: 'total',
+            expanded: rebuildExpanded,
+            onToggle: onRebuildToggle,
+          ),
+          if (rebuildExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: _RebuildTable(entries: rebuildEntries),
+            ),
+          _HBorder(),
         ],
       ),
     );
@@ -305,6 +331,7 @@ class _ChartHeader extends StatelessWidget {
   final String label;
   final Color iconColor;
   final int sampleCount;
+  final String countSuffix;
   final bool expanded;
   final VoidCallback onToggle;
 
@@ -314,6 +341,7 @@ class _ChartHeader extends StatelessWidget {
     required this.sampleCount,
     required this.expanded,
     required this.onToggle,
+    this.countSuffix = 'samples',
   });
 
   @override
@@ -343,7 +371,7 @@ class _ChartHeader extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              '$sampleCount samples',
+              '$sampleCount $countSuffix',
               style: TextStyle(
                   color: MonitorColors.secondaryText,
                   fontSize: 9,
@@ -357,6 +385,109 @@ class _ChartHeader extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Rebuild table ────────────────────────────────────────────────────────────
+
+class _RebuildTable extends StatelessWidget {
+  final List<MapEntry<String, int>> entries;
+  const _RebuildTable({required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.isEmpty) {
+      return Container(
+        height: 44,
+        alignment: Alignment.center,
+        child: Text(
+          'No rebuilds recorded — add MonitorRebuild mixin to your widgets',
+          style: TextStyle(color: MonitorColors.secondaryText, fontSize: 10),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    const kColor = Color(0xFFA78BFA);
+    final maxCount = entries.first.value; // already sorted desc
+
+    return Container(
+      decoration: BoxDecoration(
+        color: MonitorColors.expandedDetailBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: MonitorColors.border),
+      ),
+      child: Column(
+        children: [
+          for (int i = 0; i < entries.length; i++) ...[
+            if (i > 0)
+              Container(height: 1, color: MonitorColors.border),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              child: Row(
+                children: [
+                  // Widget name
+                  Expanded(
+                    flex: 5,
+                    child: Text(
+                      entries[i].key,
+                      style: TextStyle(
+                        color: i == 0
+                            ? MonitorColors.statusError
+                            : MonitorColors.primaryText,
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                        fontWeight: i == 0
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Bar
+                  Expanded(
+                    flex: 3,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: entries[i].value / maxCount,
+                        minHeight: 4,
+                        backgroundColor: kColor.withValues(alpha: 0.10),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          i == 0
+                              ? MonitorColors.statusError
+                              : kColor.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Count
+                  SizedBox(
+                    width: 32,
+                    child: Text(
+                      '${entries[i].value}',
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        color: i == 0
+                            ? MonitorColors.statusError
+                            : MonitorColors.secondaryText,
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -487,7 +618,7 @@ class _ScreenPickerSheet extends StatelessWidget {
 class _LogTabHeader extends StatelessWidget {
   final String screen;
   final int apiCount;
-  final int localCount;
+  final int routeCount;
   final int errorCount;
   final int activeTab;
   final ValueChanged<int> onTabChanged;
@@ -495,7 +626,7 @@ class _LogTabHeader extends StatelessWidget {
   const _LogTabHeader({
     required this.screen,
     required this.apiCount,
-    required this.localCount,
+    required this.routeCount,
     required this.errorCount,
     required this.activeTab,
     required this.onTabChanged,
@@ -522,11 +653,11 @@ class _LogTabHeader extends StatelessWidget {
                   onTap: () => onTabChanged(0),
                 ),
                 _TabButton(
-                  label: 'LOCAL',
-                  count: localCount,
-                  icon: Icons.storage_outlined,
+                  label: 'ROUTES',
+                  count: routeCount,
+                  icon: Icons.route_outlined,
                   active: activeTab == 1,
-                  activeColor: const Color(0xFF2DD4BF),
+                  activeColor: const Color(0xFFA78BFA),
                   onTap: () => onTabChanged(1),
                 ),
                 _TabButton(
@@ -1056,10 +1187,10 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
   }
 }
 
-// ─── Local read list ──────────────────────────────────────────────────────────
+// ─── Route log list ──────────────────────────────────────────────────────────
 
-class _EmptyLocalState extends StatelessWidget {
-  const _EmptyLocalState();
+class _EmptyRouteState extends StatelessWidget {
+  const _EmptyRouteState();
 
   @override
   Widget build(BuildContext context) {
@@ -1074,17 +1205,17 @@ class _EmptyLocalState extends StatelessWidget {
               color: MonitorColors.border.withValues(alpha: 0.5),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.storage_outlined,
+            child: Icon(Icons.route_outlined,
                 size: 26, color: MonitorColors.secondaryText),
           ),
           const SizedBox(height: 12),
-          Text('No local reads logged',
+          Text('No route events yet',
               style: TextStyle(
                   color: MonitorColors.secondaryText,
                   fontSize: 13,
                   fontWeight: FontWeight.w500)),
           const SizedBox(height: 4),
-          Text('Call DevMonitor.trackLocal() in your app',
+          Text('Navigate around the app to see the flow',
               style: TextStyle(color: MonitorColors.border, fontSize: 11)),
         ],
       ),
@@ -1092,259 +1223,167 @@ class _EmptyLocalState extends StatelessWidget {
   }
 }
 
-class _LocalReadList extends StatelessWidget {
-  final List<LocalReadItem> reads;
-  const _LocalReadList({required this.reads});
+class _RouteLogList extends StatelessWidget {
+  final List<RouteLogItem> logs;
+  const _RouteLogList({required this.logs});
 
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-      itemCount: reads.length,
-      itemBuilder: (_, i) => _LocalReadTile(item: reads[i]),
+      itemCount: logs.length,
+      itemBuilder: (_, i) => _RouteLogTile(item: logs[i]),
     );
   }
 }
 
-class _LocalReadTile extends StatefulWidget {
-  final LocalReadItem item;
-  const _LocalReadTile({required this.item});
-
-  @override
-  State<_LocalReadTile> createState() => _LocalReadTileState();
-}
-
-class _LocalReadTileState extends State<_LocalReadTile> {
-  bool _expanded = false;
-
-  static Color _sourceColor(String source) {
-    final s = source.toUpperCase();
-    if (s.contains('HIVE')) return const Color(0xFFFBBF24);
-    if (s.contains('SQL') || s.contains('DATABASE') || s.contains('DB'))
-      return const Color(0xFF60A5FA);
-    if (s.contains('SECURE')) return const Color(0xFF4ADE80);
-    if (s.contains('PREF') || s.contains('SHARED'))
-      return const Color(0xFF2DD4BF);
-    if (s.contains('MMKV') || s.contains('BOX'))
-      return const Color(0xFFFB923C);
-    if (s.contains('SINGLETON') ||
-        s.contains('MEMORY') ||
-        s.contains('CACHE')) return const Color(0xFFA78BFA);
-    return MonitorColors.secondaryText;
-  }
+class _RouteLogTile extends StatelessWidget {
+  final RouteLogItem item;
+  const _RouteLogTile({required this.item});
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
     final ts = item.timestamp;
     final timeStr =
         '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
-    final color = _sourceColor(item.source);
-    // Treat as structured if it contains newlines (serialized Map/List)
-    final isStructured = item.hasValue && item.value!.contains('\n');
+
+    final Color color;
+    final IconData icon;
+    final String eventLabel;
+
+    switch (item.event) {
+      case RouteLogItem.eventPush:
+        color = MonitorColors.statusSuccess;
+        icon = Icons.arrow_upward_rounded;
+        eventLabel = 'PUSH';
+        break;
+      case RouteLogItem.eventPop:
+        color = MonitorColors.secondaryText;
+        icon = Icons.arrow_downward_rounded;
+        eventLabel = 'POP';
+        break;
+      default: // REPLACE
+        color = MonitorColors.statusSlow;
+        icon = Icons.sync_alt_rounded;
+        eventLabel = 'REPLACE';
+        break;
+    }
+
+    final durationStr = item.duration != null
+        ? RouteLogController.fmtDuration(item.duration!)
+        : null;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: MonitorColors.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header row (always visible) ──────────────────────────────
-          InkWell(
-            onTap: isStructured
-                ? () => setState(() => _expanded = !_expanded)
-                : null,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          // Event icon
+          Container(
+            margin: const EdgeInsets.only(top: 1, right: 10),
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(icon, size: 13, color: color),
+          ),
+          // Route info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(3),
+                        border: Border.all(
+                            color: color.withValues(alpha: 0.35), width: 0.5),
+                      ),
+                      child: Text(eventLabel,
+                          style: TextStyle(
+                              color: color,
+                              fontSize: 7,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.3)),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        item.route,
+                        style: TextStyle(
+                            color: MonitorColors.primaryText,
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                if (item.from != null) ...[
+                  const SizedBox(height: 4),
                   Row(
                     children: [
-                      // READ / WRITE indicator
-                      Icon(
-                        item.isWrite
-                            ? Icons.arrow_upward_rounded
-                            : Icons.arrow_downward_rounded,
-                        size: 11,
-                        color: item.isWrite
-                            ? MonitorColors.statusSlow
-                            : MonitorColors.statusSuccess,
-                      ),
-                      const SizedBox(width: 5),
-                      // Source badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                              color: color.withValues(alpha: 0.35),
-                              width: 0.5),
-                        ),
-                        child: Text(item.source,
-                            style: TextStyle(
-                                color: color,
-                                fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.3)),
-                      ),
-                      const SizedBox(width: 8),
+                      Icon(Icons.subdirectory_arrow_right_rounded,
+                          size: 11, color: MonitorColors.secondaryText),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          item.key,
+                          item.event == RouteLogItem.eventPush
+                              ? 'from ${item.from}'
+                              : item.event == RouteLogItem.eventPop
+                                  ? '→ ${item.from}'
+                                  : 'was ${item.from}',
                           style: TextStyle(
-                              color: MonitorColors.primaryText,
-                              fontSize: 11.5,
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.w600),
+                              color: MonitorColors.secondaryText,
+                              fontSize: 10,
+                              fontFamily: 'monospace'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(timeStr,
-                          style: TextStyle(
-                              color: MonitorColors.secondaryText,
-                              fontSize: 10,
-                              fontFamily: 'monospace')),
-                      if (isStructured) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          _expanded
-                              ? Icons.expand_less
-                              : Icons.expand_more,
-                          size: 16,
-                          color: MonitorColors.secondaryText,
-                        ),
-                      ],
                     ],
                   ),
-                  // Inline preview for simple string values
-                  if (item.hasValue && !isStructured) ...[
-                    const SizedBox(height: 5),
-                    Text(
-                      item.value!,
-                      style: TextStyle(
-                          color: MonitorColors.secondaryText,
-                          fontSize: 10,
-                          fontFamily: 'monospace'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  // Collapsed preview for structured values
-                  if (isStructured && !_expanded) ...[
-                    const SizedBox(height: 5),
-                    Text(
-                      item.value!.split('\n').take(2).join(' ').trim(),
-                      style: TextStyle(
-                          color: MonitorColors.secondaryText,
-                          fontSize: 10,
-                          fontFamily: 'monospace'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 4),
-                  Text(
-                    item.screen,
-                    style: TextStyle(
-                        color: MonitorColors.border,
-                        fontSize: 9,
-                        fontFamily: 'monospace'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                 ],
-              ),
+              ],
             ),
           ),
-          // ── Expanded JSON block ───────────────────────────────────────
-          if (isStructured && _expanded) ...[
-            Container(height: 1, color: MonitorColors.border),
-            Container(
-              decoration: BoxDecoration(
-                color: MonitorColors.expandedDetailBg,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(8),
-                  bottomRight: Radius.circular(8),
-                ),
-              ),
-              constraints: const BoxConstraints(maxHeight: 240),
-              child: Stack(
-                children: [
-                  SingleChildScrollView(
-                    padding:
-                        const EdgeInsets.fromLTRB(12, 10, 40, 10),
-                    child: SelectionArea(
-                      child: Text(
-                        item.value!,
-                        style: TextStyle(
-                          color: MonitorColors.primaryText,
-                          fontSize: 10,
-                          fontFamily: 'monospace',
-                          height: 1.55,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Copy button
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: _InlineCopyBtn(text: item.value!),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          // Time + duration
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(timeStr,
+                  style: TextStyle(
+                      color: MonitorColors.secondaryText,
+                      fontSize: 10,
+                      fontFamily: 'monospace')),
+              if (durationStr != null) ...[
+                const SizedBox(height: 2),
+                Text(durationStr,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 9,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w600)),
+              ],
+            ],
+          ),
         ],
       ),
     );
   }
-}
-
-class _InlineCopyBtn extends StatefulWidget {
-  final String text;
-  const _InlineCopyBtn({required this.text});
-  @override
-  State<_InlineCopyBtn> createState() => _InlineCopyBtnState();
-}
-
-class _InlineCopyBtnState extends State<_InlineCopyBtn> {
-  bool _copied = false;
-  Future<void> _copy() async {
-    await Clipboard.setData(ClipboardData(text: widget.text));
-    setState(() => _copied = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) setState(() => _copied = false);
-  }
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: _copy,
-        child: Container(
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: MonitorColors.expandedDetailBg,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: MonitorColors.border),
-          ),
-          child: Icon(
-            _copied ? Icons.check_rounded : Icons.copy_rounded,
-            size: 12,
-            color: _copied
-                ? MonitorColors.statusSuccess
-                : MonitorColors.secondaryText,
-          ),
-        ),
-      );
 }
 
 class _SectionHeader extends StatelessWidget {

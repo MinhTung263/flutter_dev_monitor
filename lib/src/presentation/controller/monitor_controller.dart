@@ -7,13 +7,14 @@ import '../ui/theme/monitor_theme.dart';
 import '../../data/hardware_datasource.dart';
 import '../../domain/api_log_item.dart';
 import '../../domain/error_log_item.dart';
-import '../../domain/local_read_item.dart';
+import '../../domain/route_log_item.dart';
 import '../navigation/monitor_navigator_observer.dart';
 import 'api_log_controller.dart';
 import 'error_log_controller.dart';
 import 'fps_controller.dart';
 import 'hardware_controller.dart';
-import 'local_read_controller.dart';
+import 'rebuild_log_controller.dart';
+import 'route_log_controller.dart';
 
 class MonitorController extends ChangeNotifier {
   MonitorController._() {
@@ -26,11 +27,12 @@ class MonitorController extends ChangeNotifier {
   /// Provider, Riverpod, GetX Get.put(), etc.
   static MonitorController get instance => _instance ??= MonitorController._();
 
-  final _apiLog = ApiLogController();
-  final _fps = FpsController();
-  final _hardware = HardwareController();
-  final _errorLog = ErrorLogController();
-  final _localRead = LocalReadController();
+  final _apiLog    = ApiLogController();
+  final _fps       = FpsController();
+  final _hardware  = HardwareController();
+  final _errorLog  = ErrorLogController();
+  final _routeLog  = RouteLogController();
+  final _rebuild   = RebuildLogController();
   final _datasource = HardwareDatasource();
 
   // All screen names seen this session — never cleared on pop, only on clearAll()
@@ -70,9 +72,6 @@ class MonitorController extends ChangeNotifier {
 
   // ── Visited screens (never cleared on pop) ───────────────────────────
 
-  /// Every screen name seen this session. Not cleared when a screen is popped
-  /// — only on [clearAll]. Used by the screen picker so no screen disappears
-  /// from the list mid-flow (e.g. Login → Splash → Home all remain selectable).
   Set<String> get visitedScreens => Set.unmodifiable(_visitedScreens);
 
   // ── Expose error log state ────────────────────────────────────────────
@@ -80,24 +79,39 @@ class MonitorController extends ChangeNotifier {
   List<ErrorLogItem> get errorLogs => _errorLog.errors;
   int get flutterErrorCount => _errorLog.count;
 
-  // ── Expose local read state ───────────────────────────────────────────
+  // ── Expose rebuild state ─────────────────────────────────────────────
 
-  List<LocalReadItem> get localReads => _localRead.reads;
-  int get localReadCount => _localRead.count;
+  List<MapEntry<String, int>> rebuildCountsForScreen(String screen) =>
+      _rebuild.sortedForScreen(screen);
 
-  void addLocalRead({
-    required String source,
-    required String key,
-    dynamic value,
-    bool isWrite = false,
-  }) {
-    _localRead.add(
-      source: source,
-      key: key,
-      value: value,
-      screen: MonitorNavigatorObserver.currentRoute,
-      isWrite: isWrite,
-    );
+  int rebuildTotalForScreen(String screen) =>
+      _rebuild.totalForScreen(screen);
+
+  void recordRebuild(String widgetName, String screen) {
+    if (screen.isEmpty ||
+        screen == MonitorConstants.dashboardRoute ||
+        screen == MonitorConstants.unknownRoute) return;
+    _rebuild.record(widgetName, screen);
+    notifyListeners();
+  }
+
+  // ── Expose route log state ────────────────────────────────────────────
+
+  List<RouteLogItem> get routeLogs => _routeLog.logs;
+  int get routeLogCount => _routeLog.count;
+
+  void logRoutePush(String route, String? from) {
+    _routeLog.logPush(route, from);
+    notifyListeners();
+  }
+
+  void logRoutePop(String route, String? to) {
+    _routeLog.logPop(route, to);
+    notifyListeners();
+  }
+
+  void logRouteReplace(String oldRoute, String newRoute) {
+    _routeLog.logReplace(oldRoute, newRoute);
     notifyListeners();
   }
 
@@ -198,7 +212,8 @@ class MonitorController extends ChangeNotifier {
     _fps.clearAll();
     _hardware.clearAll();
     _errorLog.clearAll();
-    _localRead.clearAll();
+    _routeLog.clearAll();
+    _rebuild.clearAll();
     _visitedScreens.clear();
     notifyListeners();
   }
@@ -229,8 +244,7 @@ class MonitorController extends ChangeNotifier {
   void recordJankFrame() => _fps.recordJankFrame();
 
   void addFpsSample(String screenName, double fps) {
-    if (screenName.isEmpty || screenName == MonitorConstants.unknownRoute)
-      return;
+    if (screenName.isEmpty || screenName == MonitorConstants.unknownRoute) return;
     if (screenName != MonitorConstants.dashboardRoute) {
       MonitorNavigatorObserver.currentContentRoute = screenName;
     }

@@ -38,9 +38,12 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     if (route is PageRoute) {
       pageStack.add(name);
       pageToSessionMap[name] = _activeAnchor;
-      MonitorController.instance.startSession(name);
+      final ctrl = MonitorController.instance;
+      ctrl.startSession(name);
+      ctrl.logRoutePush(name, previousRoute?.settings.name);
     } else if (route is PopupRoute) {
       MonitorController.instance.setActivePopup(name);
+      MonitorController.instance.logRoutePush(name, previousRoute?.settings.name);
     }
   }
 
@@ -60,6 +63,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       pageStack.remove(name);
       if (!pageStack.contains(name)) {
         final ctrl = MonitorController.instance;
+        ctrl.logRoutePop(name, prevName);
         if (pageToSessionMap[name] == name) {
           ctrl.clearSessionByAnchor(name);
           pageToSessionMap.removeWhere((_, v) => v == name);
@@ -69,7 +73,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
         }
       }
     } else if (route is PopupRoute) {
-      MonitorController.instance.clearActivePopup(name);
+      MonitorController.instance
+        ..clearActivePopup(name)
+        ..logRoutePop(name, prevName);
     }
   }
 
@@ -81,8 +87,10 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     if (name == null || name.isEmpty || name == '/MonitorDashboardPage') return;
 
     pageStack.remove(name);
+    final ctrl = MonitorController.instance;
+    ctrl.logRoutePop(name, previousRoute?.settings.name);
     if (!pageStack.contains(name) && pageToSessionMap[name] == name) {
-      MonitorController.instance.clearSessionByAnchor(name);
+      ctrl.clearSessionByAnchor(name);
       pageToSessionMap.removeWhere((_, v) => v == name);
     }
   }
@@ -90,24 +98,28 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
-    if (oldRoute is PageRoute) {
-      final oldName = oldRoute.settings.name;
-      if (oldName != null) {
-        pageStack.remove(oldName);
-        if (!pageStack.contains(oldName) &&
-            pageToSessionMap[oldName] == oldName) {
-          MonitorController.instance.clearSessionByAnchor(oldName);
-          pageToSessionMap.removeWhere((_, v) => v == oldName);
-        }
+    final oldName = oldRoute is PageRoute ? oldRoute.settings.name : null;
+    final newName = newRoute is PageRoute ? newRoute.settings.name : null;
+
+    if (oldName != null) {
+      pageStack.remove(oldName);
+      if (!pageStack.contains(oldName) &&
+          pageToSessionMap[oldName] == oldName) {
+        MonitorController.instance.clearSessionByAnchor(oldName);
+        pageToSessionMap.removeWhere((_, v) => v == oldName);
       }
     }
-    if (newRoute is PageRoute) {
-      final name = newRoute.settings.name;
-      if (name != null && name.isNotEmpty && name != '/MonitorDashboardPage') {
-        currentRoute = name;
-        pageStack.add(name);
-        pageToSessionMap[name] = _activeAnchor;
-      }
+    if (newName != null && newName.isNotEmpty &&
+        newName != '/MonitorDashboardPage') {
+      currentRoute = newName;
+      pageStack.add(newName);
+      pageToSessionMap[newName] = _activeAnchor;
+      MonitorController.instance.startSession(newName);
+    }
+
+    if (oldName != null && newName != null &&
+        newName != '/MonitorDashboardPage') {
+      MonitorController.instance.logRouteReplace(oldName, newName);
     }
   }
 }
