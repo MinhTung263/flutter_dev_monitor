@@ -1,3 +1,16 @@
+## 1.2.0
+
+* **API log — tabbed expanded view** (TIMELINE | REQUEST | RESPONSE | HEADERS): interceptor now captures query params, request/response headers, and bodies (pretty-printed JSON, capped to prevent OOM). `url` changed to full URI via `options.uri.toString()`.
+* **Copy actions**: cURL generation (`>_ Copy cURL` chip in REQUEST tab), per-section inline copy buttons for URL/params/headers, copy-all bottom sheet (`⧉` button in tile tab bar) listing every copyable item.
+* **LOCAL tab** (`DevMonitor.trackLocal` / `DevMonitor.trackSingleton`): log reads from SharedPreferences, Hive, SQLite, SecureStorage, or any in-memory singleton. `value` accepts `dynamic` (Map/List auto-serialized to indented JSON). Tiles expand to show full JSON with copy button.
+* **Dashboard scroll**: `NestedScrollView` — hardware grid + charts collapse when scrolling the log list; MetricsBar + TabHeader + FilterBar stay pinned.
+* **Light/dark theme persistence** via native channels (Android `SharedPreferences`, iOS `UserDefaults`) — no external package required. Theme restores automatically on app restart without any `init()` call in `main()`.
+* **Overlay `_DetailsPanel` theme-aware**: follows light/dark toggle via merged `Listenable`; light mode uses slate palette with shadow for panel depth; metric accent colors darkened for readability on light backgrounds. Restored physical screen resolution (`physW×physH`) to device info row.
+* **Example app**: added `ApiLabScreen` with 9 API test cases (GET with query params, POST with body, PUT, PATCH, DELETE, 404) and `LocalLabScreen` with mock `AppState` / `AuthService` singletons plus simulated SharedPreferences, Hive, and SQLite reads.
+* Fixed: `ApiLogController` was dropping captured fields (headers, body, params) when creating new log entries — all fields now propagated correctly.
+* Fixed: `Container(color + decoration)` assertion crash when expanding API log tiles.
+* Fixed: `_SparklinePainter` and chart painters now include `isDark` in `shouldRepaint` to force canvas redraw on theme toggle.
+
 ## 1.1.1
 
 * **RAM chart auto-scale** — chart Y-axis now scales to actual app usage (ceiling = `maxVal × 1.4`, min 256 MB) instead of total device RAM; fixes chart appearing flat near zero on devices with 8+ GB RAM.
