@@ -16,6 +16,7 @@ class LocalReadController {
     required String key,
     dynamic value,
     required String screen,
+    bool isWrite = false,
   }) {
     _reads.insert(
       0,
@@ -26,6 +27,7 @@ class LocalReadController {
         value: _serialize(value),
         timestamp: DateTime.now(),
         screen: screen,
+        isWrite: isWrite,
       ),
     );
     if (_reads.length > _max) _reads.removeLast();

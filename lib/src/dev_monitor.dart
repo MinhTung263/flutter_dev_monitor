@@ -51,9 +51,10 @@ abstract final class DevMonitor {
     required String source,
     required String key,
     dynamic value,
+    bool isWrite = false,
   }) =>
-      MonitorController.instance
-          .addLocalRead(source: source, key: key, value: value);
+      MonitorController.instance.addLocalRead(
+          source: source, key: key, value: value, isWrite: isWrite);
 
   /// Log a write to an in-memory Singleton for the current screen.
   ///
@@ -72,6 +73,38 @@ abstract final class DevMonitor {
   ///   }
   /// }
   /// ```
+  /// Snapshot a Map of key-value pairs from any storage source.
+  ///
+  /// Use this for libraries that don't have a dedicated Monitor wrapper,
+  /// such as ObjectBox, Isar, Drift, or any custom cache. Call it in
+  /// [initState] to see what the screen loaded from storage.
+  ///
+  /// ```dart
+  /// // Sqflite
+  /// final rows = await db.query('users', where: 'id = ?', whereArgs: [id]);
+  /// DevMonitor.snapshotMap('SQLite:users', {
+  ///   for (final row in rows) '${row['id']}': row,
+  /// });
+  ///
+  /// // ObjectBox / Isar
+  /// final items = itemBox.getAll();
+  /// DevMonitor.snapshotMap('ObjectBox:Item', {
+  ///   for (final item in items) '${item.id}': item.toJson(),
+  /// });
+  ///
+  /// // Any in-memory map/cache
+  /// DevMonitor.snapshotMap('Cache:products', productCache);
+  /// ```
+  static void snapshotMap(String source, Map<dynamic, dynamic> data) {
+    for (final e in data.entries) {
+      MonitorController.instance.addLocalRead(
+        source: source,
+        key: '${e.key}',
+        value: e.value,
+      );
+    }
+  }
+
   static void trackSingleton(
     String singletonName,
     String key, [

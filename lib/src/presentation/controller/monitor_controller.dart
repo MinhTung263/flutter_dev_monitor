@@ -33,6 +33,9 @@ class MonitorController extends ChangeNotifier {
   final _localRead = LocalReadController();
   final _datasource = HardwareDatasource();
 
+  // All screen names seen this session — never cleared on pop, only on clearAll()
+  final Set<String> _visitedScreens = {};
+
   Timer? _hardwareTimer;
 
   // ── Expose API log state ──────────────────────────────────────────────
@@ -65,6 +68,13 @@ class MonitorController extends ChangeNotifier {
   List<double> get overlayGpuHistory => _fps.overlayGpuHistory;
   List<double> get overlayBuildHistory => _fps.overlayBuildHistory;
 
+  // ── Visited screens (never cleared on pop) ───────────────────────────
+
+  /// Every screen name seen this session. Not cleared when a screen is popped
+  /// — only on [clearAll]. Used by the screen picker so no screen disappears
+  /// from the list mid-flow (e.g. Login → Splash → Home all remain selectable).
+  Set<String> get visitedScreens => Set.unmodifiable(_visitedScreens);
+
   // ── Expose error log state ────────────────────────────────────────────
 
   List<ErrorLogItem> get errorLogs => _errorLog.errors;
@@ -79,12 +89,14 @@ class MonitorController extends ChangeNotifier {
     required String source,
     required String key,
     dynamic value,
+    bool isWrite = false,
   }) {
     _localRead.add(
       source: source,
       key: key,
       value: value,
       screen: MonitorNavigatorObserver.currentRoute,
+      isWrite: isWrite,
     );
     notifyListeners();
   }
@@ -139,6 +151,11 @@ class MonitorController extends ChangeNotifier {
   // ── Session management ────────────────────────────────────────────────
 
   void startSession(String screenName) {
+    if (screenName.isNotEmpty &&
+        screenName != MonitorConstants.dashboardRoute &&
+        screenName != MonitorConstants.unknownRoute) {
+      _visitedScreens.add(screenName);
+    }
     _apiLog.startSession(screenName);
     notifyListeners();
   }
@@ -182,6 +199,7 @@ class MonitorController extends ChangeNotifier {
     _hardware.clearAll();
     _errorLog.clearAll();
     _localRead.clearAll();
+    _visitedScreens.clear();
     notifyListeners();
   }
 

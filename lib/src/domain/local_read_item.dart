@@ -5,6 +5,7 @@ class LocalReadItem {
   final String? value;
   final DateTime timestamp;
   final String screen;
+  final bool isWrite;
 
   const LocalReadItem({
     required this.id,
@@ -13,6 +14,7 @@ class LocalReadItem {
     this.value,
     required this.timestamp,
     required this.screen,
+    this.isWrite = false,
   });
 
   bool get hasValue => value != null && value!.isNotEmpty;

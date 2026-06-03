@@ -152,8 +152,12 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   }
 
   void _openScreenPicker(BuildContext context) {
-    final screens = List<String>.from(_ctrl.fpsHistoryMap.keys);
-    if (!screens.contains(_selectedScreen) && _selectedScreen.isNotEmpty) {
+    // visitedScreens tracks all screens seen this session regardless of whether
+    // their data was cleared on pop — so Login/Splash remain visible even after
+    // navigating to Home.
+    final screens = _ctrl.visitedScreens.toList();
+    if (!screens.contains(_selectedScreen) && _selectedScreen.isNotEmpty &&
+        _selectedScreen != '/unknown') {
       screens.add(_selectedScreen);
     }
     showModalBottomSheet(
@@ -1162,6 +1166,17 @@ class _LocalReadTileState extends State<_LocalReadTile> {
                 children: [
                   Row(
                     children: [
+                      // READ / WRITE indicator
+                      Icon(
+                        item.isWrite
+                            ? Icons.arrow_upward_rounded
+                            : Icons.arrow_downward_rounded,
+                        size: 11,
+                        color: item.isWrite
+                            ? MonitorColors.statusSlow
+                            : MonitorColors.statusSuccess,
+                      ),
+                      const SizedBox(width: 5),
                       // Source badge
                       Container(
                         padding: const EdgeInsets.symmetric(
