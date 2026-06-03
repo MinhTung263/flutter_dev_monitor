@@ -7,11 +7,13 @@ import '../ui/theme/monitor_theme.dart';
 import '../../data/hardware_datasource.dart';
 import '../../domain/api_log_item.dart';
 import '../../domain/error_log_item.dart';
+import '../../domain/local_read_item.dart';
 import '../navigation/monitor_navigator_observer.dart';
 import 'api_log_controller.dart';
 import 'error_log_controller.dart';
 import 'fps_controller.dart';
 import 'hardware_controller.dart';
+import 'local_read_controller.dart';
 
 class MonitorController extends ChangeNotifier {
   MonitorController._() {
@@ -28,6 +30,7 @@ class MonitorController extends ChangeNotifier {
   final _fps = FpsController();
   final _hardware = HardwareController();
   final _errorLog = ErrorLogController();
+  final _localRead = LocalReadController();
   final _datasource = HardwareDatasource();
 
   Timer? _hardwareTimer;
@@ -66,6 +69,25 @@ class MonitorController extends ChangeNotifier {
 
   List<ErrorLogItem> get errorLogs => _errorLog.errors;
   int get flutterErrorCount => _errorLog.count;
+
+  // ── Expose local read state ───────────────────────────────────────────
+
+  List<LocalReadItem> get localReads => _localRead.reads;
+  int get localReadCount => _localRead.count;
+
+  void addLocalRead({
+    required String source,
+    required String key,
+    dynamic value,
+  }) {
+    _localRead.add(
+      source: source,
+      key: key,
+      value: value,
+      screen: MonitorNavigatorObserver.currentRoute,
+    );
+    notifyListeners();
+  }
 
   // ── Expose hardware state ─────────────────────────────────────────────
 
@@ -159,6 +181,7 @@ class MonitorController extends ChangeNotifier {
     _fps.clearAll();
     _hardware.clearAll();
     _errorLog.clearAll();
+    _localRead.clearAll();
     notifyListeners();
   }
 

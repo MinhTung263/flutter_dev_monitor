@@ -74,6 +74,17 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Home'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.storage_outlined),
+            tooltip: 'Local Lab',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: '/LocalLabScreen'),
+                builder: (_) => const LocalLabScreen(),
+              ),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.science_outlined),
             tooltip: 'API Lab',
             onPressed: () => Navigator.push(
@@ -457,6 +468,316 @@ class _LabButton extends StatelessWidget {
         trailing: Icon(Icons.chevron_right,
             color: onTap == null ? Colors.grey : Colors.grey[400]),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+// ── Mock singletons ───────────────────────────────────────────────────────────
+
+class AppState {
+  AppState._();
+  static final AppState instance = AppState._();
+
+  final List<String> _cart = [];
+
+  void login(String userId) {
+    DevMonitor.trackSingleton('AppState', 'userId', userId);
+    DevMonitor.trackSingleton('AppState', 'isLoggedIn', 'true');
+  }
+
+  void logout() {
+    DevMonitor.trackSingleton('AppState', 'userId', null);
+    DevMonitor.trackSingleton('AppState', 'isLoggedIn', 'false');
+  }
+
+  void setTheme(String theme) {
+    DevMonitor.trackSingleton('AppState', 'theme', theme);
+  }
+
+  void addToCart(String productId) {
+    _cart.add(productId);
+    DevMonitor.trackSingleton('AppState', 'cart', '${_cart.length} items');
+  }
+
+  void clearCart() {
+    _cart.clear();
+    DevMonitor.trackSingleton('AppState', 'cart', 'cleared (0 items)');
+  }
+}
+
+class AuthService {
+  AuthService._();
+  static final AuthService instance = AuthService._();
+
+  void saveTokens(String access, String refresh) {
+    DevMonitor.trackSingleton('AuthService', 'accessToken',
+        '${access.substring(0, access.length.clamp(0, 12))}…');
+    DevMonitor.trackSingleton('AuthService', 'refreshToken',
+        '${refresh.substring(0, refresh.length.clamp(0, 12))}…');
+  }
+
+  void saveProfile(Map<String, dynamic> profile) {
+    DevMonitor.trackSingleton(
+        'AuthService', 'profile', 'id=${profile['id']} name=${profile['name']}');
+  }
+
+  void clearSession() {
+    DevMonitor.trackSingleton('AuthService', 'accessToken', null);
+    DevMonitor.trackSingleton('AuthService', 'profile', null);
+  }
+}
+
+// ── Local Lab screen ──────────────────────────────────────────────────────────
+
+class LocalLabScreen extends StatefulWidget {
+  const LocalLabScreen({super.key});
+
+  @override
+  State<LocalLabScreen> createState() => _LocalLabScreenState();
+}
+
+class _LocalLabScreenState extends State<LocalLabScreen> {
+  String _status = 'Tap a button to simulate a local storage operation.';
+
+  void _act(String label, VoidCallback fn) {
+    fn();
+    setState(() => _status = '✓ $label logged → check LOCAL tab');
+  }
+
+  // ── SharedPreferences (simulated) ───────────────────────────────────────
+
+  void _prefsReadToken() => _act('Read auth_token', () {
+        DevMonitor.trackLocal(
+            source: 'SharedPreferences', key: 'auth_token',
+            value: 'eyJhbGciOi…');
+      });
+
+  void _prefsWriteOnboarding() => _act('Write onboarding_done', () {
+        DevMonitor.trackLocal(
+            source: 'SharedPreferences', key: 'onboarding_done',
+            value: 'true');
+      });
+
+  void _prefsReadLocale() => _act('Read locale', () {
+        DevMonitor.trackLocal(
+            source: 'SharedPreferences', key: 'app_locale', value: 'vi_VN');
+      });
+
+  // ── Hive (simulated) ─────────────────────────────────────────────────────
+
+  void _hiveGetProducts() => _act('Hive get products', () {
+        DevMonitor.trackLocal(
+            source: 'Hive', key: 'products', value: '42 items cached');
+      });
+
+  void _hivePutUser() => _act('Hive put user', () {
+        DevMonitor.trackLocal(
+            source: 'Hive', key: 'current_user', value: 'id=7 name=Nguyen Van A');
+      });
+
+  void _hiveGetCart() => _act('Hive get cart', () {
+        DevMonitor.trackLocal(
+            source: 'Hive', key: 'cart_items', value: '3 items · 250,000đ');
+      });
+
+  // ── SQLite (simulated) ───────────────────────────────────────────────────
+
+  void _sqlSelectMessages() => _act('SQLite SELECT messages', () {
+        DevMonitor.trackLocal(
+            source: 'SQLite',
+            key: 'SELECT * FROM messages WHERE thread_id=12',
+            value: '18 rows');
+      });
+
+  void _sqlInsertOrder() => _act('SQLite INSERT order', () {
+        DevMonitor.trackLocal(
+            source: 'SQLite',
+            key: 'INSERT INTO orders (user_id, total)',
+            value: 'rowId=88');
+      });
+
+  // ── Singleton ────────────────────────────────────────────────────────────
+
+  void _singletonLogin() => _act('AppState.login', () {
+        AppState.instance.login('user_42');
+      });
+
+  void _singletonSetTheme() => _act('AppState.setTheme', () {
+        AppState.instance.setTheme('dark');
+      });
+
+  void _singletonAddCart() => _act('AppState.addToCart', () {
+        AppState.instance.addToCart('prod_${DateTime.now().second}');
+      });
+
+  void _singletonClearCart() => _act('AppState.clearCart', () {
+        AppState.instance.clearCart();
+      });
+
+  void _authSaveTokens() => _act('AuthService.saveTokens', () {
+        AuthService.instance.saveTokens(
+            'eyJhbGciOiJSUzI1NiJ9.user42', 'rt_9f8e7d6c5b4a');
+      });
+
+  void _authSaveProfile() => _act('AuthService.saveProfile', () {
+        AuthService.instance
+            .saveProfile({'id': 42, 'name': 'Nguyen Van A', 'role': 'admin'});
+      });
+
+  void _authClear() => _act('AuthService.clearSession', () {
+        AuthService.instance.clearSession();
+        AppState.instance.logout();
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Local Lab'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: '/MonitorDashboardPage'),
+                builder: (_) => const MonitorDashboardPage(
+                    initialScreen: '/LocalLabScreen'),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child:
+                Text(_status, style: Theme.of(context).textTheme.bodySmall),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _SectionHeader('Singleton'),
+                _LabButton(
+                  icon: Icons.login,
+                  label: 'AppState.login()',
+                  subtitle: 'userId + isLoggedIn → SINGLETON:APPSTATE',
+                  color: const Color(0xFFA78BFA),
+                  onTap: _singletonLogin,
+                ),
+                _LabButton(
+                  icon: Icons.palette_outlined,
+                  label: 'AppState.setTheme()',
+                  subtitle: 'theme=dark → SINGLETON:APPSTATE',
+                  color: const Color(0xFFA78BFA),
+                  onTap: _singletonSetTheme,
+                ),
+                _LabButton(
+                  icon: Icons.add_shopping_cart,
+                  label: 'AppState.addToCart()',
+                  subtitle: 'cart N items → SINGLETON:APPSTATE',
+                  color: const Color(0xFFA78BFA),
+                  onTap: _singletonAddCart,
+                ),
+                _LabButton(
+                  icon: Icons.remove_shopping_cart_outlined,
+                  label: 'AppState.clearCart()',
+                  subtitle: 'cart cleared → SINGLETON:APPSTATE',
+                  color: const Color(0xFFA78BFA),
+                  onTap: _singletonClearCart,
+                ),
+                _LabButton(
+                  icon: Icons.key_rounded,
+                  label: 'AuthService.saveTokens()',
+                  subtitle: 'accessToken + refreshToken → SINGLETON:AUTHSERVICE',
+                  color: const Color(0xFFA78BFA),
+                  onTap: _authSaveTokens,
+                ),
+                _LabButton(
+                  icon: Icons.person_outline,
+                  label: 'AuthService.saveProfile()',
+                  subtitle: 'id + name + role → SINGLETON:AUTHSERVICE',
+                  color: const Color(0xFFA78BFA),
+                  onTap: _authSaveProfile,
+                ),
+                _LabButton(
+                  icon: Icons.logout,
+                  label: 'AuthService.clearSession()',
+                  subtitle: 'tokens=null, profile=null, logout',
+                  color: Colors.red,
+                  onTap: _authClear,
+                ),
+                const SizedBox(height: 8),
+                _SectionHeader('SharedPreferences'),
+                _LabButton(
+                  icon: Icons.vpn_key_outlined,
+                  label: 'Read auth_token',
+                  subtitle: 'getString(auth_token) → SHAREDPREFERENCES',
+                  color: const Color(0xFF2DD4BF),
+                  onTap: _prefsReadToken,
+                ),
+                _LabButton(
+                  icon: Icons.check_circle_outline,
+                  label: 'Write onboarding_done',
+                  subtitle: 'setBool(onboarding_done, true)',
+                  color: const Color(0xFF2DD4BF),
+                  onTap: _prefsWriteOnboarding,
+                ),
+                _LabButton(
+                  icon: Icons.language,
+                  label: 'Read app_locale',
+                  subtitle: 'getString(app_locale) → vi_VN',
+                  color: const Color(0xFF2DD4BF),
+                  onTap: _prefsReadLocale,
+                ),
+                const SizedBox(height: 8),
+                _SectionHeader('Hive'),
+                _LabButton(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Get products box',
+                  subtitle: 'box.get(products) → 42 items cached',
+                  color: const Color(0xFFFBBF24),
+                  onTap: _hiveGetProducts,
+                ),
+                _LabButton(
+                  icon: Icons.person_outline,
+                  label: 'Put current_user',
+                  subtitle: 'box.put(current_user, User{id=7})',
+                  color: const Color(0xFFFBBF24),
+                  onTap: _hivePutUser,
+                ),
+                _LabButton(
+                  icon: Icons.shopping_bag_outlined,
+                  label: 'Get cart_items',
+                  subtitle: 'box.get(cart_items) → 3 items',
+                  color: const Color(0xFFFBBF24),
+                  onTap: _hiveGetCart,
+                ),
+                const SizedBox(height: 8),
+                _SectionHeader('SQLite'),
+                _LabButton(
+                  icon: Icons.chat_bubble_outline,
+                  label: 'SELECT messages',
+                  subtitle: 'WHERE thread_id=12 → 18 rows',
+                  color: const Color(0xFF60A5FA),
+                  onTap: _sqlSelectMessages,
+                ),
+                _LabButton(
+                  icon: Icons.receipt_long_outlined,
+                  label: 'INSERT order',
+                  subtitle: 'orders (user_id, total) → rowId=88',
+                  color: const Color(0xFF60A5FA),
+                  onTap: _sqlInsertOrder,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
