@@ -209,21 +209,6 @@ class MonitorController extends ChangeNotifier {
 
   void clearOverlayHistory() => _fps.clearOverlayHistory();
 
-  void clearSessionByAnchor(String anchorName) {
-    final screens = MonitorNavigatorObserver.pageToSessionMap.entries
-        .where((e) => e.value == anchorName)
-        .map((e) => e.key)
-        .toList();
-    if (!screens.contains(anchorName)) screens.add(anchorName);
-
-    for (final screen in screens) {
-      _apiLog.clearScreen(screen);
-      _fps.clearScreen(screen);
-      _hardware.clearScreen(screen);
-    }
-    notifyListeners();
-  }
-
   // ── FPS ───────────────────────────────────────────────────────────────
 
   void addOverlaySamples(double fps, double gpuMs, double buildMs) {

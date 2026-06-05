@@ -2,12 +2,15 @@ import '../../core/monitor_constants.dart';
 import '../../domain/api_log_item.dart';
 
 class ApiLogController {
+  static const int _maxTrackedScreens = 50;
+
   final Map<String, List<ApiLogItem>> initLogsMap = {};
   final Map<String, List<ApiLogItem>> refreshLogsMap = {};
   final Map<String, int> _orderCounters = {};
   final Map<String, DateTime> _lastApiTime = {};
   final Map<String, bool> _screenInRefreshMode = {};
   final Map<String, int> _refreshCycleCounters = {};
+  final List<String> _screenOrder = [];
 
   String? activePopup;
 
@@ -24,12 +27,27 @@ class ApiLogController {
   bool isInRefresh(String screen) => (_refreshCycleCounters[screen] ?? 0) > 0;
 
   void startSession(String screenName) {
+    if (!initLogsMap.containsKey(screenName)) {
+      _screenOrder.add(screenName);
+      if (_screenOrder.length > _maxTrackedScreens) {
+        _evict(_screenOrder.removeAt(0));
+      }
+    }
     _orderCounters.putIfAbsent(screenName, () => 0);
     _screenInRefreshMode.putIfAbsent(screenName, () => false);
     _refreshCycleCounters.putIfAbsent(screenName, () => 0);
     initLogsMap.putIfAbsent(screenName, () => []);
     refreshLogsMap.putIfAbsent(screenName, () => []);
     updateView(screenName);
+  }
+
+  void _evict(String screenName) {
+    initLogsMap.remove(screenName);
+    refreshLogsMap.remove(screenName);
+    _orderCounters.remove(screenName);
+    _lastApiTime.remove(screenName);
+    _screenInRefreshMode.remove(screenName);
+    _refreshCycleCounters.remove(screenName);
   }
 
   void addLog(ApiLogItem item, String screen, String popupSuffix) {
@@ -163,12 +181,8 @@ class ApiLogController {
   }
 
   void clearScreen(String screenName) {
-    initLogsMap.remove(screenName);
-    refreshLogsMap.remove(screenName);
-    _orderCounters.remove(screenName);
-    _lastApiTime.remove(screenName);
-    _screenInRefreshMode.remove(screenName);
-    _refreshCycleCounters.remove(screenName);
+    _screenOrder.remove(screenName);
+    _evict(screenName);
     apiLogs = [];
     initApiCount = 0;
     refreshApiCount = 0;
@@ -183,8 +197,10 @@ class ApiLogController {
     refreshLogsMap.clear();
     apiLogs = [];
     _orderCounters.clear();
+    _lastApiTime.clear();
     _screenInRefreshMode.clear();
     _refreshCycleCounters.clear();
+    _screenOrder.clear();
     activePopup = null;
     initApiCount = 0;
     refreshApiCount = 0;

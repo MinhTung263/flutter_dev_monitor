@@ -10,20 +10,15 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   }
 
   /// The NavigatorState of the host app — available after the first route push.
-  /// Use this to navigate from outside the Navigator widget tree (e.g. FpsOverlay).
   static NavigatorState? get navigatorState => _instance?.navigator;
 
   static final List<String> pageStack = [];
-  static final Map<String, String> pageToSessionMap = {};
 
   /// The most recently pushed page route name (excludes popups and dashboard).
   static String currentContentRoute = '/unknown';
 
   /// The topmost active route (including popups).
   static String currentRoute = '/unknown';
-
-  static String get _activeAnchor =>
-      pageStack.length > 1 ? pageStack[1] : (pageStack.firstOrNull ?? '/unknown');
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
@@ -37,7 +32,6 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
     if (route is PageRoute) {
       pageStack.add(name);
-      pageToSessionMap[name] = _activeAnchor;
       final ctrl = MonitorController.instance;
       ctrl.startSession(name);
       ctrl.logRoutePush(name, previousRoute?.settings.name);
@@ -62,15 +56,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     if (route is PageRoute) {
       pageStack.remove(name);
       if (!pageStack.contains(name)) {
-        final ctrl = MonitorController.instance;
-        ctrl.logRoutePop(name, prevName);
-        if (pageToSessionMap[name] == name) {
-          ctrl.clearSessionByAnchor(name);
-          pageToSessionMap.removeWhere((_, v) => v == name);
-        } else {
-          ctrl.clearScreenData(name);
-          pageToSessionMap.remove(name);
-        }
+        MonitorController.instance.logRoutePop(name, prevName);
       }
     } else if (route is PopupRoute) {
       MonitorController.instance
@@ -87,12 +73,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     if (name == null || name.isEmpty || name == '/MonitorDashboardPage') return;
 
     pageStack.remove(name);
-    final ctrl = MonitorController.instance;
-    ctrl.logRoutePop(name, previousRoute?.settings.name);
-    if (!pageStack.contains(name) && pageToSessionMap[name] == name) {
-      ctrl.clearSessionByAnchor(name);
-      pageToSessionMap.removeWhere((_, v) => v == name);
-    }
+    MonitorController.instance.logRoutePop(name, previousRoute?.settings.name);
   }
 
   @override
@@ -101,19 +82,12 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     final oldName = oldRoute is PageRoute ? oldRoute.settings.name : null;
     final newName = newRoute is PageRoute ? newRoute.settings.name : null;
 
-    if (oldName != null) {
-      pageStack.remove(oldName);
-      if (!pageStack.contains(oldName) &&
-          pageToSessionMap[oldName] == oldName) {
-        MonitorController.instance.clearSessionByAnchor(oldName);
-        pageToSessionMap.removeWhere((_, v) => v == oldName);
-      }
-    }
+    if (oldName != null) pageStack.remove(oldName);
+
     if (newName != null && newName.isNotEmpty &&
         newName != '/MonitorDashboardPage') {
       currentRoute = newName;
       pageStack.add(newName);
-      pageToSessionMap[newName] = _activeAnchor;
       MonitorController.instance.startSession(newName);
     }
 
