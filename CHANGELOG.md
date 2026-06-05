@@ -1,3 +1,11 @@
+## 1.3.3
+
+* **Refactored `MonitorDashboardPage`**: split 1300-line file into 6 focused part files (`dashboard_header`, `log_tab_section`, `api_log_section`, `error_log_section`, `route_log_section`) using Dart `part`/`part of`.
+* **Fixed API history lost on re-navigation**: `startSession` now uses `putIfAbsent` — logs are preserved when a screen is re-pushed via replace navigation (e.g. GetX `offNamed`). Data only clears on explicit user action.
+* **LRU screen eviction**: `ApiLogController` now caps tracked screens at 50. When exceeded, the oldest screen's data is evicted automatically.
+* **Removed `clearSessionByAnchor`**: auto-clearing on pop/replace is gone. Navigation no longer resets API history — data accumulates until the user taps the clear button.
+* **Cleaned up `MonitorNavigatorObserver`**: removed `pageToSessionMap` and `_activeAnchor` fields.
+
 ## 1.3.2
 
 * **`FpsOverlay` pill redesign**: more compact layout, colored mini-labels (API/MEM/NET), animated one-time "hold to open" hint fades in on first appearance.
