@@ -7,9 +7,6 @@ import '../presentation/controller/monitor_controller.dart';
 import '../presentation/navigation/monitor_navigator_observer.dart';
 
 class MonitorInterceptor extends Interceptor {
-  static const int _maxBodyChars = 8 * 1024; // 8 KB output cap
-  static const int _maxArrayItems = 25;       // max list items to serialize
-  static const int _maxMapKeys = 40;          // max map keys to serialize
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
@@ -110,52 +107,15 @@ class MonitorInterceptor extends Interceptor {
     try {
       if (data is String) {
         if (data.isEmpty) return null;
-        // Truncate raw string BEFORE parsing to prevent OOM
-        final src = data.length > _maxBodyChars
-            ? data.substring(0, _maxBodyChars)
-            : data;
         try {
-          final formatted =
-              const JsonEncoder.withIndent('  ').convert(jsonDecode(src));
-          return formatted.length > _maxBodyChars
-              ? '${formatted.substring(0, _maxBodyChars)}\n// … (truncated)'
-              : formatted;
+          return const JsonEncoder.withIndent('  ').convert(jsonDecode(data));
         } catch (_) {
-          return data.length > _maxBodyChars
-              ? '${src}\n// … (${data.length} chars total, truncated)'
-              : data;
+          return data;
         }
       }
-
-      // Limit LIST size BEFORE serializing — prevents OOM on large arrays
-      if (data is List) {
-        if (data.isEmpty) return '[]';
-        final isTrunc = data.length > _maxArrayItems;
-        final sample =
-            isTrunc ? data.take(_maxArrayItems).toList() : data;
-        final encoded = const JsonEncoder.withIndent('  ').convert(sample);
-        final note =
-            isTrunc ? '\n// … ${data.length - _maxArrayItems} more items' : '';
-        return encoded.length > _maxBodyChars
-            ? '${encoded.substring(0, _maxBodyChars)}\n// … (truncated)$note'
-            : '$encoded$note';
+      if (data is List || data is Map) {
+        return const JsonEncoder.withIndent('  ').convert(data);
       }
-
-      // Limit MAP key count BEFORE serializing
-      if (data is Map) {
-        if (data.isEmpty) return '{}';
-        final isTrunc = data.length > _maxMapKeys;
-        final sample = isTrunc
-            ? Map.fromEntries(data.entries.take(_maxMapKeys))
-            : data;
-        final encoded = const JsonEncoder.withIndent('  ').convert(sample);
-        final note =
-            isTrunc ? '\n// … ${data.length - _maxMapKeys} more keys' : '';
-        return encoded.length > _maxBodyChars
-            ? '${encoded.substring(0, _maxBodyChars)}\n// … (truncated)$note'
-            : '$encoded$note';
-      }
-
       return data.toString();
     } catch (_) {
       return null;

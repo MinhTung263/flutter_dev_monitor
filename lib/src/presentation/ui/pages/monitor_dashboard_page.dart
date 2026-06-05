@@ -24,7 +24,6 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   late String _selectedScreen;
   bool _chartExpanded = true;
   bool _ramChartExpanded = false;
-  bool _rebuildExpanded = false;
   int _activeTab = 0; // 0=API  1=ROUTES  2=ERRORS
   String _filterMode = 'ALL';
 
@@ -109,11 +108,6 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
               onRamChartToggle: () =>
                   setState(() => _ramChartExpanded = !_ramChartExpanded),
               totalRam: _ctrl.totalRam,
-              rebuildEntries:
-                  _ctrl.rebuildCountsForScreen(_selectedScreen),
-              rebuildExpanded: _rebuildExpanded,
-              onRebuildToggle: () =>
-                  setState(() => _rebuildExpanded = !_rebuildExpanded),
             ),
           ),
         ],
@@ -254,9 +248,6 @@ class _DashboardHeader extends StatelessWidget {
   final bool ramChartExpanded;
   final VoidCallback onRamChartToggle;
   final double totalRam;
-  final List<MapEntry<String, int>> rebuildEntries;
-  final bool rebuildExpanded;
-  final VoidCallback onRebuildToggle;
 
   const _DashboardHeader({
     required this.screen,
@@ -267,9 +258,6 @@ class _DashboardHeader extends StatelessWidget {
     required this.ramChartExpanded,
     required this.onRamChartToggle,
     required this.totalRam,
-    required this.rebuildEntries,
-    required this.rebuildExpanded,
-    required this.onRebuildToggle,
   });
 
   @override
@@ -307,20 +295,6 @@ class _DashboardHeader extends StatelessWidget {
               child: RamChartWidget(history: ramChartData, totalRam: totalRam),
             ),
           _HBorder(),
-          _ChartHeader(
-            label: 'WIDGET REBUILDS',
-            iconColor: const Color(0xFFA78BFA),
-            sampleCount: rebuildEntries.fold(0, (s, e) => s + e.value),
-            countSuffix: 'total',
-            expanded: rebuildExpanded,
-            onToggle: onRebuildToggle,
-          ),
-          if (rebuildExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: _RebuildTable(entries: rebuildEntries),
-            ),
-          _HBorder(),
         ],
       ),
     );
@@ -331,7 +305,6 @@ class _ChartHeader extends StatelessWidget {
   final String label;
   final Color iconColor;
   final int sampleCount;
-  final String countSuffix;
   final bool expanded;
   final VoidCallback onToggle;
 
@@ -341,7 +314,6 @@ class _ChartHeader extends StatelessWidget {
     required this.sampleCount,
     required this.expanded,
     required this.onToggle,
-    this.countSuffix = 'samples',
   });
 
   @override
@@ -371,7 +343,7 @@ class _ChartHeader extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              '$sampleCount $countSuffix',
+              '$sampleCount samples',
               style: TextStyle(
                   color: MonitorColors.secondaryText,
                   fontSize: 9,
@@ -385,109 +357,6 @@ class _ChartHeader extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ─── Rebuild table ────────────────────────────────────────────────────────────
-
-class _RebuildTable extends StatelessWidget {
-  final List<MapEntry<String, int>> entries;
-  const _RebuildTable({required this.entries});
-
-  @override
-  Widget build(BuildContext context) {
-    if (entries.isEmpty) {
-      return Container(
-        height: 44,
-        alignment: Alignment.center,
-        child: Text(
-          'No rebuilds recorded — add MonitorRebuild mixin to your widgets',
-          style: TextStyle(color: MonitorColors.secondaryText, fontSize: 10),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-
-    const kColor = Color(0xFFA78BFA);
-    final maxCount = entries.first.value; // already sorted desc
-
-    return Container(
-      decoration: BoxDecoration(
-        color: MonitorColors.expandedDetailBg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: MonitorColors.border),
-      ),
-      child: Column(
-        children: [
-          for (int i = 0; i < entries.length; i++) ...[
-            if (i > 0)
-              Container(height: 1, color: MonitorColors.border),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              child: Row(
-                children: [
-                  // Widget name
-                  Expanded(
-                    flex: 5,
-                    child: Text(
-                      entries[i].key,
-                      style: TextStyle(
-                        color: i == 0
-                            ? MonitorColors.statusError
-                            : MonitorColors.primaryText,
-                        fontSize: 10,
-                        fontFamily: 'monospace',
-                        fontWeight: i == 0
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Bar
-                  Expanded(
-                    flex: 3,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: LinearProgressIndicator(
-                        value: entries[i].value / maxCount,
-                        minHeight: 4,
-                        backgroundColor: kColor.withValues(alpha: 0.10),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          i == 0
-                              ? MonitorColors.statusError
-                              : kColor.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Count
-                  SizedBox(
-                    width: 32,
-                    child: Text(
-                      '${entries[i].value}',
-                      textAlign: TextAlign.end,
-                      style: TextStyle(
-                        color: i == 0
-                            ? MonitorColors.statusError
-                            : MonitorColors.secondaryText,
-                        fontSize: 10,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }

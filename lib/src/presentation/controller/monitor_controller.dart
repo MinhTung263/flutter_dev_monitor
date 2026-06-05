@@ -13,7 +13,6 @@ import 'api_log_controller.dart';
 import 'error_log_controller.dart';
 import 'fps_controller.dart';
 import 'hardware_controller.dart';
-import 'rebuild_log_controller.dart';
 import 'route_log_controller.dart';
 
 class MonitorController extends ChangeNotifier {
@@ -32,7 +31,6 @@ class MonitorController extends ChangeNotifier {
   final _hardware  = HardwareController();
   final _errorLog  = ErrorLogController();
   final _routeLog  = RouteLogController();
-  final _rebuild   = RebuildLogController();
   final _datasource = HardwareDatasource();
 
   // All screen names seen this session — never cleared on pop, only on clearAll()
@@ -78,22 +76,6 @@ class MonitorController extends ChangeNotifier {
 
   List<ErrorLogItem> get errorLogs => _errorLog.errors;
   int get flutterErrorCount => _errorLog.count;
-
-  // ── Expose rebuild state ─────────────────────────────────────────────
-
-  List<MapEntry<String, int>> rebuildCountsForScreen(String screen) =>
-      _rebuild.sortedForScreen(screen);
-
-  int rebuildTotalForScreen(String screen) =>
-      _rebuild.totalForScreen(screen);
-
-  void recordRebuild(String widgetName, String screen) {
-    if (screen.isEmpty ||
-        screen == MonitorConstants.dashboardRoute ||
-        screen == MonitorConstants.unknownRoute) return;
-    _rebuild.record(widgetName, screen);
-    notifyListeners();
-  }
 
   // ── Expose route log state ────────────────────────────────────────────
 
@@ -213,7 +195,6 @@ class MonitorController extends ChangeNotifier {
     _hardware.clearAll();
     _errorLog.clearAll();
     _routeLog.clearAll();
-    _rebuild.clearAll();
     _visitedScreens.clear();
     notifyListeners();
   }
