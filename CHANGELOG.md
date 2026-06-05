@@ -1,3 +1,8 @@
+## 1.3.4
+
+* **Fixed API phase mis-classification on re-navigation**: re-entering a screen (e.g. pressing back then forward) now correctly classifies its init APIs as INIT instead of ACTION. Root cause: `startSession` now always resets `_lastApiTime` and `_screenInRefreshMode` on entry, so the elapsed time since the previous visit no longer triggers the refresh-gap heuristic.
+* **Fixed overlay showing stale API count after pop**: the `FpsOverlay` pill now immediately reflects the API count of the screen being returned to. `MonitorNavigatorObserver` calls `updateDashboardView` on `didPop` and `didRemove` so the count refreshes without waiting for the next API call.
+
 ## 1.3.3
 
 * **Refactored `MonitorDashboardPage`**: split 1300-line file into 6 focused part files (`dashboard_header`, `log_tab_section`, `api_log_section`, `error_log_section`, `route_log_section`) using Dart `part`/`part of`.

@@ -1,6 +1,6 @@
 name: flutter_dev_monitor
 description: In-app developer monitor for Flutter apps. Tracks API calls, FPS, RAM, and disk usage with a floating overlay and full dashboard. Framework-agnostic — works with GetX, Provider, Riverpod, or plain Flutter.
-version: 1.3.3
+version: 1.3.4
 homepage: https://github.com/MinhTung263/flutter_dev_monitor
 repository: https://github.com/MinhTung263/flutter_dev_monitor
 issue_tracker: https://github.com/MinhTung263/flutter_dev_monitor/issues
