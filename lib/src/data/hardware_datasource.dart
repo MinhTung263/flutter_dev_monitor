@@ -39,6 +39,21 @@ class HardwareDatasource {
     }
   }
 
+  Future<int?> measurePing() async {
+    try {
+      final sw = Stopwatch()..start();
+      final socket = await Socket.connect(
+        '1.1.1.1', 80,
+        timeout: const Duration(seconds: 3),
+      );
+      final ms = sw.elapsedMilliseconds;
+      socket.destroy();
+      return ms;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<String> fetchDeviceModel() async {
     try {
       final info = DeviceInfoPlugin();

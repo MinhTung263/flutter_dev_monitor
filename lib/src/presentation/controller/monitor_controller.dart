@@ -37,6 +37,8 @@ class MonitorController extends ChangeNotifier {
   final Set<String> _visitedScreens = {};
 
   Timer? _hardwareTimer;
+  Timer? _pingTimer;
+  int? _currentPingMs;
 
   // ── Expose API log state ──────────────────────────────────────────────
 
@@ -97,6 +99,10 @@ class MonitorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Expose ping state ────────────────────────────────────────────────
+
+  int? get currentPingMs => _currentPingMs;
+
   // ── Expose hardware state ─────────────────────────────────────────────
 
   double get currentRam => _hardware.currentRam;
@@ -111,6 +117,7 @@ class MonitorController extends ChangeNotifier {
   void _init() {
     _loadDeviceModel();
     _startHardwareMonitoring();
+    _startPingMonitoring();
     _hookFlutterErrors();
     MonitorColors.load(); // fire-and-forget: restores persisted theme
   }
@@ -141,6 +148,7 @@ class MonitorController extends ChangeNotifier {
   @override
   void dispose() {
     _hardwareTimer?.cancel();
+    _pingTimer?.cancel();
     super.dispose();
   }
 
@@ -250,6 +258,17 @@ class MonitorController extends ChangeNotifier {
       const Duration(seconds: 3),
       (_) => _fetchHardware(),
     );
+  }
+
+  void _startPingMonitoring() {
+    _fetchPing();
+    _pingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchPing());
+  }
+
+  Future<void> _fetchPing() async {
+    final ms = await _datasource.measurePing();
+    _currentPingMs = ms;
+    notifyListeners();
   }
 
   Future<void> _fetchHardware() async {

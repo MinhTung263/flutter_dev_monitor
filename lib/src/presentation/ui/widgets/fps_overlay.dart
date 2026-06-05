@@ -273,9 +273,17 @@ class _PillBadge extends StatelessWidget {
           final memMb = ctrl.currentRam;
           final apiCount = ctrl.currentPhaseApiCount;
           final jankCount = ctrl.jankFrameCount;
+          final pingMs = ctrl.currentPingMs;
           final jank = fps < 50 && fps > 0;
           final fpsColor =
               jank ? MonitorColors.overlayAlert : MonitorColors.overlayFps;
+          final pingColor = pingMs == null
+              ? Colors.white24
+              : pingMs < 50
+                  ? MonitorColors.overlayFps
+                  : pingMs < 150
+                      ? MonitorColors.overlayBuild
+                      : MonitorColors.overlayAlert;
 
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -366,6 +374,27 @@ class _PillBadge extends StatelessWidget {
                             height: 1.2)),
                   ],
                 ),
+                const SizedBox(height: 3),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('NET ',
+                        style: TextStyle(
+                            color: pingColor,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'monospace',
+                            height: 1.2)),
+                    Text(
+                        pingMs == null ? '--' : '${pingMs}ms',
+                        style: TextStyle(
+                            color: pingColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'monospace',
+                            height: 1.2)),
+                  ],
+                ),
               ],
             ),
           );
@@ -424,6 +453,7 @@ class _DetailsPanel extends StatelessWidget {
           final gpuMs = ctrl.currentGpuMs;
           final memMb = ctrl.currentRam;
           final apiCount = ctrl.currentPhaseApiCount;
+          final pingMs = ctrl.currentPingMs;
 
           final fpsHist = List<double>.from(ctrl.overlayFpsHistory);
           final gpuHist = List<double>.from(ctrl.overlayGpuHistory);
@@ -555,6 +585,18 @@ class _DetailsPanel extends StatelessWidget {
                     _metricRow(
                         'Mem', '${memMb.toStringAsFixed(1)}MB', mMem, [], 1),
                     _metricRow('API', '$apiCount calls', mApi, [], 0),
+                    _metricRow(
+                        'NET',
+                        pingMs == null ? '--' : '${pingMs}ms',
+                        pingMs == null
+                            ? subtleTxt
+                            : pingMs < 50
+                                ? mFps
+                                : pingMs < 150
+                                    ? mBuild
+                                    : mJank,
+                        [],
+                        0),
                     _metricRow(
                         'FPS', fps.toStringAsFixed(2), mFpsActive, fpsHist, 2),
                     const SizedBox(height: 4),
