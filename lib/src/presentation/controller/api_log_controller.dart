@@ -179,17 +179,9 @@ class ApiLogController {
       totalRefreshDuration = 0;
     }
 
-    // ACTION on top (newest cycle first), INIT below (newest visit first).
+    // Newest call on top, oldest at bottom — pure chronological order.
     apiLogs = [...refreshLogs, ...initLogs]
-      ..sort((a, b) {
-        if (a.phase != b.phase) {
-          return a.phase == ApiLogItem.phaseRefresh ? -1 : 1;
-        }
-        if (a.refreshCycle != b.refreshCycle) {
-          return b.refreshCycle.compareTo(a.refreshCycle);
-        }
-        return b.orderNumber.compareTo(a.orderNumber);
-      });
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
 
   void clearScreen(String screenName) {
