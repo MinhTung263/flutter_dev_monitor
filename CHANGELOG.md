@@ -1,3 +1,10 @@
+## 1.3.2
+
+* **`FpsOverlay` pill redesign**: more compact layout, colored mini-labels (API/MEM/NET), animated one-time "hold to open" hint fades in on first appearance.
+* **Tap `_DetailsPanel` to collapse**: tapping anywhere on the expanded panel now collapses it back to the pill (in addition to the existing collapse button).
+* **Removed route arguments tracking**: `RouteLogItem.arguments` and related encoding removed — custom Dart classes cannot be reliably serialized without a `toJson()` method, making the feature unreliable.
+* **Fixed `startSession` data wipe**: API logs are now preserved when a screen is re-pushed (e.g. via GetX `offNamed`/replace navigation). Data is only cleared when the user explicitly taps the clear button.
+
 ## 1.3.1
 
 * Fixed repository URL in pubspec.yaml (was `tunglv`, now `MinhTung263`).
