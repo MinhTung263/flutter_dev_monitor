@@ -1,3 +1,14 @@
+## 1.3.0
+
+* **Full response body**: removed all truncation limits — response data (arrays, maps, strings) now displayed in full regardless of size.
+* **Route arguments tracking**: `RouteLogItem` now captures `route.settings.arguments` (JSON-encoded for Map/List, toString otherwise). Shown as an expandable `arguments ▾` row in the ROUTES tab tile.
+* **Network ping**: live TCP ping to `1.1.1.1:80`, refreshed every 5 s. Displayed as `NET Xms` in the FpsOverlay pill (3rd row) and as a `NET` metric row in the details panel. Color-coded: green < 50 ms, yellow < 150 ms, red ≥ 150 ms.
+* **`DevMonitor.tapToToggle`**: wrap any widget with a secret N-tap trigger (default 7) to toggle the overlay. Optional `clipboardKey` is copied to the clipboard on each trigger — useful as a passphrase for testers. Overlay is now visible by default (`isShowing: true`).
+* **`MonitorTextStyle` + text widgets**: added `MonitorTextStyle.mono/label/body` factories and `MonoText`, `LabelText`, `BodyText` widgets (exported publicly) — applied across all UI files to eliminate repeated `TextStyle` boilerplate.
+* **`_ScreenPickerSheet` redesign**: card-style items with left accent border for selected screen, numeric index badge (1 = newest), route name split into screen title + sub-path, count badge. Screens ordered newest-first.
+* **Small-screen layout fixes**: `MetricsBar` split into two rows (INIT+ACTION / ERRORS+JANK+RAM); screen name in tab header wrapped in `Flexible`; section summary text ellipsis; `_HardwareStat` value overflow ellipsis.
+* **FpsOverlay navigation**: long-press on pill opens `MonitorDashboardPage` directly; opening dashboard from details panel collapses overlay to pill; guard prevents opening a duplicate dashboard when already on that page.
+
 ## 1.2.0
 
 * **API log — tabbed expanded view** (TIMELINE | REQUEST | RESPONSE | HEADERS): interceptor now captures query params, request/response headers, and bodies (pretty-printed JSON, capped to prevent OOM). `url` changed to full URI via `options.uri.toString()`.
