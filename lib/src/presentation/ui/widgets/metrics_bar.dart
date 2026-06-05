@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
+import 'monitor_text.dart';
 
 class MonitorMetricsBar extends StatelessWidget {
   final int screenErrorCount;
@@ -15,29 +16,40 @@ class MonitorMetricsBar extends StatelessWidget {
       builder: (context, _) {
         final ctrl = MonitorController.instance;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _PhasePill(
-                label: 'INIT',
-                count: ctrl.initApiCount,
-                duration: ctrl.initTotalDuration,
-                color: MonitorColors.metricInit,
+              Row(
+                children: [
+                  _PhasePill(
+                    label: 'INIT',
+                    count: ctrl.initApiCount,
+                    duration: ctrl.initTotalDuration,
+                    color: MonitorColors.metricInit,
+                  ),
+                  const SizedBox(width: 8),
+                  _PhasePill(
+                    label: 'ACTION',
+                    count: ctrl.totalRefreshApiCount,
+                    duration: ctrl.totalRefreshDuration,
+                    color: MonitorColors.metricRefresh,
+                    emptyLabel: '--',
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              _PhasePill(
-                label: 'ACTION',
-                count: ctrl.totalRefreshApiCount,
-                duration: ctrl.totalRefreshDuration,
-                color: MonitorColors.metricRefresh,
-                emptyLabel: '--',
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(child: _ErrorPill(count: screenErrorCount)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _JankPill(count: ctrl.jankFrameCount)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _RamPill(
+                          ramMb: ctrl.currentRam, totalMb: ctrl.totalRam)),
+                ],
               ),
-              const SizedBox(width: 8),
-              _ErrorPill(count: screenErrorCount),
-              const SizedBox(width: 8),
-              _JankPill(count: ctrl.jankFrameCount),
-              const SizedBox(width: 8),
-              _RamPill(ramMb: ctrl.currentRam, totalMb: ctrl.totalRam),
             ],
           ),
         );
@@ -81,19 +93,10 @@ class _PhasePill extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(label,
-                      style: TextStyle(
-                          color: color.withValues(alpha: 0.7),
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.4)),
+                  LabelText(label, color.withValues(alpha: 0.7)),
                   const SizedBox(height: 3),
-                  Text(durationStr,
-                      style: TextStyle(
-                          color: color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'monospace')),
+                  MonoText(durationStr, 12,
+                      color: color, weight: FontWeight.bold),
                 ],
               ),
             ),
@@ -104,12 +107,8 @@ class _PhasePill extends StatelessWidget {
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Text('$count API',
-                    style: TextStyle(
-                        color: color,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'monospace')),
+                child: MonoText('$count API', 9,
+                    color: color, weight: FontWeight.bold),
               ),
           ],
         ),
@@ -139,19 +138,9 @@ class _ErrorPill extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('ERRORS',
-              style: TextStyle(
-                  color: color.withValues(alpha: 0.7),
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.4)),
+          LabelText('ERRORS', color.withValues(alpha: 0.7)),
           const SizedBox(height: 3),
-          Text('$count',
-              style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace')),
+          MonoText('$count', 12, color: color, weight: FontWeight.bold),
         ],
       ),
     );
@@ -181,19 +170,9 @@ class _RamPill extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('RAM',
-              style: TextStyle(
-                  color: color.withValues(alpha: 0.7),
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.4)),
+          LabelText('RAM', color.withValues(alpha: 0.7)),
           const SizedBox(height: 3),
-          Text(label,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace')),
+          MonoText(label, 12, color: color, weight: FontWeight.bold),
         ],
       ),
     );
@@ -221,19 +200,9 @@ class _JankPill extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('JANK',
-              style: TextStyle(
-                  color: color.withValues(alpha: 0.7),
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.4)),
+          LabelText('JANK', color.withValues(alpha: 0.7)),
           const SizedBox(height: 3),
-          Text('$count',
-              style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace')),
+          MonoText('$count', 12, color: color, weight: FontWeight.bold),
         ],
       ),
     );

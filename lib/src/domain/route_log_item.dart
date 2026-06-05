@@ -9,6 +9,7 @@ class RouteLogItem {
   final String? from;
   final DateTime timestamp;
   final Duration? duration; // active time — set on POP / REPLACE
+  final String? arguments;  // serialized push/replace arguments
 
   const RouteLogItem({
     required this.id,
@@ -17,5 +18,6 @@ class RouteLogItem {
     this.from,
     required this.timestamp,
     this.duration,
+    this.arguments,
   });
 }

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../domain/api_log_item.dart';
 import '../theme/monitor_theme.dart';
+import 'monitor_text.dart';
 
 class ApiLogTile extends StatefulWidget {
   final ApiLogItem log;
@@ -106,16 +107,7 @@ class _CollapsedRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              log.url,
-              style: TextStyle(
-                color: MonitorColors.primaryText,
-                fontSize: 11.5,
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w500,
-                height: 1.3,
-              ),
-            ),
+            MonoText(log.url, 11.5, color: MonitorColors.primaryText, weight: FontWeight.w500, height: 1.3),
             if (log.hasCallerName) ...[
               const SizedBox(height: 4),
               _CallerRow(
@@ -259,17 +251,9 @@ class _TabBar extends StatelessWidget {
                     ),
                   ),
                 ),
-                child: Text(
-                  tabs[i],
-                  style: TextStyle(
-                    color: active == i
-                        ? MonitorColors.metricTotal
-                        : MonitorColors.secondaryText,
-                    fontSize: 9,
-                    fontWeight: active == i ? FontWeight.bold : FontWeight.w500,
-                    letterSpacing: 0.4,
-                  ),
-                ),
+                child: active == i
+                    ? LabelText(tabs[i], MonitorColors.metricTotal, size: 9)
+                    : BodyText(tabs[i], 9, color: MonitorColors.secondaryText, weight: FontWeight.w500),
               ),
             ),
         ],
@@ -295,15 +279,7 @@ class _TimelineContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'EXECUTION TIMELINE',
-            style: TextStyle(
-              color: MonitorColors.secondaryText,
-              fontSize: 9,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
-            ),
-          ),
+          LabelText('EXECUTION TIMELINE', MonitorColors.secondaryText, size: 9, spacing: 0.8),
           const SizedBox(height: 12),
           _TimelineStep(
             title: 'Request Sent',
@@ -409,15 +385,7 @@ class _RequestContent extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: SelectionArea(
-                  child: Text(
-                    log.url,
-                    style: TextStyle(
-                      color: MonitorColors.primaryText,
-                      fontSize: 11,
-                      fontFamily: 'monospace',
-                      height: 1.4,
-                    ),
-                  ),
+                  child: MonoText(log.url, 11, color: MonitorColors.primaryText, height: 1.4),
                 ),
               ),
             ],
@@ -437,11 +405,7 @@ class _RequestContent extends StatelessWidget {
           ],
           if (!hasQuery && !hasBody) ...[
             const SizedBox(height: 8),
-            Text(
-              'No query params or body.',
-              style:
-                  TextStyle(color: MonitorColors.secondaryText, fontSize: 11),
-            ),
+            BodyText('No query params or body.', 11, color: MonitorColors.secondaryText),
           ],
         ],
       ),
@@ -498,16 +462,7 @@ class _CurlCopyButtonState extends State<_CurlCopyButton> {
                   : MonitorColors.metricTotal,
             ),
             const SizedBox(width: 4),
-            Text(
-              _copied ? 'Copied!' : 'Copy cURL',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: _copied
-                    ? MonitorColors.statusSuccess
-                    : MonitorColors.metricTotal,
-              ),
-            ),
+            BodyText(_copied ? 'Copied!' : 'Copy cURL', 9, color: _copied ? MonitorColors.statusSuccess : MonitorColors.metricTotal, weight: FontWeight.bold),
           ],
         ),
       ),
@@ -549,38 +504,13 @@ class _ResponseContent extends StatelessWidget {
                   border: Border.all(
                       color: statusColor.withValues(alpha: 0.4), width: 0.5),
                 ),
-                child: Text(
-                  '${log.statusCode}',
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace',
-                  ),
-                ),
+                child: MonoText('${log.statusCode}', 11, color: statusColor, weight: FontWeight.bold),
               ),
               const SizedBox(width: 10),
-              Text(
-                '${log.duration}ms',
-                style: TextStyle(
-                  color: log.isSlow
-                      ? MonitorColors.statusSlow
-                      : MonitorColors.secondaryText,
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              MonoText('${log.duration}ms', 11, color: log.isSlow ? MonitorColors.statusSlow : MonitorColors.secondaryText, weight: FontWeight.w600),
               if (log.hasResponseSize) ...[
                 const SizedBox(width: 10),
-                Text(
-                  log.responseSizeFormatted,
-                  style: TextStyle(
-                    color: MonitorColors.secondaryText,
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                  ),
-                ),
+                MonoText(log.responseSizeFormatted, 11),
               ],
             ],
           ),
@@ -589,11 +519,7 @@ class _ResponseContent extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: hasBody
               ? _BodyBlock(text: log.responseBody!)
-              : Text(
-                  'No response body.',
-                  style: TextStyle(
-                      color: MonitorColors.secondaryText, fontSize: 11),
-                ),
+              : BodyText('No response body.', 11, color: MonitorColors.secondaryText),
         ),
       ],
     );
@@ -614,8 +540,7 @@ class _HeadersContent extends StatelessWidget {
     if (!hasReqHeaders && !hasResHeaders) {
       return Padding(
         padding: const EdgeInsets.all(12),
-        child: Text('No headers captured.',
-            style: TextStyle(color: MonitorColors.secondaryText, fontSize: 11)),
+        child: BodyText('No headers captured.', 11, color: MonitorColors.secondaryText),
       );
     }
 
@@ -757,12 +682,7 @@ class _CopyActionsSheetState extends State<_CopyActionsSheet> {
                 Icon(Icons.copy_all_rounded,
                     size: 16, color: MonitorColors.secondaryText),
                 const SizedBox(width: 8),
-                Text('Copy',
-                    style: TextStyle(
-                      color: MonitorColors.primaryText,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    )),
+                BodyText('Copy', 14, weight: FontWeight.bold),
                 const Spacer(),
                 // Status badge
                 Container(
@@ -775,17 +695,7 @@ class _CopyActionsSheetState extends State<_CopyActionsSheet> {
                         .withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text(
-                    '${log.method} ${log.statusCode}',
-                    style: TextStyle(
-                      color: log.isSuccess
-                          ? MonitorColors.statusSuccess
-                          : MonitorColors.statusError,
-                      fontSize: 10,
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: MonoText('${log.method} ${log.statusCode}', 10, color: log.isSuccess ? MonitorColors.statusSuccess : MonitorColors.statusError, weight: FontWeight.bold),
                 ),
               ],
             ),
@@ -818,23 +728,9 @@ class _CopyActionsSheetState extends State<_CopyActionsSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(action.label,
-                              style: TextStyle(
-                                color: MonitorColors.primaryText,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              )),
+                          BodyText(action.label, 13, weight: FontWeight.w600),
                           const SizedBox(height: 2),
-                          Text(
-                            action.preview,
-                            style: TextStyle(
-                              color: MonitorColors.secondaryText,
-                              fontSize: 10,
-                              fontFamily: 'monospace',
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          MonoText(action.preview, 10, maxLines: 1, overflow: TextOverflow.ellipsis),
                         ],
                       ),
                     ),
@@ -889,15 +785,7 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: TextStyle(
-        color: MonitorColors.secondaryText,
-        fontSize: 9,
-        fontWeight: FontWeight.bold,
-        letterSpacing: 0.8,
-      ),
-    );
+    return LabelText(label, MonitorColors.secondaryText, size: 9, spacing: 0.8);
   }
 }
 
@@ -988,27 +876,12 @@ class _KVTable extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: 110,
-                    child: Text(
-                      entries[i].key,
-                      style: TextStyle(
-                        color: MonitorColors.callerName,
-                        fontSize: 10,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    child: MonoText(entries[i].key, 10, color: MonitorColors.callerName, weight: FontWeight.w500),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: SelectionArea(
-                      child: Text(
-                        entries[i].value,
-                        style: TextStyle(
-                          color: MonitorColors.primaryText,
-                          fontSize: 10,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
+                      child: MonoText(entries[i].value, 10, color: MonitorColors.primaryText),
                     ),
                   ),
                 ],
@@ -1039,15 +912,7 @@ class _BodyBlock extends StatelessWidget {
           SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(10, 8, 38, 8),
             child: SelectionArea(
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: MonitorColors.primaryText,
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                  height: 1.55,
-                ),
-              ),
+              child: MonoText(text, 10, color: MonitorColors.primaryText, height: 1.55),
             ),
           ),
           Positioned(
@@ -1116,13 +981,7 @@ class _OrderBadge extends StatelessWidget {
         color: MonitorColors.orderBadgeBg,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text('#$order',
-          style: TextStyle(
-            color: MonitorColors.orderBadgeText,
-            fontSize: 9,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'monospace',
-          )),
+      child: MonoText('#$order', 9, color: MonitorColors.orderBadgeText, weight: FontWeight.bold),
     );
   }
 }
@@ -1142,9 +1001,7 @@ class _PhaseBadge extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(3),
       ),
-      child: Text(phase,
-          style: TextStyle(
-              color: color, fontSize: 7, fontWeight: FontWeight.bold)),
+      child: BodyText(phase, 7, color: color, weight: FontWeight.bold),
     );
   }
 }
@@ -1163,9 +1020,7 @@ class _MethodBadge extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(method,
-          style: TextStyle(
-              color: color, fontSize: 9, fontWeight: FontWeight.bold)),
+      child: BodyText(method, 9, color: color, weight: FontWeight.bold),
     );
   }
 }
@@ -1182,20 +1037,9 @@ class _DurationLabel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Text('${duration}ms',
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'monospace',
-            )),
+        MonoText('${duration}ms', 11, color: color, weight: FontWeight.bold),
         if (isSlow)
-          Text('⚠ SLOW',
-              style: TextStyle(
-                color: MonitorColors.statusSlow,
-                fontSize: 7,
-                fontWeight: FontWeight.bold,
-              )),
+          BodyText('⚠ SLOW', 7, color: MonitorColors.statusSlow, weight: FontWeight.bold),
       ],
     );
   }
@@ -1213,11 +1057,7 @@ class _CallerRow extends StatelessWidget {
         Icon(Icons.call_made, size: 10, color: color),
         const SizedBox(width: 4),
         Expanded(
-          child: Text(callerName,
-              style: TextStyle(
-                  color: color, fontSize: 10, fontFamily: 'monospace'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
+          child: MonoText(callerName, 10, color: color, maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
       ],
     );
@@ -1238,13 +1078,7 @@ class _CallCountBadge extends StatelessWidget {
         border:
             Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
       ),
-      child: Text('×$count',
-          style: const TextStyle(
-            color: Color(0xFFB45309),
-            fontSize: 9,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'monospace',
-          )),
+      child: MonoText('×$count', 9, color: Color(0xFFB45309), weight: FontWeight.bold),
     );
   }
 }
@@ -1265,14 +1099,7 @@ class _SlowBanner extends StatelessWidget {
               color: MonitorColors.statusSlow, size: 14),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              'Slow: ${(duration / 1000).toStringAsFixed(2)}s — risk of UI jank.',
-              style: TextStyle(
-                color: MonitorColors.statusSlow,
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            child: BodyText('Slow: ${(duration / 1000).toStringAsFixed(2)}s — risk of UI jank.', 10, color: MonitorColors.statusSlow, weight: FontWeight.w500),
           ),
         ],
       ),
@@ -1322,27 +1149,14 @@ class _TimelineStep extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title,
-                  style: TextStyle(
-                    color: MonitorColors.primaryText,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  )),
+              BodyText(title, 11, weight: FontWeight.bold),
               const SizedBox(height: 2),
-              Text(subtitle,
-                  style: TextStyle(
-                      color: MonitorColors.secondaryText, fontSize: 10)),
+              BodyText(subtitle, 10, color: MonitorColors.secondaryText),
               const SizedBox(height: 4),
             ],
           ),
         ),
-        Text(timeStr,
-            style: TextStyle(
-              color: MonitorColors.secondaryText,
-              fontSize: 10.5,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.bold,
-            )),
+        MonoText(timeStr, 10.5, weight: FontWeight.bold),
       ],
     );
   }
@@ -1357,16 +1171,7 @@ class _LogFooter extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${log.screen}  ·  ${log.phase}',
-          style: TextStyle(
-            color: MonitorColors.secondaryText,
-            fontSize: 10,
-            fontFamily: 'monospace',
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        MonoText('${log.screen}  ·  ${log.phase}', 10, maxLines: 1, overflow: TextOverflow.ellipsis),
         if (log.hasCallerName) ...[
           const SizedBox(height: 3),
           Row(
@@ -1375,17 +1180,7 @@ class _LogFooter extends StatelessWidget {
               const SizedBox(width: 4),
               Expanded(
                 child: SelectionArea(
-                  child: Text(
-                    log.callerName,
-                    style: TextStyle(
-                      color: MonitorColors.callerName,
-                      fontSize: 10,
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: MonoText(log.callerName, 10, color: MonitorColors.callerName, weight: FontWeight.w600, maxLines: 2, overflow: TextOverflow.ellipsis),
                 ),
               ),
             ],

@@ -82,8 +82,8 @@ class MonitorController extends ChangeNotifier {
   List<RouteLogItem> get routeLogs => _routeLog.logs;
   int get routeLogCount => _routeLog.count;
 
-  void logRoutePush(String route, String? from) {
-    _routeLog.logPush(route, from);
+  void logRoutePush(String route, String? from, {String? arguments}) {
+    _routeLog.logPush(route, from, arguments: arguments);
     notifyListeners();
   }
 
@@ -92,8 +92,8 @@ class MonitorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void logRouteReplace(String oldRoute, String newRoute) {
-    _routeLog.logReplace(oldRoute, newRoute);
+  void logRouteReplace(String oldRoute, String newRoute, {String? arguments}) {
+    _routeLog.logReplace(oldRoute, newRoute, arguments: arguments);
     notifyListeners();
   }
 

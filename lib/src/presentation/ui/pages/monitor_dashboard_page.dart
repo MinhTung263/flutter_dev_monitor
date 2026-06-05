@@ -10,6 +10,7 @@ import '../../controller/route_log_controller.dart';
 import '../widgets/fps_chart.dart';
 import '../widgets/hardware_grid.dart';
 import '../widgets/metrics_bar.dart';
+import '../widgets/monitor_text.dart';
 import '../widgets/ram_chart.dart';
 
 class MonitorDashboardPage extends StatefulWidget {
@@ -97,13 +98,13 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
           SliverToBoxAdapter(
             child: _DashboardHeader(
               screen: _selectedScreen,
-              chartData: List<double>.from(
-                  _ctrl.fpsHistoryMap[_selectedScreen] ?? []),
+              chartData:
+                  List<double>.from(_ctrl.fpsHistoryMap[_selectedScreen] ?? []),
               chartExpanded: _chartExpanded,
               onChartToggle: () =>
                   setState(() => _chartExpanded = !_chartExpanded),
-              ramChartData: List<double>.from(
-                  _ctrl.ramHistoryMap[_selectedScreen] ?? []),
+              ramChartData:
+                  List<double>.from(_ctrl.ramHistoryMap[_selectedScreen] ?? []),
               ramChartExpanded: _ramChartExpanded,
               onRamChartToggle: () =>
                   setState(() => _ramChartExpanded = !_ramChartExpanded),
@@ -156,7 +157,8 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     // their data was cleared on pop — so Login/Splash remain visible even after
     // navigating to Home.
     final screens = _ctrl.visitedScreens.toList();
-    if (!screens.contains(_selectedScreen) && _selectedScreen.isNotEmpty &&
+    if (!screens.contains(_selectedScreen) &&
+        _selectedScreen.isNotEmpty &&
         _selectedScreen != '/unknown') {
       screens.add(_selectedScreen);
     }
@@ -186,13 +188,11 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
           children: [
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 220),
-              child: Text(
+              child: MonoText(
                 _selectedScreen,
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace',
-                    color: MonitorColors.primaryText),
+                13,
+                color: MonitorColors.primaryText,
+                weight: FontWeight.bold,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -333,21 +333,16 @@ class _ChartHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
+            LabelText(
               label,
-              style: TextStyle(
-                  color: iconColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5),
+              iconColor,
+              size: 10,
+              spacing: 0.5,
             ),
             const Spacer(),
-            Text(
+            MonoText(
               '$sampleCount samples',
-              style: TextStyle(
-                  color: MonitorColors.secondaryText,
-                  fontSize: 9,
-                  fontFamily: 'monospace'),
+              9,
             ),
             SizedBox(width: 6),
             Icon(
@@ -406,15 +401,11 @@ class _ScreenPickerSheet extends StatelessWidget {
                 Icon(Icons.smartphone_outlined,
                     size: 16, color: MonitorColors.secondaryText),
                 SizedBox(width: 8),
-                Text('Select screen',
-                    style: TextStyle(
-                        color: MonitorColors.primaryText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold)),
+                BodyText('Select screen', 14,
+                    weight: FontWeight.bold),
                 const Spacer(),
-                Text('${screens.length} screens',
-                    style: TextStyle(
-                        color: MonitorColors.secondaryText, fontSize: 11)),
+                BodyText('${screens.length} screens', 11,
+                    color: MonitorColors.secondaryText),
               ],
             ),
           ),
@@ -452,16 +443,13 @@ class _ScreenPickerSheet extends StatelessWidget {
                         ),
                         SizedBox(width: 12),
                         Expanded(
-                          child: Text(s,
-                              style: TextStyle(
-                                  color: isSelected
-                                      ? MonitorColors.primaryText
-                                      : MonitorColors.secondaryText,
-                                  fontSize: 12,
-                                  fontFamily: 'monospace',
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal),
+                          child: MonoText(s, 12,
+                              color: isSelected
+                                  ? MonitorColors.primaryText
+                                  : MonitorColors.secondaryText,
+                              weight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
                         ),
@@ -511,7 +499,8 @@ class _LogTabHeader extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _TabButton(
                   label: 'API',
@@ -537,15 +526,13 @@ class _LogTabHeader extends StatelessWidget {
                   activeColor: MonitorColors.statusError,
                   onTap: () => onTabChanged(2),
                 ),
-                const Spacer(),
-                Text(
-                  screen,
-                  style: TextStyle(
-                      color: MonitorColors.secondaryText,
-                      fontSize: 9,
-                      fontFamily: 'monospace'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Flexible(
+                  child: MonoText(
+                    screen,
+                    9,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -589,13 +576,11 @@ class _TabButton extends StatelessWidget {
               children: [
                 Icon(icon, size: 11, color: color),
                 const SizedBox(width: 5),
-                Text(
+                LabelText(
                   label,
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: active ? FontWeight.bold : FontWeight.w500,
-                      letterSpacing: 0.3),
+                  color,
+                  size: 11,
+                  spacing: 0.3,
                 ),
                 if (count > 0) ...[
                   const SizedBox(width: 5),
@@ -607,15 +592,13 @@ class _TabButton extends StatelessWidget {
                           activeColor.withValues(alpha: active ? 0.18 : 0.07),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(
+                    child: MonoText(
                       '$count',
-                      style: TextStyle(
-                          color: active
-                              ? activeColor
-                              : MonitorColors.secondaryText,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'monospace'),
+                      9,
+                      color: active
+                          ? activeColor
+                          : MonitorColors.secondaryText,
+                      weight: FontWeight.bold,
                     ),
                   ),
                 ],
@@ -654,14 +637,11 @@ class _EmptyState extends StatelessWidget {
                 size: 26, color: MonitorColors.secondaryText),
           ),
           SizedBox(height: 12),
-          Text('No API calls yet',
-              style: TextStyle(
-                  color: MonitorColors.secondaryText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
+          BodyText('No API calls yet', 13,
+              color: MonitorColors.secondaryText,
+              weight: FontWeight.w500),
           SizedBox(height: 4),
-          Text('on this screen',
-              style: TextStyle(color: MonitorColors.border, fontSize: 11)),
+          BodyText('on this screen', 11, color: MonitorColors.border),
         ],
       ),
     );
@@ -842,13 +822,11 @@ class _FilterChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
+            LabelText(
               label,
-              style: TextStyle(
-                  color: active ? color : MonitorColors.secondaryText,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.3),
+              active ? color : MonitorColors.secondaryText,
+              size: 10,
+              spacing: 0.3,
             ),
             SizedBox(width: 5),
             Container(
@@ -858,13 +836,11 @@ class _FilterChip extends StatelessWidget {
                     .withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
+              child: MonoText(
                 '$count',
-                style: TextStyle(
-                    color: active ? color : MonitorColors.secondaryText,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace'),
+                9,
+                color: active ? color : MonitorColors.secondaryText,
+                weight: FontWeight.bold,
               ),
             ),
           ],
@@ -896,14 +872,11 @@ class _EmptyErrorState extends StatelessWidget {
                 size: 26, color: MonitorColors.secondaryText),
           ),
           SizedBox(height: 12),
-          Text('No Flutter errors',
-              style: TextStyle(
-                  color: MonitorColors.secondaryText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
+          BodyText('No Flutter errors', 13,
+              color: MonitorColors.secondaryText,
+              weight: FontWeight.w500),
           SizedBox(height: 4),
-          Text('caught yet',
-              style: TextStyle(color: MonitorColors.border, fontSize: 11)),
+          BodyText('caught yet', 11, color: MonitorColors.border),
         ],
       ),
     );
@@ -972,12 +945,9 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                           color: MonitorColors.orderBadgeBg,
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: Text('#${e.id}',
-                            style: TextStyle(
-                                color: MonitorColors.orderBadgeText,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'monospace')),
+                        child: MonoText('#${e.id}', 9,
+                            color: MonitorColors.orderBadgeText,
+                            weight: FontWeight.bold),
                       ),
                       const SizedBox(width: 6),
                       Container(
@@ -990,33 +960,23 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                               color: typeColor.withValues(alpha: 0.30),
                               width: 0.5),
                         ),
-                        child: Text(e.type,
-                            style: TextStyle(
-                                color: typeColor,
-                                fontSize: 7,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.3)),
+                        child: LabelText(e.type, typeColor,
+                            size: 7, spacing: 0.3),
                       ),
                       const Spacer(),
-                      Text(timeStr,
-                          style: TextStyle(
-                              color: MonitorColors.secondaryText,
-                              fontSize: 10,
-                              fontFamily: 'monospace')),
+                      MonoText(timeStr, 10),
                       SizedBox(width: 8),
                       Icon(_expanded ? Icons.expand_less : Icons.expand_more,
                           color: MonitorColors.secondaryText, size: 16),
                     ],
                   ),
                   SizedBox(height: 8),
-                  Text(
+                  MonoText(
                     e.message,
-                    style: TextStyle(
-                        color: MonitorColors.statusError,
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w500,
-                        height: 1.4),
+                    11,
+                    color: MonitorColors.statusError,
+                    weight: FontWeight.w500,
+                    height: 1.4,
                     maxLines: _expanded ? null : 2,
                     overflow: _expanded
                         ? TextOverflow.visible
@@ -1039,13 +999,10 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                 ),
               ),
               child: SelectionArea(
-                child: Text(
+                child: MonoText(
                   e.stackTrace.split('\n').take(20).join('\n'),
-                  style: TextStyle(
-                      color: MonitorColors.secondaryText,
-                      fontSize: 9.5,
-                      fontFamily: 'monospace',
-                      height: 1.5),
+                  9.5,
+                  height: 1.5,
                 ),
               ),
             ),
@@ -1078,14 +1035,12 @@ class _EmptyRouteState extends StatelessWidget {
                 size: 26, color: MonitorColors.secondaryText),
           ),
           const SizedBox(height: 12),
-          Text('No route events yet',
-              style: TextStyle(
-                  color: MonitorColors.secondaryText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
+          BodyText('No route events yet', 13,
+              color: MonitorColors.secondaryText,
+              weight: FontWeight.w500),
           const SizedBox(height: 4),
-          Text('Navigate around the app to see the flow',
-              style: TextStyle(color: MonitorColors.border, fontSize: 11)),
+          BodyText('Navigate around the app to see the flow', 11,
+              color: MonitorColors.border),
         ],
       ),
     );
@@ -1106,12 +1061,20 @@ class _RouteLogList extends StatelessWidget {
   }
 }
 
-class _RouteLogTile extends StatelessWidget {
+class _RouteLogTile extends StatefulWidget {
   final RouteLogItem item;
   const _RouteLogTile({required this.item});
 
   @override
+  State<_RouteLogTile> createState() => _RouteLogTileState();
+}
+
+class _RouteLogTileState extends State<_RouteLogTile> {
+  bool _argsExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     final ts = item.timestamp;
     final timeStr =
         '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
@@ -1131,7 +1094,7 @@ class _RouteLogTile extends StatelessWidget {
         icon = Icons.arrow_downward_rounded;
         eventLabel = 'POP';
         break;
-      default: // REPLACE
+      default:
         color = MonitorColors.statusSlow;
         icon = Icons.sync_alt_rounded;
         eventLabel = 'REPLACE';
@@ -1141,114 +1104,158 @@ class _RouteLogTile extends StatelessWidget {
     final durationStr = item.duration != null
         ? RouteLogController.fmtDuration(item.duration!)
         : null;
+    final hasArgs = item.arguments != null && item.arguments!.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: MonitorColors.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Event icon
-          Container(
-            margin: const EdgeInsets.only(top: 1, right: 10),
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(icon, size: 13, color: color),
-          ),
-          // Route info
-          Expanded(
-            child: Column(
+          // ── Main row ──────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(3),
-                        border: Border.all(
-                            color: color.withValues(alpha: 0.35), width: 0.5),
-                      ),
-                      child: Text(eventLabel,
-                          style: TextStyle(
-                              color: color,
-                              fontSize: 7,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.3)),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        item.route,
-                        style: TextStyle(
-                            color: MonitorColors.primaryText,
-                            fontSize: 11,
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.w600),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                Container(
+                  margin: const EdgeInsets.only(top: 1, right: 10),
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(icon, size: 13, color: color),
                 ),
-                if (item.from != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.subdirectory_arrow_right_rounded,
-                          size: 11, color: MonitorColors.secondaryText),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          item.event == RouteLogItem.eventPush
-                              ? 'from ${item.from}'
-                              : item.event == RouteLogItem.eventPop
-                                  ? '→ ${item.from}'
-                                  : 'was ${item.from}',
-                          style: TextStyle(
-                              color: MonitorColors.secondaryText,
-                              fontSize: 10,
-                              fontFamily: 'monospace'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(3),
+                              border: Border.all(
+                                  color: color.withValues(alpha: 0.35),
+                                  width: 0.5),
+                            ),
+                            child: LabelText(eventLabel, color,
+                                size: 7, spacing: 0.3),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: MonoText(
+                              item.route,
+                              11,
+                              color: MonitorColors.primaryText,
+                              weight: FontWeight.w600,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
+                      if (item.from != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.subdirectory_arrow_right_rounded,
+                                size: 11, color: MonitorColors.secondaryText),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: MonoText(
+                                item.event == RouteLogItem.eventPush
+                                    ? 'from ${item.from}'
+                                    : item.event == RouteLogItem.eventPop
+                                        ? '→ ${item.from}'
+                                        : 'was ${item.from}',
+                                10,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (hasArgs) ...[
+                        const SizedBox(height: 6),
+                        GestureDetector(
+                          onTap: () =>
+                              setState(() => _argsExpanded = !_argsExpanded),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.data_object,
+                                  size: 10,
+                                  color: color.withValues(alpha: 0.7)),
+                              const SizedBox(width: 4),
+                              MonoText(
+                                'arguments',
+                                9,
+                                color: color.withValues(alpha: 0.7),
+                                weight: FontWeight.w600,
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                _argsExpanded
+                                    ? Icons.expand_less
+                                    : Icons.expand_more,
+                                size: 12,
+                                color: color.withValues(alpha: 0.7),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
-                ],
+                ),
+                // Time + duration
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    MonoText(timeStr, 10),
+                    if (durationStr != null) ...[
+                      const SizedBox(height: 2),
+                      MonoText(durationStr, 9,
+                          color: color,
+                          weight: FontWeight.w600),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
-          // Time + duration
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(timeStr,
-                  style: TextStyle(
-                      color: MonitorColors.secondaryText,
-                      fontSize: 10,
-                      fontFamily: 'monospace')),
-              if (durationStr != null) ...[
-                const SizedBox(height: 2),
-                Text(durationStr,
-                    style: TextStyle(
-                        color: color,
-                        fontSize: 9,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w600)),
-              ],
-            ],
-          ),
+          // ── Arguments panel ────────────────────────────────────
+          if (hasArgs && _argsExpanded) ...[
+            Container(height: 1, color: MonitorColors.divider),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: MonitorColors.expandedDetailBg,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(8),
+                  bottomRight: Radius.circular(8),
+                ),
+              ),
+              child: SelectionArea(
+                child: MonoText(
+                  item.arguments!,
+                  10,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1291,24 +1298,22 @@ class _SectionHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(
+          LabelText(
             label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
-              fontFamily: 'monospace',
-            ),
+            color,
+            size: 10,
+            spacing: 0.8,
           ),
-          const Spacer(),
-          Text(
-            _sectionSummary(data),
-            style: TextStyle(
+          const SizedBox(width: 8),
+          Flexible(
+            child: MonoText(
+              _sectionSummary(data),
+              9,
               color: color.withValues(alpha: 0.70),
-              fontSize: 9,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w600,
+              weight: FontWeight.w600,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
             ),
           ),
         ],

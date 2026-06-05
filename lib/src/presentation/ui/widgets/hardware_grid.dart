@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
+import 'monitor_text.dart';
 
 class MonitorHardwareGrid extends StatelessWidget {
   final String currentScreen;
@@ -94,19 +95,16 @@ class _HardwareStat extends StatelessWidget {
           children: [
             Icon(icon, size: 11, color: iconColor),
             const SizedBox(width: 4),
-            Text(label,
-                style: TextStyle(
-                    color: iconColor,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5)),
-            const Spacer(),
-            Text(value,
-                style: TextStyle(
-                    color: MonitorColors.primaryText,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace')),
+            LabelText(label, iconColor, spacing: 0.5),
+            const SizedBox(width: 4),
+            Flexible(
+              child: MonoText(value, 10,
+                  color: MonitorColors.primaryText,
+                  weight: FontWeight.bold,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end),
+            ),
           ],
         ),
         const SizedBox(height: 5),

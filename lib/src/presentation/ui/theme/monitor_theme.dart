@@ -104,6 +104,51 @@ abstract class MonitorColors {
   static const Color overlayApi = Color(0xFF60A5FA);
 }
 
+abstract class MonitorTextStyle {
+  /// Monospace — values, timestamps, route names, JSON.
+  /// [color] defaults to [MonitorColors.secondaryText].
+  static TextStyle mono(
+    double size, {
+    Color? color,
+    FontWeight? weight,
+    double? height,
+  }) =>
+      TextStyle(
+        color: color ?? MonitorColors.secondaryText,
+        fontSize: size,
+        fontFamily: 'monospace',
+        fontWeight: weight,
+        height: height,
+      );
+
+  /// Uppercase bold label — section headers, event badges, chip labels.
+  /// Default size 8, letterSpacing 0.4.
+  static TextStyle label(
+    Color color, {
+    double size = 8,
+    double spacing = 0.4,
+  }) =>
+      TextStyle(
+        color: color,
+        fontSize: size,
+        fontWeight: FontWeight.bold,
+        letterSpacing: spacing,
+      );
+
+  /// Regular (non-monospace) body text.
+  /// [color] defaults to [MonitorColors.primaryText].
+  static TextStyle body(
+    double size, {
+    Color? color,
+    FontWeight weight = FontWeight.normal,
+  }) =>
+      TextStyle(
+        color: color ?? MonitorColors.primaryText,
+        fontSize: size,
+        fontWeight: weight,
+      );
+}
+
 abstract class OverlayLayout {
   static const double expandedW = 258.0;
   static const double expandedH = 190.0;
