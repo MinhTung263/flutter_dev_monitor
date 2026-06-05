@@ -24,12 +24,11 @@ class ApiLogController {
   bool isInRefresh(String screen) => (_refreshCycleCounters[screen] ?? 0) > 0;
 
   void startSession(String screenName) {
-    _orderCounters[screenName] = 0;
-    _lastApiTime.remove(screenName);
-    _screenInRefreshMode[screenName] = false;
-    _refreshCycleCounters[screenName] = 0;
-    initLogsMap[screenName] = [];
-    refreshLogsMap[screenName] = [];
+    _orderCounters.putIfAbsent(screenName, () => 0);
+    _screenInRefreshMode.putIfAbsent(screenName, () => false);
+    _refreshCycleCounters.putIfAbsent(screenName, () => 0);
+    initLogsMap.putIfAbsent(screenName, () => []);
+    refreshLogsMap.putIfAbsent(screenName, () => []);
     updateView(screenName);
   }
 

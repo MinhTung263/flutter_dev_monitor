@@ -149,7 +149,11 @@ class _FpsOverlayState extends State<FpsOverlay>
   }
 
   void _onTap() {
-    if (!_isExpanded) setState(() => _isExpanded = true);
+    if (_isExpanded) {
+      _onCollapse();
+    } else {
+      setState(() => _isExpanded = true);
+    }
   }
 
   void _onCollapse() {
@@ -258,8 +262,47 @@ class _FpsOverlayState extends State<FpsOverlay>
 
 // ─── Collapsed pill badge ─────────────────────────────────────────────────────
 
-class _PillBadge extends StatelessWidget {
+class _PillBadge extends StatefulWidget {
   const _PillBadge();
+
+  @override
+  State<_PillBadge> createState() => _PillBadgeState();
+}
+
+class _PillBadgeState extends State<_PillBadge>
+    with SingleTickerProviderStateMixin {
+  static bool _hintShown = false;
+
+  late final AnimationController _hintCtrl;
+  late final Animation<double> _hintAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _hintCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _hintAnim = CurvedAnimation(parent: _hintCtrl, curve: Curves.easeInOut);
+
+    if (!_hintShown) {
+      _hintShown = true;
+      Future.delayed(const Duration(seconds: 1), () {
+        if (!mounted) return;
+        _hintCtrl.forward().then((_) {
+          Future.delayed(const Duration(milliseconds: 2500), () {
+            if (mounted) _hintCtrl.reverse();
+          });
+        });
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _hintCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -285,13 +328,26 @@ class _PillBadge extends StatelessWidget {
                       ? MonitorColors.overlayBuild
                       : MonitorColors.overlayAlert;
 
+          const TextStyle _lbl = TextStyle(
+            fontSize: 7,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            height: 1.2,
+          );
+          const TextStyle _val = TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'monospace',
+            height: 1.2,
+          );
+
           return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
               color: MonitorColors.overlayBg,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: fpsColor.withValues(alpha: 0.5), width: 0.8),
+                  color: fpsColor.withValues(alpha: 0.45), width: 0.8),
               boxShadow: [
                 BoxShadow(
                     color: fpsColor.withValues(alpha: 0.15), blurRadius: 6),
@@ -301,17 +357,20 @@ class _PillBadge extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── FPS ──────────────────────────────────────────
                 Row(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
                   children: [
                     Container(
                       width: 5,
                       height: 5,
+                      margin: const EdgeInsets.only(bottom: 1),
                       decoration: BoxDecoration(
                           color: fpsColor, shape: BoxShape.circle),
                     ),
-                    const SizedBox(width: 5),
+                    const SizedBox(width: 4),
                     Text(fps.toStringAsFixed(1),
                         style: TextStyle(
                             color: fpsColor,
@@ -322,9 +381,8 @@ class _PillBadge extends StatelessWidget {
                     const SizedBox(width: 2),
                     Text('fps',
                         style: TextStyle(
-                            color: fpsColor,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
+                            color: fpsColor.withValues(alpha: 0.6),
+                            fontSize: 8,
                             fontFamily: 'monospace',
                             height: 1.1)),
                     if (jankCount > 0) ...[
@@ -332,7 +390,7 @@ class _PillBadge extends StatelessWidget {
                       Text('⚡$jankCount',
                           style: const TextStyle(
                               color: MonitorColors.overlayGpu,
-                              fontSize: 9,
+                              fontSize: 8,
                               fontWeight: FontWeight.w700,
                               fontFamily: 'monospace',
                               height: 1.1)),
@@ -340,60 +398,60 @@ class _PillBadge extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 3),
+                // ── API + MEM ────────────────────────────────────
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('API ',
-                        style: TextStyle(
-                            color: MonitorColors.overlayApi,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'monospace',
-                            height: 1.2)),
+                    Text('API ',
+                        style: _lbl.copyWith(
+                            color: MonitorColors.overlayApi)),
                     Text('$apiCount',
-                        style: const TextStyle(
-                            color: MonitorColors.overlayApi,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'monospace',
-                            height: 1.2)),
+                        style: _val.copyWith(
+                            color: MonitorColors.overlayApi)),
                     const SizedBox(width: 6),
-                    const Text('Mem ',
-                        style: TextStyle(
-                            color: MonitorColors.overlayMem,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'monospace',
-                            height: 1.2)),
+                    Text('MEM ',
+                        style: _lbl.copyWith(
+                            color: MonitorColors.overlayMem)),
                     Text('${memMb.toStringAsFixed(0)}M',
-                        style: const TextStyle(
-                            color: MonitorColors.overlayMem,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'monospace',
-                            height: 1.2)),
+                        style: _val.copyWith(
+                            color: MonitorColors.overlayMem)),
                   ],
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
+                // ── NET ──────────────────────────────────────────
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text('NET ',
-                        style: TextStyle(
-                            color: pingColor,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'monospace',
-                            height: 1.2)),
-                    Text(
-                        pingMs == null ? '--' : '${pingMs}ms',
-                        style: TextStyle(
-                            color: pingColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'monospace',
-                            height: 1.2)),
+                        style: _lbl.copyWith(color: pingColor)),
+                    Text(pingMs == null ? '--' : '${pingMs}ms',
+                        style: _val.copyWith(color: pingColor)),
                   ],
+                ),
+                SizeTransition(
+                  sizeFactor: _hintAnim,
+                  axisAlignment: 1,
+                  child: FadeTransition(
+                    opacity: _hintAnim,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.touch_app_outlined,
+                              size: 9, color: Colors.white54),
+                          SizedBox(width: 4),
+                          Text('hold to open',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 7,
+                                fontFamily: 'monospace',
+                                height: 1.2,
+                              )),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
