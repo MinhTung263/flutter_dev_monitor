@@ -156,7 +156,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     // visitedScreens tracks all screens seen this session regardless of whether
     // their data was cleared on pop — so Login/Splash remain visible even after
     // navigating to Home.
-    final screens = _ctrl.visitedScreens.toList();
+    final screens = _ctrl.visitedScreens.toList().reversed.toList();
     if (!screens.contains(_selectedScreen) &&
         _selectedScreen.isNotEmpty &&
         _selectedScreen != '/unknown') {
@@ -375,88 +375,148 @@ class _ScreenPickerSheet extends StatelessWidget {
     required this.onSelected,
   });
 
+  // "/PostDetail/123" → ("PostDetail", "/123")
+  static (String title, String? sub) _parseRoute(String route) {
+    final clean = route.startsWith('/') ? route.substring(1) : route;
+    final idx = clean.indexOf('/');
+    if (idx == -1) return (clean.isEmpty ? route : clean, null);
+    return (clean.substring(0, idx), clean.substring(idx));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: MonitorColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Handle
           Container(
             width: 36,
             height: 4,
-            margin: const EdgeInsets.only(top: 12, bottom: 16),
+            margin: const EdgeInsets.only(top: 12, bottom: 12),
             decoration: BoxDecoration(
               color: MonitorColors.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
+          // Header
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: Row(
               children: [
-                Icon(Icons.smartphone_outlined,
-                    size: 16, color: MonitorColors.secondaryText),
-                SizedBox(width: 8),
-                BodyText('Select screen', 14,
-                    weight: FontWeight.bold),
+                BodyText('Screens', 14, weight: FontWeight.bold),
                 const Spacer(),
-                BodyText('${screens.length} screens', 11,
-                    color: MonitorColors.secondaryText),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: MonitorColors.metricTotal.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: MonitorColors.metricTotal.withValues(alpha: 0.3),
+                        width: 0.5),
+                  ),
+                  child: MonoText('${screens.length}', 10,
+                      color: MonitorColors.metricTotal,
+                      weight: FontWeight.bold),
+                ),
               ],
             ),
           ),
           Container(height: 1, color: MonitorColors.divider),
+          // List
           ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.45,
+              maxHeight: MediaQuery.of(context).size.height * 0.48,
             ),
-            child: ListView.separated(
+            child: ListView.builder(
               shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
               itemCount: screens.length,
-              separatorBuilder: (_, __) =>
-                  Container(height: 1, color: MonitorColors.divider),
               itemBuilder: (_, i) {
                 final s = screens[i];
                 final isSelected = s == selected;
-                return InkWell(
+                final (title, sub) = _parseRoute(s);
+                final accent = MonitorColors.metricTotal;
+
+                return GestureDetector(
                   onTap: () => onSelected(s),
                   child: Container(
-                    color: isSelected
-                        ? MonitorColors.metricTotal.withValues(alpha: 0.08)
-                        : null,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isSelected
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_unchecked,
-                          size: 18,
-                          color: isSelected
-                              ? MonitorColors.metricTotal
-                              : MonitorColors.border,
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? accent.withValues(alpha: 0.08)
+                          : MonitorColors.pageBackground,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border(
+                        left: BorderSide(
+                          color: isSelected ? accent : Colors.transparent,
+                          width: 3,
                         ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: MonoText(s, 12,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      child: Row(
+                        children: [
+                          // Index badge (1 = newest)
+                          Container(
+                            width: 24,
+                            height: 24,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
                               color: isSelected
-                                  ? MonitorColors.primaryText
-                                  : MonitorColors.secondaryText,
-                              weight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                        if (isSelected)
-                          Icon(Icons.check,
-                              size: 16, color: MonitorColors.metricTotal),
-                      ],
+                                  ? accent.withValues(alpha: 0.15)
+                                  : MonitorColors.border.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: MonoText('${i + 1}', 9,
+                                color: isSelected
+                                    ? accent
+                                    : MonitorColors.secondaryText,
+                                weight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 10),
+                          // Screen name + sub-path
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                BodyText(
+                                  title,
+                                  12,
+                                  color: isSelected
+                                      ? MonitorColors.primaryText
+                                      : MonitorColors.secondaryText,
+                                  weight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (sub != null)
+                                  MonoText(sub, 9,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Indicator
+                          if (isSelected)
+                            Icon(Icons.check_circle_rounded,
+                                size: 17, color: accent)
+                          else
+                            Icon(Icons.chevron_right_rounded,
+                                size: 16, color: MonitorColors.border),
+                        ],
+                      ),
                     ),
                   ),
                 );
