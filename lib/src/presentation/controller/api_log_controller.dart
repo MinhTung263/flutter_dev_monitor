@@ -10,6 +10,7 @@ class ApiLogController {
   final Map<String, DateTime> _lastApiTime = {};
   final Map<String, bool> _screenInRefreshMode = {};
   final Map<String, int> _refreshCycleCounters = {};
+  final Map<String, int> _initCycleCounters = {};
   final List<String> _screenOrder = [];
 
   String? activePopup;
@@ -24,7 +25,7 @@ class ApiLogController {
 
   int get errorCount => apiLogs.where((l) => l.statusCode != 200).length;
 
-  bool isInRefresh(String screen) => (_refreshCycleCounters[screen] ?? 0) > 0;
+  bool isInRefresh(String screen) => _screenInRefreshMode[screen] == true;
 
   void startSession(String screenName) {
     if (!initLogsMap.containsKey(screenName)) {
@@ -33,13 +34,14 @@ class ApiLogController {
         _evict(_screenOrder.removeAt(0));
       }
     }
-    // Reset timing + init logs on every entry so re-visiting a screen starts
-    // fresh INIT entries instead of accumulating call counts from prior visits.
+    // Reset timing on every entry; each visit gets its own init cycle so
+    // new init APIs are added as fresh entries rather than merged with prior visits.
     _lastApiTime.remove(screenName);
     _screenInRefreshMode[screenName] = false;
     _orderCounters[screenName] = 0;
+    _initCycleCounters[screenName] = (_initCycleCounters[screenName] ?? 0) + 1;
     _refreshCycleCounters.putIfAbsent(screenName, () => 0);
-    initLogsMap[screenName] = [];
+    initLogsMap.putIfAbsent(screenName, () => []);
     refreshLogsMap.putIfAbsent(screenName, () => []);
     updateView(screenName);
   }
@@ -51,6 +53,7 @@ class ApiLogController {
     _lastApiTime.remove(screenName);
     _screenInRefreshMode.remove(screenName);
     _refreshCycleCounters.remove(screenName);
+    _initCycleCounters.remove(screenName);
   }
 
   void addLog(ApiLogItem item, String screen, String popupSuffix) {
@@ -112,8 +115,10 @@ class ApiLogController {
       }
     } else {
       final initLogs = initLogsMap[screen] ??= [];
-      final idx = initLogs
-          .indexWhere((l) => l.url == item.url && l.method == item.method);
+      final initCycle = _initCycleCounters[screen] ?? 1;
+      // Dedup within the same visit only (same URL+method+initCycle).
+      final idx = initLogs.indexWhere((l) =>
+          l.url == item.url && l.method == item.method && l.refreshCycle == initCycle);
 
       if (idx >= 0) {
         final existing = initLogs[idx];
@@ -134,7 +139,7 @@ class ApiLogController {
           screen: screenLabel,
           callerName: item.callerName,
           phase: newPhase,
-          refreshCycle: 0,
+          refreshCycle: initCycle,
           responseBytes: item.responseBytes,
           queryParams: item.queryParams,
           requestHeaders: item.requestHeaders,
@@ -152,9 +157,13 @@ class ApiLogController {
     final initLogs = initLogsMap[screen] ?? [];
     final refreshLogs = refreshLogsMap[screen] ?? [];
     final currentCycle = _refreshCycleCounters[screen] ?? 0;
+    final currentInitCycle = _initCycleCounters[screen] ?? 1;
 
-    initApiCount = initLogs.fold(0, (s, l) => s + l.callCount);
-    initTotalDuration = initLogs.fold(0, (s, l) => s + l.duration);
+    // MetricsBar and overlay show current visit's init stats only.
+    final currentInitLogs =
+        initLogs.where((l) => l.refreshCycle == currentInitCycle).toList();
+    initApiCount = currentInitLogs.fold(0, (s, l) => s + l.callCount);
+    initTotalDuration = currentInitLogs.fold(0, (s, l) => s + l.duration);
 
     if (currentCycle > 0) {
       final cycleLogs =
@@ -170,7 +179,7 @@ class ApiLogController {
       totalRefreshDuration = 0;
     }
 
-    // ACTION on top (newest cycle first), INIT at bottom
+    // ACTION on top (newest cycle first), INIT below (newest visit first).
     apiLogs = [...refreshLogs, ...initLogs]
       ..sort((a, b) {
         if (a.phase != b.phase) {
@@ -203,6 +212,7 @@ class ApiLogController {
     _lastApiTime.clear();
     _screenInRefreshMode.clear();
     _refreshCycleCounters.clear();
+    _initCycleCounters.clear();
     _screenOrder.clear();
     activePopup = null;
     initApiCount = 0;

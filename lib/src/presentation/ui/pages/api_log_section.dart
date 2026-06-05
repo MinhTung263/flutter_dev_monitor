@@ -226,7 +226,9 @@ class _SectionHeader extends StatelessWidget {
     final isRefresh = data.phase == ApiLogItem.phaseRefresh;
     final color =
         isRefresh ? MonitorColors.metricRefresh : MonitorColors.metricInit;
-    final label = isRefresh ? 'ACTION #${data.refreshCycle}' : 'INIT';
+    final label = isRefresh
+        ? 'ACTION #${data.refreshCycle}'
+        : 'INIT #${data.refreshCycle}';
 
     return Container(
       margin: const EdgeInsets.only(top: 8, bottom: 4),
