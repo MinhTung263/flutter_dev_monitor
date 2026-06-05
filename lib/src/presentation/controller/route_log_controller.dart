@@ -9,7 +9,7 @@ class RouteLogController {
   List<RouteLogItem> get logs => List.unmodifiable(_logs);
   int get count => _logs.length;
 
-  void logPush(String route, String? from, {String? arguments}) {
+  void logPush(String route, String? from) {
     _pushTimes[route] = DateTime.now();
     _insert(RouteLogItem(
       id: _nextId++,
@@ -17,7 +17,6 @@ class RouteLogController {
       route: route,
       from: from,
       timestamp: DateTime.now(),
-      arguments: arguments,
     ));
   }
 
@@ -35,7 +34,7 @@ class RouteLogController {
     ));
   }
 
-  void logReplace(String oldRoute, String newRoute, {String? arguments}) {
+  void logReplace(String oldRoute, String newRoute) {
     final pushTime = _pushTimes.remove(oldRoute);
     final duration =
         pushTime != null ? DateTime.now().difference(pushTime) : null;
@@ -47,7 +46,6 @@ class RouteLogController {
       from: oldRoute,
       timestamp: DateTime.now(),
       duration: duration,
-      arguments: arguments,
     ));
   }
 

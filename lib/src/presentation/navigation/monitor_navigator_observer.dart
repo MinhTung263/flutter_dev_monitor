@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../controller/monitor_controller.dart';
@@ -27,19 +25,6 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   static String get _activeAnchor =>
       pageStack.length > 1 ? pageStack[1] : (pageStack.firstOrNull ?? '/unknown');
 
-  static String? _encodeArguments(dynamic args) {
-    if (args == null) return null;
-    try {
-      if (args is Map || args is List) {
-        return const JsonEncoder.withIndent('  ').convert(args);
-      }
-      final s = args.toString();
-      return s == 'Instance of \'${args.runtimeType}\'' ? null : s;
-    } catch (_) {
-      return null;
-    }
-  }
-
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
@@ -50,16 +35,15 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
     if (name == '/MonitorDashboardPage') return;
 
-    final args = _encodeArguments(route.settings.arguments);
     if (route is PageRoute) {
       pageStack.add(name);
       pageToSessionMap[name] = _activeAnchor;
       final ctrl = MonitorController.instance;
       ctrl.startSession(name);
-      ctrl.logRoutePush(name, previousRoute?.settings.name, arguments: args);
+      ctrl.logRoutePush(name, previousRoute?.settings.name);
     } else if (route is PopupRoute) {
       MonitorController.instance.setActivePopup(name);
-      MonitorController.instance.logRoutePush(name, previousRoute?.settings.name, arguments: args);
+      MonitorController.instance.logRoutePush(name, previousRoute?.settings.name);
     }
   }
 
@@ -135,8 +119,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
     if (oldName != null && newName != null &&
         newName != '/MonitorDashboardPage') {
-      final args = _encodeArguments(newRoute?.settings.arguments);
-      MonitorController.instance.logRouteReplace(oldName, newName, arguments: args);
+      MonitorController.instance.logRouteReplace(oldName, newName);
     }
   }
 }

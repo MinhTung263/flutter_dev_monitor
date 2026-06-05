@@ -1121,20 +1121,12 @@ class _RouteLogList extends StatelessWidget {
   }
 }
 
-class _RouteLogTile extends StatefulWidget {
+class _RouteLogTile extends StatelessWidget {
   final RouteLogItem item;
   const _RouteLogTile({required this.item});
 
   @override
-  State<_RouteLogTile> createState() => _RouteLogTileState();
-}
-
-class _RouteLogTileState extends State<_RouteLogTile> {
-  bool _argsExpanded = false;
-
-  @override
   Widget build(BuildContext context) {
-    final item = widget.item;
     final ts = item.timestamp;
     final timeStr =
         '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
@@ -1164,7 +1156,6 @@ class _RouteLogTileState extends State<_RouteLogTile> {
     final durationStr = item.duration != null
         ? RouteLogController.fmtDuration(item.duration!)
         : null;
-    final hasArgs = item.arguments != null && item.arguments!.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -1173,150 +1164,92 @@ class _RouteLogTileState extends State<_RouteLogTile> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Main row ──────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 1, right: 10),
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(icon, size: 13, color: color),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 1, right: 10),
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(icon, size: 13, color: color),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 5, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(3),
-                              border: Border.all(
-                                  color: color.withValues(alpha: 0.35),
-                                  width: 0.5),
-                            ),
-                            child: LabelText(eventLabel, color,
-                                size: 7, spacing: 0.3),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: MonoText(
-                              item.route,
-                              11,
-                              color: MonitorColors.primaryText,
-                              weight: FontWeight.w600,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(3),
+                          border: Border.all(
+                              color: color.withValues(alpha: 0.35),
+                              width: 0.5),
+                        ),
+                        child: LabelText(eventLabel, color,
+                            size: 7, spacing: 0.3),
                       ),
-                      if (item.from != null) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.subdirectory_arrow_right_rounded,
-                                size: 11, color: MonitorColors.secondaryText),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: MonoText(
-                                item.event == RouteLogItem.eventPush
-                                    ? 'from ${item.from}'
-                                    : item.event == RouteLogItem.eventPop
-                                        ? '→ ${item.from}'
-                                        : 'was ${item.from}',
-                                10,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: MonoText(
+                          item.route,
+                          11,
+                          color: MonitorColors.primaryText,
+                          weight: FontWeight.w600,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                      if (hasArgs) ...[
-                        const SizedBox(height: 6),
-                        GestureDetector(
-                          onTap: () =>
-                              setState(() => _argsExpanded = !_argsExpanded),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.data_object,
-                                  size: 10,
-                                  color: color.withValues(alpha: 0.7)),
-                              const SizedBox(width: 4),
-                              MonoText(
-                                'arguments',
-                                9,
-                                color: color.withValues(alpha: 0.7),
-                                weight: FontWeight.w600,
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                _argsExpanded
-                                    ? Icons.expand_less
-                                    : Icons.expand_more,
-                                size: 12,
-                                color: color.withValues(alpha: 0.7),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      ),
                     ],
                   ),
-                ),
-                // Time + duration
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    MonoText(timeStr, 10),
-                    if (durationStr != null) ...[
-                      const SizedBox(height: 2),
-                      MonoText(durationStr, 9,
-                          color: color,
-                          weight: FontWeight.w600),
-                    ],
+                  if (item.from != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.subdirectory_arrow_right_rounded,
+                            size: 11, color: MonitorColors.secondaryText),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: MonoText(
+                            item.event == RouteLogItem.eventPush
+                                ? 'from ${item.from}'
+                                : item.event == RouteLogItem.eventPop
+                                    ? '→ ${item.from}'
+                                    : 'was ${item.from}',
+                            10,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
-                ),
+                ],
+              ),
+            ),
+            // Time + duration
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                MonoText(timeStr, 10),
+                if (durationStr != null) ...[
+                  const SizedBox(height: 2),
+                  MonoText(durationStr, 9,
+                      color: color,
+                      weight: FontWeight.w600),
+                ],
               ],
             ),
-          ),
-          // ── Arguments panel ────────────────────────────────────
-          if (hasArgs && _argsExpanded) ...[
-            Container(height: 1, color: MonitorColors.divider),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: MonitorColors.expandedDetailBg,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(8),
-                  bottomRight: Radius.circular(8),
-                ),
-              ),
-              child: SelectionArea(
-                child: MonoText(
-                  item.arguments!,
-                  10,
-                  height: 1.5,
-                ),
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
