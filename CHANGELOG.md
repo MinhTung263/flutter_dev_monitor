@@ -1,3 +1,7 @@
+## 1.3.1
+
+* Fixed repository URL in pubspec.yaml (was `tunglv`, now `MinhTung263`).
+
 ## 1.3.0
 
 * **Full response body**: removed all truncation limits — response data (arrays, maps, strings) now displayed in full regardless of size.
