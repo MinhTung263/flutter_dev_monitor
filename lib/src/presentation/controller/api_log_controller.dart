@@ -33,13 +33,13 @@ class ApiLogController {
         _evict(_screenOrder.removeAt(0));
       }
     }
-    // Reset timing on every entry so re-visiting a screen doesn't mis-classify
-    // init APIs as ACTION due to the elapsed time since the previous visit.
+    // Reset timing + init logs on every entry so re-visiting a screen starts
+    // fresh INIT entries instead of accumulating call counts from prior visits.
     _lastApiTime.remove(screenName);
     _screenInRefreshMode[screenName] = false;
-    _orderCounters.putIfAbsent(screenName, () => 0);
+    _orderCounters[screenName] = 0;
     _refreshCycleCounters.putIfAbsent(screenName, () => 0);
-    initLogsMap.putIfAbsent(screenName, () => []);
+    initLogsMap[screenName] = [];
     refreshLogsMap.putIfAbsent(screenName, () => []);
     updateView(screenName);
   }
