@@ -163,6 +163,8 @@ class _FpsOverlayState extends State<FpsOverlay>
   void _onOpenDashboard() {
     final nav = MonitorNavigatorObserver.navigatorState;
     if (nav == null) return;
+    if (MonitorNavigatorObserver.currentRoute ==
+        MonitorConstants.dashboardRoute) return;
     final route = MonitorNavigatorObserver.currentRoute;
     nav.push(MaterialPageRoute(
       builder: (_) => MonitorDashboardPage(
@@ -171,6 +173,7 @@ class _FpsOverlayState extends State<FpsOverlay>
     ));
     if (mounted) {
       setState(() {
+        _isExpanded = false;
         _top = MediaQuery.of(context).padding.top + 60;
       });
     }
@@ -234,6 +237,11 @@ class _FpsOverlayState extends State<FpsOverlay>
               });
             },
             onTap: _onTap,
+            onLongPress: _isExpanded ||
+                    MonitorNavigatorObserver.currentRoute ==
+                        '/MonitorDashboardPage'
+                ? null
+                : _onOpenDashboard,
             child: _isExpanded
                 ? _DetailsPanel(
                     onCollapse: _onCollapse,
