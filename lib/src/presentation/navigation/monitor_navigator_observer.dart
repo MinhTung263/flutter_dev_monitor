@@ -37,7 +37,8 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       ctrl.logRoutePush(name, previousRoute?.settings.name);
     } else if (route is PopupRoute) {
       MonitorController.instance.setActivePopup(name);
-      MonitorController.instance.logRoutePush(name, previousRoute?.settings.name);
+      MonitorController.instance
+          .logRoutePush(name, previousRoute?.settings.name);
     }
   }
 
@@ -58,10 +59,16 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       if (!pageStack.contains(name)) {
         MonitorController.instance.logRoutePop(name, prevName);
       }
+      if (prevName != null &&
+          prevName.isNotEmpty &&
+          prevName != '/MonitorDashboardPage') {
+        MonitorController.instance.updateDashboardView(prevName);
+      }
     } else if (route is PopupRoute) {
       MonitorController.instance
         ..clearActivePopup(name)
         ..logRoutePop(name, prevName);
+      MonitorController.instance.updateDashboardView(currentContentRoute);
     }
   }
 
@@ -72,8 +79,14 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     final name = route.settings.name;
     if (name == null || name.isEmpty || name == '/MonitorDashboardPage') return;
 
+    final prevName = previousRoute?.settings.name;
     pageStack.remove(name);
-    MonitorController.instance.logRoutePop(name, previousRoute?.settings.name);
+    MonitorController.instance.logRoutePop(name, prevName);
+    if (prevName != null &&
+        prevName.isNotEmpty &&
+        prevName != '/MonitorDashboardPage') {
+      MonitorController.instance.updateDashboardView(prevName);
+    }
   }
 
   @override
@@ -84,14 +97,16 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
     if (oldName != null) pageStack.remove(oldName);
 
-    if (newName != null && newName.isNotEmpty &&
+    if (newName != null &&
+        newName.isNotEmpty &&
         newName != '/MonitorDashboardPage') {
       currentRoute = newName;
       pageStack.add(newName);
       MonitorController.instance.startSession(newName);
     }
 
-    if (oldName != null && newName != null &&
+    if (oldName != null &&
+        newName != null &&
         newName != '/MonitorDashboardPage') {
       MonitorController.instance.logRouteReplace(oldName, newName);
     }
