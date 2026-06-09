@@ -1,3 +1,7 @@
+## 1.3.6
+
+* Added pub.dev screenshots: dashboard (light & dark), home with charts, API Lab, and overlay pill.
+
 ## 1.3.5
 
 * **Renamed INIT → OPEN**: all labels (`phaseInit`, MetricsBar, section headers, tile badges) now say `OPEN` — more accurate since it reflects APIs that ran when the screen was opened, not only `initState`.

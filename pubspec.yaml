@@ -1,9 +1,32 @@
 name: flutter_dev_monitor
 description: In-app developer monitor for Flutter apps. Tracks API calls, FPS, RAM, and disk usage with a floating overlay and full dashboard. Framework-agnostic — works with GetX, Provider, Riverpod, or plain Flutter.
-version: 1.3.5
+version: 1.3.6
 homepage: https://github.com/MinhTung263/flutter_dev_monitor
 repository: https://github.com/MinhTung263/flutter_dev_monitor
 issue_tracker: https://github.com/MinhTung263/flutter_dev_monitor/issues
+
+screenshots:
+  - description: >
+      API dashboard (light mode) — MetricsBar with OPEN/ACTION/JANK pills,
+      API log list grouped by visit, full request/response detail.
+    path: screenshots/dashboard_light.png
+  - description: >
+      API dashboard (dark mode) — same view with dark theme.
+    path: screenshots/dashboard_dark.png
+  - description: >
+      Home dashboard with FPS history chart, RAM history chart, and MetricsBar.
+    path: screenshots/home_dashboard.png
+  - description: >
+      Example app API Lab screen — tap buttons to fire API calls and
+      observe them appear in the monitor overlay and dashboard.
+    path: screenshots/api_lab.png
+  - description: >
+      Floating overlay (light mode) — compact FPS/API/MEM/NET pill with
+      tap-to-expand details panel.
+    path: screenshots/overlay_light.png
+  - description: >
+      Floating overlay (dark mode) — same overlay with dark theme.
+    path: screenshots/overlay_dark.png
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
