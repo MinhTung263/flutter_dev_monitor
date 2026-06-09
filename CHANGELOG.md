@@ -1,3 +1,16 @@
+## 2.0.0
+
+* **Major release** — consolidates all 1.x improvements into a stable, versioned API.
+* Floating overlay: tap → open dashboard directly; long press → expand details panel.
+* `DevMonitor.builder({bool showOverlay, bool expandedByDefault})` — configure initial overlay visibility and state.
+* `DevMonitor.hideOverlay()` / `showOverlay()` / `toggleOverlay()` — runtime control.
+* `DevMonitor.tapToToggle(...)` — secret N-tap trigger to toggle overlay.
+* OPEN / ACTION phase detection with per-visit grouping and `#N` labels.
+* MetricsBar shows per-screen stats for the selected dashboard screen.
+* Chronological API list sort; FPS HISTORY collapsed by default.
+* Consistent reset icon (`Icons.restart_alt`) across dashboard and overlay.
+* pub.dev screenshots added.
+
 ## 1.3.9
 
 * **`DevMonitor.builder(expandedByDefault)`**: new parameter to choose whether the overlay starts as the details panel (`true`) or the collapsed pill (`false`, default).
