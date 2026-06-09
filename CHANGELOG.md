@@ -1,3 +1,7 @@
+## 1.3.9
+
+* **`DevMonitor.builder(expandedByDefault)`**: new parameter to choose whether the overlay starts as the details panel (`true`) or the collapsed pill (`false`, default).
+
 ## 1.3.8
 
 * **Tap overlay pill → open dashboard directly**: single tap now opens `MonitorDashboardPage`; long press expands the details panel.
