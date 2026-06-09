@@ -37,12 +37,16 @@ abstract final class DevMonitor {
   /// // Hidden until manually shown (e.g. production build):
   /// builder: DevMonitor.builder(showOverlay: false),
   /// ```
-  static TransitionBuilder builder({bool showOverlay = true}) {
+  static TransitionBuilder builder({
+    bool showOverlay = true,
+    bool expandedByDefault = false,
+  }) {
     _overlayEnabled.value = showOverlay;
     return (context, child) => ValueListenableBuilder<bool>(
           valueListenable: _overlayEnabled,
           builder: (_, enabled, __) => FpsOverlay(
             isShowing: enabled,
+            expandedByDefault: expandedByDefault,
             onHide: hideOverlay,
             child: child ?? const SizedBox.shrink(),
           ),

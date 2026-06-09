@@ -13,12 +13,14 @@ import '../theme/monitor_theme.dart';
 class FpsOverlay extends StatefulWidget {
   final Widget child;
   final bool isShowing;
+  final bool expandedByDefault;
   final VoidCallback? onHide;
 
   const FpsOverlay({
     super.key,
     required this.child,
     this.isShowing = true,
+    this.expandedByDefault = false,
     this.onHide,
   });
 
@@ -46,13 +48,14 @@ class _FpsOverlayState extends State<FpsOverlay>
   double? _top;
   double? _left;
   bool _positionInit = false;
-  bool _isExpanded = false;
+  late bool _isExpanded;
 
   MonitorController get _ctrl => MonitorController.instance;
 
   @override
   void initState() {
     super.initState();
+    _isExpanded = widget.expandedByDefault;
     _manageListening();
   }
 
