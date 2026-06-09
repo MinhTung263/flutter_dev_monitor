@@ -236,6 +236,44 @@ class ApiLogController {
     totalRefreshDuration = 0;
   }
 
+  /// Returns live stats for a given screen without mutating shared state.
+  /// Used by the dashboard MetricsBar so it always reflects the selected screen.
+  ({
+    int openCount,
+    int openMs,
+    int visitCount,
+    int actionCount,
+    int actionMs,
+    int actionCycles,
+  }) statsForScreen(String screen) {
+    final initLogs = initLogsMap[screen] ?? [];
+    final refreshLogs = refreshLogsMap[screen] ?? [];
+    final currentInitCycle = _initCycleCounters[screen] ?? 1;
+    final actionCycles = _refreshCycleCounters[screen] ?? 0;
+
+    // OPEN: latest visit only
+    final currentInitLogs =
+        initLogs.where((l) => l.refreshCycle == currentInitCycle).toList();
+    final openCount = currentInitLogs.fold(0, (s, l) => s + l.callCount);
+    final openMs = currentInitLogs.fold(0, (s, l) => s + l.duration);
+
+    // ACTION: latest cycle only (consistent with OPEN showing latest visit)
+    final latestActionLogs = actionCycles > 0
+        ? refreshLogs.where((l) => l.refreshCycle == actionCycles).toList()
+        : <ApiLogItem>[];
+    final actionCount = latestActionLogs.fold(0, (s, l) => s + l.callCount);
+    final actionMs = latestActionLogs.fold(0, (s, l) => s + l.duration);
+
+    return (
+      openCount: openCount,
+      openMs: openMs,
+      visitCount: currentInitCycle,
+      actionCount: actionCount,
+      actionMs: actionMs,
+      actionCycles: actionCycles,
+    );
+  }
+
   bool isPopupRoute(String route) =>
       route.contains('dialog') ||
       route.contains('bottomSheet') ||

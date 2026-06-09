@@ -53,6 +53,10 @@ class MonitorController extends ChangeNotifier {
   int get totalRefreshDuration => _apiLog.totalRefreshDuration;
   int get errorCount => _apiLog.errorCount;
 
+  ({int openCount, int openMs, int visitCount, int actionCount, int actionMs, int actionCycles}) screenStats(
+          String screen) =>
+      _apiLog.statsForScreen(screen);
+
   bool get isCurrentScreenInRefresh =>
       _apiLog.isInRefresh(MonitorNavigatorObserver.currentRoute);
 

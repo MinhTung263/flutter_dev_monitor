@@ -91,7 +91,6 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   Widget _buildPage(BuildContext context) {
     final allLogs = _ctrl.apiLogs;
     final filteredLogs = _applyFilter(allLogs);
-    final errorCount = allLogs.where((l) => !l.isSuccess).length;
     final flutterErrors = _ctrl.errorLogs;
     final routeLogs = _ctrl.routeLogs;
 
@@ -121,9 +120,8 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         // Body stays pinned — MetricsBar + TabHeader + FilterBar always visible
         body: Column(
           children: [
-            MonitorMetricsBar(screenErrorCount: errorCount),
+            MonitorMetricsBar(screen: _selectedScreen),
             _LogTabHeader(
-              screen: _selectedScreen,
               apiCount: allLogs.length,
               routeCount: routeLogs.length,
               errorCount: flutterErrors.length,

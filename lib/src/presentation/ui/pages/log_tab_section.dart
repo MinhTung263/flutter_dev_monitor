@@ -3,7 +3,6 @@ part of 'monitor_dashboard_page.dart';
 // ─── Log tab header (API / ERRORS toggle) ─────────────────────────────────────
 
 class _LogTabHeader extends StatelessWidget {
-  final String screen;
   final int apiCount;
   final int routeCount;
   final int errorCount;
@@ -11,7 +10,6 @@ class _LogTabHeader extends StatelessWidget {
   final ValueChanged<int> onTabChanged;
 
   const _LogTabHeader({
-    required this.screen,
     required this.apiCount,
     required this.routeCount,
     required this.errorCount,
@@ -55,14 +53,6 @@ class _LogTabHeader extends StatelessWidget {
                   active: activeTab == 2,
                   activeColor: MonitorColors.statusError,
                   onTap: () => onTabChanged(2),
-                ),
-                Flexible(
-                  child: MonoText(
-                    screen,
-                    9,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                 ),
               ],
             ),
