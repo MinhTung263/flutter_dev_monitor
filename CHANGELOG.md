@@ -1,3 +1,11 @@
+## 1.3.8
+
+* **Tap overlay pill → open dashboard directly**: single tap now opens `MonitorDashboardPage`; long press expands the details panel.
+* **Hide overlay permanently**: added X button (`Icons.close`) in the details panel that calls `DevMonitor.hideOverlay()` — overlay stays hidden until `DevMonitor.showOverlay()` is called. Collapses back to pill state when hidden.
+* **Fixed ticker crash on re-show**: `SingleTickerProviderStateMixin` ticker is now stopped/started instead of disposed/recreated, preventing the "multiple tickers" assertion.
+* **Consistent reset icon**: both dashboard AppBar and overlay panel now use `Icons.restart_alt` with `MonitorColors.statusError`.
+* **FPS HISTORY collapsed by default**: chart starts collapsed to reduce visual noise on open.
+
 ## 1.3.7
 
 * **`DevMonitor.builder({bool showOverlay})`**: new method replacing `appBuilder` — pass `showOverlay: false` to start the overlay hidden (e.g. production builds). `appBuilder` kept as a backwards-compatible alias.
