@@ -1,5 +1,5 @@
 class ApiLogItem {
-  static const String phaseInit = 'INIT';
+  static const String phaseInit = 'OPEN';
   static const String phaseRefresh = 'ACTION';
 
   final int orderNumber;

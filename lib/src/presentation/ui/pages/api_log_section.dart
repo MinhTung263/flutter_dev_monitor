@@ -228,7 +228,7 @@ class _SectionHeader extends StatelessWidget {
         isRefresh ? MonitorColors.metricRefresh : MonitorColors.metricInit;
     final label = isRefresh
         ? 'ACTION #${data.refreshCycle}'
-        : 'INIT #${data.refreshCycle}';
+        : 'OPEN #${data.refreshCycle}';
 
     return Container(
       margin: const EdgeInsets.only(top: 8, bottom: 4),

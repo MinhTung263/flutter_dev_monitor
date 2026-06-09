@@ -11,6 +11,7 @@ class ApiLogController {
   final Map<String, bool> _screenInRefreshMode = {};
   final Map<String, int> _refreshCycleCounters = {};
   final Map<String, int> _initCycleCounters = {};
+  final Map<String, DateTime> _sessionStartTime = {};
   final List<String> _screenOrder = [];
 
   String? activePopup;
@@ -37,6 +38,7 @@ class ApiLogController {
     // Reset timing on every entry; each visit gets its own init cycle so
     // new init APIs are added as fresh entries rather than merged with prior visits.
     _lastApiTime.remove(screenName);
+    _sessionStartTime[screenName] = DateTime.now();
     _screenInRefreshMode[screenName] = false;
     _orderCounters[screenName] = 0;
     _initCycleCounters[screenName] = (_initCycleCounters[screenName] ?? 0) + 1;
@@ -54,6 +56,7 @@ class ApiLogController {
     _screenInRefreshMode.remove(screenName);
     _refreshCycleCounters.remove(screenName);
     _initCycleCounters.remove(screenName);
+    _sessionStartTime.remove(screenName);
   }
 
   void addLog(ApiLogItem item, String screen, String popupSuffix) {
@@ -67,8 +70,21 @@ class ApiLogController {
       _refreshCycleCounters[screen] = (_refreshCycleCounters[screen] ?? 0) + 1;
       _screenInRefreshMode[screen] = true;
     } else if (lastTime == null) {
-      _screenInRefreshMode[screen] = false;
-      // Don't reset _refreshCycleCounters — preserves ACTION history from prior visits.
+      // First API after screen entry. If user waited longer than the gap before
+      // triggering it (e.g. pressed a button after reading the screen), treat
+      // it as ACTION rather than OPEN.
+      final sessionStart = _sessionStartTime[screen];
+      final delayedAction = sessionStart != null &&
+          now.difference(sessionStart).inMilliseconds >
+              MonitorConstants.refreshGapMs;
+      if (delayedAction) {
+        _orderCounters[screen] = 0;
+        _refreshCycleCounters[screen] =
+            (_refreshCycleCounters[screen] ?? 0) + 1;
+        _screenInRefreshMode[screen] = true;
+      } else {
+        _screenInRefreshMode[screen] = false;
+      }
     }
 
     _lastApiTime[screen] = now;
@@ -83,7 +99,9 @@ class ApiLogController {
     if (inRefresh) {
       final refreshLogs = refreshLogsMap[screen] ??= [];
       final idx = refreshLogs.indexWhere((l) =>
-          l.url == item.url && l.method == item.method && l.refreshCycle == cycle);
+          l.url == item.url &&
+          l.method == item.method &&
+          l.refreshCycle == cycle);
 
       if (idx >= 0) {
         final existing = refreshLogs[idx];
@@ -118,7 +136,9 @@ class ApiLogController {
       final initCycle = _initCycleCounters[screen] ?? 1;
       // Dedup within the same visit only (same URL+method+initCycle).
       final idx = initLogs.indexWhere((l) =>
-          l.url == item.url && l.method == item.method && l.refreshCycle == initCycle);
+          l.url == item.url &&
+          l.method == item.method &&
+          l.refreshCycle == initCycle);
 
       if (idx >= 0) {
         final existing = initLogs[idx];
@@ -205,6 +225,7 @@ class ApiLogController {
     _screenInRefreshMode.clear();
     _refreshCycleCounters.clear();
     _initCycleCounters.clear();
+    _sessionStartTime.clear();
     _screenOrder.clear();
     activePopup = null;
     initApiCount = 0;

@@ -23,7 +23,7 @@ class MonitorMetricsBar extends StatelessWidget {
               Row(
                 children: [
                   _PhasePill(
-                    label: 'INIT',
+                    label: 'OPEN',
                     count: ctrl.initApiCount,
                     duration: ctrl.initTotalDuration,
                     color: MonitorColors.metricInit,
