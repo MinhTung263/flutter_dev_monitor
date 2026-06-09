@@ -1,3 +1,14 @@
+## 1.3.5
+
+* **Renamed INIT → OPEN**: all labels (`phaseInit`, MetricsBar, section headers, tile badges) now say `OPEN` — more accurate since it reflects APIs that ran when the screen was opened, not only `initState`.
+* **Fixed phase mis-classification for delayed first API**: if the first API on a screen is triggered after `refreshGapMs` (e.g. user reads the screen then taps a button), it is now classified as `ACTION` instead of `OPEN`. Uses `_sessionStartTime` recorded at `startSession`.
+* **Per-visit OPEN entries**: each navigation to a screen creates a new `OPEN #N` group in the API list instead of accumulating call counts across visits. Section headers show `OPEN #1`, `OPEN #2`, etc.
+* **MetricsBar shows per-screen stats**: OPEN and ACTION metrics now always reflect the dashboard's selected screen, even when the app has navigated to a different screen in the background.
+* **MetricsBar OPEN and ACTION both show latest occurrence only**: ACTION now shows the latest action cycle's stats (previously showed totals across all cycles), consistent with OPEN showing the latest visit. Label includes `#N` so the visit/action number is always visible.
+* **MetricsBar reduced to one row**: removed redundant ERRORS and RAM pills (already visible in the tab header and hardware grid). Row now shows `OPEN · ACTION · JANK`.
+* **Removed duplicate screen name from tab header**: screen name is already in the AppBar; the tab bar now shows only the API / ROUTES / ERRORS tabs.
+* **Chronological API list sort**: API log list now sorts strictly by timestamp (newest first) across all OPEN and ACTION groups.
+
 ## 1.3.4
 
 * **Fixed API phase mis-classification on re-navigation**: re-entering a screen (e.g. pressing back then forward) now correctly classifies its init APIs as INIT instead of ACTION. Root cause: `startSession` now always resets `_lastApiTime` and `_screenInRefreshMode` on entry, so the elapsed time since the previous visit no longer triggers the refresh-gap heuristic.
