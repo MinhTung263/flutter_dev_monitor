@@ -29,7 +29,7 @@ class MonitorDashboardPage extends StatefulWidget {
 
 class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   late String _selectedScreen;
-  bool _chartExpanded = true;
+  bool _chartExpanded = false;
   bool _ramChartExpanded = false;
   int _activeTab = 0; // 0=API  1=ROUTES  2=ERRORS
   String _filterMode = 'ALL';

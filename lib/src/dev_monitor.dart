@@ -20,8 +20,7 @@ abstract final class DevMonitor {
   static void hideOverlay() => _overlayEnabled.value = false;
 
   /// Toggle the FpsOverlay on/off.
-  static void toggleOverlay() =>
-      _overlayEnabled.value = !_overlayEnabled.value;
+  static void toggleOverlay() => _overlayEnabled.value = !_overlayEnabled.value;
 
   /// Whether the overlay is currently visible.
   static bool get isOverlayVisible => _overlayEnabled.value;
@@ -40,7 +39,14 @@ abstract final class DevMonitor {
   /// ```
   static TransitionBuilder builder({bool showOverlay = true}) {
     _overlayEnabled.value = showOverlay;
-    return appBuilder;
+    return (context, child) => ValueListenableBuilder<bool>(
+          valueListenable: _overlayEnabled,
+          builder: (_, enabled, __) => FpsOverlay(
+            isShowing: enabled,
+            onHide: hideOverlay,
+            child: child ?? const SizedBox.shrink(),
+          ),
+        );
   }
 
   /// Pass to [MaterialApp.builder]. Wraps the app with [FpsOverlay].
@@ -50,6 +56,7 @@ abstract final class DevMonitor {
         valueListenable: _overlayEnabled,
         builder: (_, enabled, __) => FpsOverlay(
           isShowing: enabled,
+          onHide: hideOverlay,
           child: child ?? const SizedBox.shrink(),
         ),
       );
@@ -99,8 +106,7 @@ class _SecretTapTriggerState extends State<_SecretTapTrigger> {
         Clipboard.setData(ClipboardData(text: widget.clipboardKey!));
       }
     } else {
-      _resetTimer =
-          Timer(const Duration(milliseconds: 1500), () => _count = 0);
+      _resetTimer = Timer(const Duration(milliseconds: 1500), () => _count = 0);
     }
   }
 

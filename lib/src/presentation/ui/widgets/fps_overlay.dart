@@ -13,11 +13,13 @@ import '../theme/monitor_theme.dart';
 class FpsOverlay extends StatefulWidget {
   final Widget child;
   final bool isShowing;
+  final VoidCallback? onHide;
 
   const FpsOverlay({
     super.key,
     required this.child,
     this.isShowing = true,
+    this.onHide,
   });
 
   @override
@@ -73,12 +75,16 @@ class _FpsOverlayState extends State<FpsOverlay>
     if (widget.isShowing && !_isListening) {
       _isListening = true;
       SchedulerBinding.instance.addTimingsCallback(_onTimings);
-      _ticker = createTicker(_onTick)..start();
+      if (_ticker == null) {
+        _ticker = createTicker(_onTick)..start();
+      } else {
+        _ticker!.start();
+      }
     } else if (!widget.isShowing && _isListening) {
       _isListening = false;
+      _isExpanded = false;
       SchedulerBinding.instance.removeTimingsCallback(_onTimings);
-      _ticker?.dispose();
-      _ticker = null;
+      _ticker?.stop();
       _vsyncHistory.clear();
       _buildAccumMs = 0.0;
       _gpuAccumMs = 0.0;
@@ -148,13 +154,7 @@ class _FpsOverlayState extends State<FpsOverlay>
     _timingBatchCount = 0;
   }
 
-  void _onTap() {
-    if (_isExpanded) {
-      _onCollapse();
-    } else {
-      setState(() => _isExpanded = true);
-    }
-  }
+  void _onExpandPanel() => setState(() => _isExpanded = true);
 
   void _onCollapse() {
     final sw = MediaQuery.of(context).size.width;
@@ -240,15 +240,17 @@ class _FpsOverlayState extends State<FpsOverlay>
                 );
               });
             },
-            onTap: _onTap,
-            onLongPress: _isExpanded ||
-                    MonitorNavigatorObserver.currentRoute ==
-                        '/MonitorDashboardPage'
-                ? null
-                : _onOpenDashboard,
+            onTap: _isExpanded
+                ? _onCollapse
+                : MonitorNavigatorObserver.currentRoute ==
+                        MonitorConstants.dashboardRoute
+                    ? null
+                    : _onOpenDashboard,
+            onLongPress: _isExpanded ? null : _onExpandPanel,
             child: _isExpanded
                 ? _DetailsPanel(
                     onCollapse: _onCollapse,
+                    onHide: widget.onHide,
                     onOpenDashboard: _onOpenDashboard,
                     onClear: _onClearData,
                   )
@@ -403,18 +405,14 @@ class _PillBadgeState extends State<_PillBadge>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text('API ',
-                        style: _lbl.copyWith(
-                            color: MonitorColors.overlayApi)),
+                        style: _lbl.copyWith(color: MonitorColors.overlayApi)),
                     Text('$apiCount',
-                        style: _val.copyWith(
-                            color: MonitorColors.overlayApi)),
+                        style: _val.copyWith(color: MonitorColors.overlayApi)),
                     const SizedBox(width: 6),
                     Text('MEM ',
-                        style: _lbl.copyWith(
-                            color: MonitorColors.overlayMem)),
+                        style: _lbl.copyWith(color: MonitorColors.overlayMem)),
                     Text('${memMb.toStringAsFixed(0)}M',
-                        style: _val.copyWith(
-                            color: MonitorColors.overlayMem)),
+                        style: _val.copyWith(color: MonitorColors.overlayMem)),
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -422,8 +420,7 @@ class _PillBadgeState extends State<_PillBadge>
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('NET ',
-                        style: _lbl.copyWith(color: pingColor)),
+                    Text('NET ', style: _lbl.copyWith(color: pingColor)),
                     Text(pingMs == null ? '--' : '${pingMs}ms',
                         style: _val.copyWith(color: pingColor)),
                   ],
@@ -466,11 +463,13 @@ class _PillBadgeState extends State<_PillBadge>
 
 class _DetailsPanel extends StatelessWidget {
   final VoidCallback onCollapse;
+  final VoidCallback? onHide;
   final VoidCallback onOpenDashboard;
   final VoidCallback onClear;
 
   const _DetailsPanel({
     required this.onCollapse,
+    this.onHide,
     required this.onOpenDashboard,
     required this.onClear,
   });
@@ -681,9 +680,19 @@ class _DetailsPanel extends StatelessWidget {
                 children: [
                   _ActionButton(
                       onTap: onCollapse,
-                      icon: Icons.close,
+                      icon: Icons.close_fullscreen,
                       iconColor: btnIconColor),
                   const SizedBox(height: 10),
+                  if (onHide != null) ...[
+                    _ActionButton(
+                        onTap: onHide!,
+                        icon: Icons.close,
+                        iconColor:
+                            const Color(0xFFFF5555).withValues(alpha: 0.80),
+                        borderColor:
+                            const Color(0xFFFF5555).withValues(alpha: 0.30)),
+                    const SizedBox(height: 10),
+                  ],
                   if (MonitorNavigatorObserver.currentRoute !=
                       MonitorConstants.dashboardRoute) ...[
                     _ActionButton(
@@ -694,11 +703,10 @@ class _DetailsPanel extends StatelessWidget {
                   ],
                   _ActionButton(
                       onTap: onClear,
-                      icon: Icons.cleaning_services,
-                      iconColor:
-                          const Color(0xFFFF5555).withValues(alpha: 0.80),
+                      icon: Icons.restart_alt,
+                      iconColor: MonitorColors.statusError,
                       borderColor:
-                          const Color(0xFFFF5555).withValues(alpha: 0.30)),
+                          MonitorColors.statusError.withValues(alpha: 0.30)),
                 ],
               ),
             ],
