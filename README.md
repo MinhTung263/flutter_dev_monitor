@@ -4,12 +4,15 @@ An in-app developer monitor for Flutter. Tracks API calls, FPS, RAM, and disk us
 
 ## Features
 
-- **Floating HUD** — draggable overlay showing live FPS, GPU ms, build ms, RAM
+- **Floating HUD** — draggable overlay showing live FPS, GPU ms, build ms, RAM, and network ping
 - **API log** — captures every Dio request: URL, method, status code, duration, caller function, and screen
-- **FPS chart** — per-screen frame-time history
+- **OPEN / ACTION phases** — automatically separates APIs that ran when the screen opened (OPEN) from those triggered by user actions (ACTION); each visit creates a fresh OPEN group
+- **FPS chart** — per-screen frame-time history with avg/min/max stats
+- **RAM chart** — per-screen memory history with avg/min/max stats
 - **Hardware grid** — RAM / disk usage updated every 3 seconds
-- **Phase detection** — automatically separates *init* calls (first load) from *refresh* calls (pull-to-refresh, periodic polling)
-- **Screen-aware** — data is scoped per route; cleared when the screen is popped
+- **Error capture** — catches Flutter and Dart unhandled errors with stack traces
+- **Route log** — records every push / pop / replace with timestamp
+- **Screen-aware** — data is scoped per route; up to 50 screens tracked (LRU eviction)
 
 ## Getting started
 
@@ -17,7 +20,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_dev_monitor: ^1.0.0
+  flutter_dev_monitor: ^1.3.0
   dio: ^5.9.0        # required for MonitorInterceptor
 ```
 
@@ -36,13 +39,43 @@ All requests made through this `Dio` instance are automatically captured.
 ```dart
 MaterialApp(
   navigatorObservers: [DevMonitor.observer],
-  builder: DevMonitor.appBuilder,
+  builder: DevMonitor.builder(),   // overlay visible by default
   home: const HomeScreen(),
 )
 ```
 
 - `DevMonitor.observer` tracks the active route so API logs are grouped by screen.
-- `DevMonitor.appBuilder` injects the draggable FPS/RAM overlay automatically — no need to wrap `home` with `FpsOverlay`.
+- `DevMonitor.builder()` injects the draggable FPS/RAM overlay automatically.
+
+#### Overlay visibility
+
+By default the overlay is always visible. Pass `showOverlay: false` to start hidden — useful for production builds where you only want the overlay on demand:
+
+```dart
+// Always visible (default):
+builder: DevMonitor.builder(),
+
+// Hidden until toggled (e.g. release / QA builds):
+builder: DevMonitor.builder(showOverlay: false),
+```
+
+Toggle at runtime from anywhere:
+
+```dart
+DevMonitor.showOverlay();
+DevMonitor.hideOverlay();
+DevMonitor.toggleOverlay();
+```
+
+Or wrap any widget (logo, version label, etc.) with a secret N-tap trigger:
+
+```dart
+DevMonitor.tapToToggle(
+  tapCount: 7,          // default
+  clipboardKey: 'dev',  // optional: copies to clipboard on trigger
+  child: myLogoWidget,
+)
+```
 
 ### 3. Open the dashboard
 
@@ -82,7 +115,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorObservers: [DevMonitor.observer],
-      builder: DevMonitor.appBuilder,
+      builder: DevMonitor.builder(),
       home: const HomeScreen(),
     );
   }
@@ -99,8 +132,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    dio.get('/posts');       // captured automatically
-    dio.get('/users');       // captured automatically
+    dio.get('/posts');    // captured automatically — appears as OPEN
+    dio.get('/users');    // captured automatically — appears as OPEN
   }
 
   @override
@@ -123,7 +156,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: const Center(child: Text('Your app content')),
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () => dio.get('/posts/1'), // appears as ACTION
+          child: const Text('Refresh'),
+        ),
+      ),
     );
   }
 }
@@ -158,17 +196,29 @@ final monitorProvider = ChangeNotifierProvider((_) => MonitorController.instance
 |---|---|
 | `DevMonitor.interceptor` | Singleton `MonitorInterceptor` — add to your `Dio` instance |
 | `DevMonitor.observer` | Singleton `MonitorNavigatorObserver` — pass to `navigatorObservers` |
-| `DevMonitor.appBuilder` | `TransitionBuilder` — pass to `MaterialApp.builder` to inject the overlay |
+| `DevMonitor.builder({bool showOverlay})` | Returns a `TransitionBuilder` for `MaterialApp.builder`; sets initial overlay visibility |
+| `DevMonitor.appBuilder` | `TransitionBuilder` — same as `builder()` with default visibility, kept for backwards compatibility |
+| `DevMonitor.showOverlay()` | Show the overlay at runtime |
+| `DevMonitor.hideOverlay()` | Hide the overlay at runtime |
+| `DevMonitor.toggleOverlay()` | Toggle overlay visibility |
+| `DevMonitor.tapToToggle(...)` | Wraps a widget with a secret N-tap toggle trigger |
 | `MonitorDashboardPage` | Full dashboard — push as a named route |
 | `MonitorController` | Singleton `ChangeNotifier` with all observable state |
-| `FpsOverlay` | Low-level overlay widget — use `DevMonitor.appBuilder` instead |
+| `FpsOverlay` | Low-level overlay widget — use `DevMonitor.builder()` instead |
 
-### `FpsOverlay` parameters
+### `DevMonitor.builder()` parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `child` | `Widget` | required | The widget tree to wrap |
-| `isShowing` | `bool` | `true` | Show or hide the overlay at runtime |
+| `showOverlay` | `bool` | `true` | Initial overlay visibility; can be changed at runtime via `showOverlay()`/`hideOverlay()` |
+
+### `DevMonitor.tapToToggle()` parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `child` | `Widget` | required | Widget to wrap |
+| `tapCount` | `int` | `7` | Number of consecutive taps to trigger |
+| `clipboardKey` | `String?` | `null` | String copied to clipboard on each trigger |
 
 ### `MonitorDashboardPage` parameters
 

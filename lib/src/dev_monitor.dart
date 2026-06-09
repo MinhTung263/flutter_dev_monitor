@@ -26,7 +26,25 @@ abstract final class DevMonitor {
   /// Whether the overlay is currently visible.
   static bool get isOverlayVisible => _overlayEnabled.value;
 
+  /// Returns a [TransitionBuilder] for [MaterialApp.builder].
+  ///
+  /// [showOverlay] sets the initial visibility (default: `true`).
+  /// The overlay can still be toggled at runtime via [showOverlay]/[hideOverlay].
+  ///
+  /// ```dart
+  /// // Always visible (default):
+  /// builder: DevMonitor.builder(),
+  ///
+  /// // Hidden until manually shown (e.g. production build):
+  /// builder: DevMonitor.builder(showOverlay: false),
+  /// ```
+  static TransitionBuilder builder({bool showOverlay = true}) {
+    _overlayEnabled.value = showOverlay;
+    return appBuilder;
+  }
+
   /// Pass to [MaterialApp.builder]. Wraps the app with [FpsOverlay].
+  /// Use [builder()] instead if you need to configure initial visibility.
   static Widget appBuilder(BuildContext context, Widget? child) =>
       ValueListenableBuilder<bool>(
         valueListenable: _overlayEnabled,

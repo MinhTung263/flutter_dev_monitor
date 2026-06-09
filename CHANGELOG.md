@@ -1,3 +1,8 @@
+## 1.3.7
+
+* **`DevMonitor.builder({bool showOverlay})`**: new method replacing `appBuilder` — pass `showOverlay: false` to start the overlay hidden (e.g. production builds). `appBuilder` kept as a backwards-compatible alias.
+* **Updated README**: documents `builder()`, overlay visibility controls, `tapToToggle`, and OPEN/ACTION phase terminology.
+
 ## 1.3.6
 
 * Added pub.dev screenshots: dashboard (light & dark), home with charts, API Lab, and overlay pill.
