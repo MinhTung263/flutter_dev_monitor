@@ -243,12 +243,7 @@ class _FpsOverlayState extends State<FpsOverlay>
                 );
               });
             },
-            onTap: _isExpanded
-                ? _onCollapse
-                : MonitorNavigatorObserver.currentRoute ==
-                        MonitorConstants.dashboardRoute
-                    ? null
-                    : _onOpenDashboard,
+            onTap: _isExpanded ? _onCollapse : _onOpenDashboard,
             onLongPress: _isExpanded ? null : _onExpandPanel,
             child: _isExpanded
                 ? _DetailsPanel(

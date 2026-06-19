@@ -50,6 +50,12 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
     if (prevName != null && prevName.isNotEmpty) {
       currentRoute = prevName;
+    } else {
+      final tempStack = List<String>.from(pageStack);
+      if (name != null) {
+        tempStack.remove(name);
+      }
+      currentRoute = tempStack.isNotEmpty ? tempStack.last : '/unknown';
     }
 
     if (name == null || name.isEmpty || name == '/MonitorDashboardPage') return;

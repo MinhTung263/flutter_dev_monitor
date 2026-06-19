@@ -12,6 +12,7 @@ abstract final class DevMonitor {
   static final MonitorInterceptor interceptor = MonitorInterceptor();
 
   static final ValueNotifier<bool> _overlayEnabled = ValueNotifier(true);
+  static bool? _configuredShowOverlay;
 
   /// Show the FpsOverlay.
   static void showOverlay() => _overlayEnabled.value = true;
@@ -39,9 +40,12 @@ abstract final class DevMonitor {
   /// ```
   static TransitionBuilder builder({
     bool showOverlay = true,
-    bool expandedByDefault = false,
+    bool expandedByDefault = true,
   }) {
-    _overlayEnabled.value = showOverlay;
+    if (_configuredShowOverlay != showOverlay) {
+      _configuredShowOverlay = showOverlay;
+      _overlayEnabled.value = showOverlay;
+    }
     return (context, child) => ValueListenableBuilder<bool>(
           valueListenable: _overlayEnabled,
           builder: (_, enabled, __) => FpsOverlay(
