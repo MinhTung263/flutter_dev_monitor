@@ -60,22 +60,22 @@ class ApiLogController {
   }
 
   void addLog(ApiLogItem item, String screen, String popupSuffix) {
-    final now = DateTime.now();
-    final lastTime = _lastApiTime[screen];
-    final gapExceeded = lastTime != null &&
-        now.difference(lastTime).inMilliseconds > MonitorConstants.refreshGapMs;
+    final reqStart = item.timestamp.subtract(Duration(milliseconds: item.duration));
+    final lastStart = _lastApiTime[screen];
+    final gapExceeded = lastStart != null &&
+        reqStart.difference(lastStart).inMilliseconds > MonitorConstants.refreshGapMs;
 
     if (gapExceeded) {
       _orderCounters[screen] = 0;
       _refreshCycleCounters[screen] = (_refreshCycleCounters[screen] ?? 0) + 1;
       _screenInRefreshMode[screen] = true;
-    } else if (lastTime == null) {
+    } else if (lastStart == null) {
       // First API after screen entry. If user waited longer than the gap before
       // triggering it (e.g. pressed a button after reading the screen), treat
       // it as ACTION rather than OPEN.
       final sessionStart = _sessionStartTime[screen];
       final delayedAction = sessionStart != null &&
-          now.difference(sessionStart).inMilliseconds >
+          reqStart.difference(sessionStart).inMilliseconds >
               MonitorConstants.refreshGapMs;
       if (delayedAction) {
         _orderCounters[screen] = 0;
@@ -87,7 +87,7 @@ class ApiLogController {
       }
     }
 
-    _lastApiTime[screen] = now;
+    _lastApiTime[screen] = reqStart;
     final order = (_orderCounters[screen] ?? 0) + 1;
     _orderCounters[screen] = order;
 
