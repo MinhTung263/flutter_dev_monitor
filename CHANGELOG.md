@@ -1,3 +1,12 @@
+## 2.1.0
+
+* **Widget Alignment Grid & Crosshairs**: Added layout alignment guides. Cycle through Off ➔ Margins (Safe Area 16px/24px) ➔ 8px Grid ➔ 16px Grid ➔ Center Crosshairs directly from FpsOverlay. High-contrast cyan/blue colors for visibility.
+* **Copy Error Details**: Added inline copy button to error tiles in the dashboard to copy error message + stacktrace to clipboard.
+* **Simulated Error Triggers in Example**: Added buttons in the example app to synchronously trigger Flutter UI errors or asynchronously trigger Dart errors.
+* **Fix Overlay Re-opening & Route Restoring**: Fixed an issue where the overlay dashboard button became unresponsive after popping `/MonitorDashboardPage` because the route observer did not restore `currentRoute` when the previous route was unnamed.
+* **Fix Rebuild Overlay State Resets**: Ensured that the `builder(showOverlay: false)` parameter preserves the user's runtime toggle state on rebuilds.
+* **Fix API Grouping on Rapid On-Refresh**: Switched log grouping calculations to use Request Start Time instead of Response Arrival Time, preventing incorrect API counts when pulling pull-to-refresh quickly.
+
 ## 2.0.0
 
 * **Major release** — consolidates all 1.x improvements into a stable, versioned API.
