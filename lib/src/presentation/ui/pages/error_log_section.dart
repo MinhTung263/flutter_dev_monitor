@@ -115,7 +115,34 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                       ),
                       const Spacer(),
                       MonoText(timeStr, 10),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(
+                            text: 'Error: ${e.message}\n\nStacktrace:\n${e.stackTrace}',
+                          ));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error copied to clipboard',
+                                  style: TextStyle(
+                                      color: MonitorColors.primaryText,
+                                      fontFamily: 'monospace',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold)),
+                              backgroundColor: MonitorColors.surface,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                side: BorderSide(color: MonitorColors.divider, width: 0.5),
+                              ),
+                              duration: const Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        child: Icon(Icons.copy_rounded,
+                            color: MonitorColors.secondaryText, size: 14),
+                      ),
+                      const SizedBox(width: 8),
                       Icon(_expanded ? Icons.expand_less : Icons.expand_more,
                           color: MonitorColors.secondaryText, size: 16),
                     ],

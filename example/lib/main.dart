@@ -298,6 +298,17 @@ class _ApiLabScreenState extends State<ApiLabScreen> {
         }
       });
 
+  void _triggerFlutterError() {
+    throw StateError('Simulated Flutter UI Error: widget state crash!');
+  }
+
+  void _triggerAsyncDartError() {
+    Future.delayed(Duration.zero, () {
+      throw ArgumentError(
+          'Simulated Async Dart Error: background task failed!');
+    });
+  }
+
   /// Large list → tests response body truncation (25-item cap)
   Future<void> _largeList() => _run('GET large list (100 posts)', () async {
         await dio.get('/posts');
@@ -411,6 +422,20 @@ class _ApiLabScreenState extends State<ApiLabScreen> {
                   color: Colors.red,
                   onTap: _busy ? null : _notFound,
                 ),
+                _LabButton(
+                  icon: Icons.bug_report,
+                  label: 'Trigger UI FlutterError',
+                  subtitle: 'Throws unhandled UI exception synchronous',
+                  color: Colors.red,
+                  onTap: _triggerFlutterError,
+                ),
+                _LabButton(
+                  icon: Icons.bolt,
+                  label: 'Trigger Async Dart Error',
+                  subtitle: 'Throws unhandled async exception in Future',
+                  color: Colors.red,
+                  onTap: _triggerAsyncDartError,
+                ),
               ],
             ),
           ),
@@ -511,45 +536,54 @@ class AlignmentTestScreen extends StatelessWidget {
             _SectionTitle('1. Horizontal Alignment (Standard 8px Grid)'),
             const SizedBox(height: 8),
             // Correctly aligned row
-            const Text('Correctly aligned (16px start padding):', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text('Correctly aligned (16px start padding):',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.grey.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 1.5),
+                border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.5), width: 1.5),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Row(
                 children: [
                   Container(width: 40, height: 40, color: Colors.green),
                   const SizedBox(width: 16),
-                  const Text('Aligned Title', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('Aligned Title',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   const Spacer(),
-                  const Text('Right text', style: TextStyle(color: Colors.grey)),
+                  const Text('Right text',
+                      style: TextStyle(color: Colors.grey)),
                 ],
               ),
             ),
             const SizedBox(height: 12),
             // Misaligned row (e.g. 13px padding, icon shifted by 3px)
-            const Text('Misaligned (13px padding, icon shifted by 3px):', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text('Misaligned (13px padding, icon shifted by 3px):',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 4),
             Container(
-              padding: const EdgeInsets.only(left: 13, right: 19, top: 12, bottom: 12),
+              padding: const EdgeInsets.only(
+                  left: 13, right: 19, top: 12, bottom: 12),
               decoration: BoxDecoration(
                 color: Colors.grey.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.5), width: 1.5),
+                border: Border.all(
+                    color: Colors.red.withValues(alpha: 0.5), width: 1.5),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Row(
                 children: [
                   Container(width: 40, height: 40, color: Colors.red),
                   const SizedBox(width: 19),
-                  const Text('Lefthand Shifted Title', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('Lefthand Shifted Title',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   const Spacer(),
                   const Padding(
                     padding: EdgeInsets.only(bottom: 5), // Vertical shift
-                    child: Text('Shifted text', style: TextStyle(color: Colors.grey)),
+                    child: Text('Shifted text',
+                        style: TextStyle(color: Colors.grey)),
                   ),
                 ],
               ),
@@ -558,7 +592,8 @@ class AlignmentTestScreen extends StatelessWidget {
             _SectionTitle('2. Vertical Grid (Center Guidelines)'),
             const SizedBox(height: 8),
             // Horizontal row of boxes that should center perfectly
-            const Text('Perfect Center vs Offset Center:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text('Perfect Center vs Offset Center:',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 8),
             Center(
               child: Column(
@@ -569,7 +604,9 @@ class AlignmentTestScreen extends StatelessWidget {
                     height: 40,
                     decoration: BoxDecoration(
                       color: Colors.green.withValues(alpha: 0.15),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 1.5),
+                      border: Border.all(
+                          color: Colors.green.withValues(alpha: 0.5),
+                          width: 1.5),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Center(child: Text('Perfect Center')),
@@ -583,10 +620,13 @@ class AlignmentTestScreen extends StatelessWidget {
                       height: 40,
                       decoration: BoxDecoration(
                         color: Colors.red.withValues(alpha: 0.15),
-                        border: Border.all(color: Colors.red.withValues(alpha: 0.5), width: 1.5),
+                        border: Border.all(
+                            color: Colors.red.withValues(alpha: 0.5),
+                            width: 1.5),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Center(child: Text('Offset Center (4px Right)')),
+                      child: const Center(
+                          child: Text('Offset Center (4px Right)')),
                     ),
                   ),
                 ],
@@ -619,7 +659,8 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue),
+      style: const TextStyle(
+          fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue),
     );
   }
 }
@@ -629,7 +670,8 @@ class _SpacingBox extends StatelessWidget {
   final double size;
   final Color color;
 
-  const _SpacingBox({required this.label, required this.size, required this.color});
+  const _SpacingBox(
+      {required this.label, required this.size, required this.color});
 
   @override
   Widget build(BuildContext context) {
