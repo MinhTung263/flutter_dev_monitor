@@ -74,6 +74,17 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Home'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.grid_on),
+            tooltip: 'Alignment Test',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: '/AlignmentTestScreen'),
+                builder: (_) => const AlignmentTestScreen(),
+              ),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.science_outlined),
             tooltip: 'API Lab',
             onPressed: () => Navigator.push(
@@ -458,6 +469,184 @@ class _LabButton extends StatelessWidget {
             color: onTap == null ? Colors.grey : Colors.grey[400]),
         onTap: onTap,
       ),
+    );
+  }
+}
+
+// ─── Alignment Test Screen ────────────────────────────────────────────────────
+
+class AlignmentTestScreen extends StatelessWidget {
+  const AlignmentTestScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Alignment Test Lab'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Card(
+              color: Colors.blueAccent,
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Hold the FpsOverlay -> Expand it -> Tap the Grid button to toggle 8px/16px Grid or Crosshair. Check if the elements below are aligned.',
+                        style: TextStyle(color: Colors.white, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _SectionTitle('1. Horizontal Alignment (Standard 8px Grid)'),
+            const SizedBox(height: 8),
+            // Correctly aligned row
+            const Text('Correctly aligned (16px start padding):', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 1.5),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  Container(width: 40, height: 40, color: Colors.green),
+                  const SizedBox(width: 16),
+                  const Text('Aligned Title', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  const Text('Right text', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Misaligned row (e.g. 13px padding, icon shifted by 3px)
+            const Text('Misaligned (13px padding, icon shifted by 3px):', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.only(left: 13, right: 19, top: 12, bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.5), width: 1.5),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  Container(width: 40, height: 40, color: Colors.red),
+                  const SizedBox(width: 19),
+                  const Text('Lefthand Shifted Title', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 5), // Vertical shift
+                    child: Text('Shifted text', style: TextStyle(color: Colors.grey)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            _SectionTitle('2. Vertical Grid (Center Guidelines)'),
+            const SizedBox(height: 8),
+            // Horizontal row of boxes that should center perfectly
+            const Text('Perfect Center vs Offset Center:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 8),
+            Center(
+              child: Column(
+                children: [
+                  // Perfect Center
+                  Container(
+                    width: 200,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.15),
+                      border: Border.all(color: Colors.green.withValues(alpha: 0.5), width: 1.5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Center(child: Text('Perfect Center')),
+                  ),
+                  const SizedBox(height: 8),
+                  // Shifted Center
+                  Transform.translate(
+                    offset: const Offset(4, 0), // 4px off center
+                    child: Container(
+                      width: 200,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.15),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.5), width: 1.5),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Center(child: Text('Offset Center (4px Right)')),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            _SectionTitle('3. Padding Verification (8px multiples)'),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _SpacingBox(label: '8px', size: 8, color: Colors.orange),
+                _SpacingBox(label: '16px', size: 16, color: Colors.orange),
+                _SpacingBox(label: '24px', size: 24, color: Colors.orange),
+                _SpacingBox(label: '32px', size: 32, color: Colors.orange),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  const _SectionTitle(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue),
+    );
+  }
+}
+
+class _SpacingBox extends StatelessWidget {
+  final String label;
+  final double size;
+  final Color color;
+
+  const _SpacingBox({required this.label, required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.25),
+            border: Border.all(color: color, width: 1.5),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontSize: 10)),
+      ],
     );
   }
 }

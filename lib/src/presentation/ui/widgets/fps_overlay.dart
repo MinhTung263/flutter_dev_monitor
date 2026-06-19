@@ -49,8 +49,21 @@ class _FpsOverlayState extends State<FpsOverlay>
   double? _left;
   bool _positionInit = false;
   late bool _isExpanded;
+  GridMode _gridMode = GridMode.off;
 
   MonitorController get _ctrl => MonitorController.instance;
+
+  void _onToggleGrid() {
+    setState(() {
+      _gridMode = switch (_gridMode) {
+        GridMode.off => GridMode.margins,
+        GridMode.margins => GridMode.grid8,
+        GridMode.grid8 => GridMode.grid16,
+        GridMode.grid16 => GridMode.crosshair,
+        GridMode.crosshair => GridMode.off,
+      };
+    });
+  }
 
   @override
   void initState() {
@@ -219,6 +232,23 @@ class _FpsOverlayState extends State<FpsOverlay>
     return Stack(
       children: [
         widget.child,
+        if (_gridMode != GridMode.off)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ListenableBuilder(
+                listenable: MonitorColors.isDarkNotifier,
+                builder: (context, _) {
+                  return CustomPaint(
+                    painter: _GridPainter(
+                      mode: _gridMode,
+                      isDark: MonitorColors.isDark,
+                      padding: pad,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         Positioned(
           top: _top,
           left: _left,
@@ -251,6 +281,8 @@ class _FpsOverlayState extends State<FpsOverlay>
                     onHide: widget.onHide,
                     onOpenDashboard: _onOpenDashboard,
                     onClear: _onClearData,
+                    gridMode: _gridMode,
+                    onToggleGrid: _onToggleGrid,
                   )
                 : const _PillBadge(),
           ),
@@ -464,12 +496,16 @@ class _DetailsPanel extends StatelessWidget {
   final VoidCallback? onHide;
   final VoidCallback onOpenDashboard;
   final VoidCallback onClear;
+  final GridMode gridMode;
+  final VoidCallback onToggleGrid;
 
   const _DetailsPanel({
     required this.onCollapse,
     this.onHide,
     required this.onOpenDashboard,
     required this.onClear,
+    required this.gridMode,
+    required this.onToggleGrid,
   });
 
   static const _cFps = MonitorColors.overlayFps;
@@ -548,6 +584,22 @@ class _DetailsPanel extends StatelessWidget {
           final btnIconColor = dark
               ? Colors.white.withValues(alpha: 0.80)
               : const Color(0xFF475569);
+
+          final IconData gridIcon = switch (gridMode) {
+            GridMode.off => Icons.grid_off_outlined,
+            GridMode.grid8 => Icons.grid_on_outlined,
+            GridMode.grid16 => Icons.grid_4x4_outlined,
+            GridMode.crosshair => Icons.center_focus_strong,
+            GridMode.margins => Icons.filter_frames_outlined,
+          };
+          final Color gridIconColor = gridMode == GridMode.off
+              ? btnIconColor
+              : (dark ? const Color(0xFF22D3EE) : const Color(0xFF0891B2));
+          final Color? gridBorderColor = gridMode == GridMode.off
+              ? null
+              : (dark
+                  ? const Color(0xFF22D3EE).withValues(alpha: 0.40)
+                  : const Color(0xFF0891B2).withValues(alpha: 0.40));
 
           // Metric accent colors — darker variants in light mode for readability
           final mFps = dark ? _cFps : const Color(0xFF16A34A);
@@ -680,6 +732,12 @@ class _DetailsPanel extends StatelessWidget {
                       onTap: onCollapse,
                       icon: Icons.close_fullscreen,
                       iconColor: btnIconColor),
+                  const SizedBox(height: 10),
+                  _ActionButton(
+                      onTap: onToggleGrid,
+                      icon: gridIcon,
+                      iconColor: gridIconColor,
+                      borderColor: gridBorderColor),
                   const SizedBox(height: 10),
                   if (onHide != null) ...[
                     _ActionButton(
@@ -894,4 +952,148 @@ class _SparklinePainter extends CustomPainter {
       (fpsHistory.isNotEmpty &&
           old.fpsHistory.isNotEmpty &&
           old.fpsHistory.last != fpsHistory.last);
+}
+
+// ─── Grid Mode and Painter ───────────────────────────────────────────────────
+
+enum GridMode { off, grid8, grid16, crosshair, margins }
+
+class _GridPainter extends CustomPainter {
+  final GridMode mode;
+  final bool isDark;
+  final EdgeInsets? padding;
+
+  const _GridPainter({required this.mode, required this.isDark, this.padding});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (mode == GridMode.off) return;
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+
+    // Use high-contrast blue/cyan colors that stand out on white/black backgrounds
+    final Color baseColor = isDark
+        ? const Color(0xFF22D3EE) // Cyan accent
+        : const Color(0xFF0284C7); // Light Blue accent
+
+    final Color mainLineColor = baseColor.withValues(alpha: 0.35);
+    final Color majorLineColor = baseColor.withValues(alpha: 0.70);
+
+    if (mode == GridMode.grid8 || mode == GridMode.grid16) {
+      final double spacing = mode == GridMode.grid8 ? 8.0 : 16.0;
+
+      // Draw vertical lines
+      for (double x = 0.0; x < size.width; x += spacing) {
+        final int lineIndex = (x / spacing).round();
+        final isMajor = lineIndex % 5 == 0;
+        paint.color = isMajor ? majorLineColor : mainLineColor;
+        paint.strokeWidth = isMajor ? 1.5 : 0.8;
+        canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+      }
+
+      // Draw horizontal lines
+      for (double y = 0.0; y < size.height; y += spacing) {
+        final int lineIndex = (y / spacing).round();
+        final isMajor = lineIndex % 5 == 0;
+        paint.color = isMajor ? majorLineColor : mainLineColor;
+        paint.strokeWidth = isMajor ? 1.5 : 0.8;
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      }
+    } else if (mode == GridMode.crosshair) {
+      final centerPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..color = isDark ? const Color(0xFF22D3EE) : const Color(0xFF0891B2);
+
+      final centerX = size.width / 2;
+      final centerY = size.height / 2;
+
+      // Draw center cross
+      canvas.drawLine(Offset(centerX, 0), Offset(centerX, size.height), centerPaint);
+      canvas.drawLine(Offset(0, centerY), Offset(size.width, centerY), centerPaint);
+
+      // Draw 25% / 75% reference lines
+      final dashPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = baseColor.withValues(alpha: 0.50);
+
+      canvas.drawLine(Offset(size.width * 0.25, 0), Offset(size.width * 0.25, size.height), dashPaint);
+      canvas.drawLine(Offset(size.width * 0.75, 0), Offset(size.width * 0.75, size.height), dashPaint);
+      canvas.drawLine(Offset(0, size.height * 0.25), Offset(size.width, size.height * 0.25), dashPaint);
+      canvas.drawLine(Offset(0, size.height * 0.75), Offset(size.width, size.height * 0.75), dashPaint);
+    } else if (mode == GridMode.margins) {
+      final pad = padding ?? EdgeInsets.zero;
+
+      // 16px Margins (Coral Red)
+      final paint16 = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = const Color(0xFFF43F5E);
+
+      // Outer boundary: Left = 16, Right = width - 16
+      canvas.drawLine(Offset(16.0, 0), Offset(16.0, size.height), paint16);
+      canvas.drawLine(Offset(size.width - 16.0, 0), Offset(size.width - 16.0, size.height), paint16);
+
+      // Top boundary (16px below status bar) and Bottom boundary (16px above home indicator)
+      final topY16 = pad.top + 16.0;
+      final bottomY16 = size.height - pad.bottom - 16.0;
+      canvas.drawLine(Offset(0, topY16), Offset(size.width, topY16), paint16);
+      canvas.drawLine(Offset(0, bottomY16), Offset(size.width, bottomY16), paint16);
+
+      // 24px Margins (Cyan / Blue)
+      final paint24 = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = isDark ? const Color(0xFF22D3EE) : const Color(0xFF0284C7);
+
+      // Outer boundary: Left = 24, Right = width - 24
+      canvas.drawLine(Offset(24.0, 0), Offset(24.0, size.height), paint24);
+      canvas.drawLine(Offset(size.width - 24.0, 0), Offset(size.width - 24.0, size.height), paint24);
+
+      // Top boundary (24px below status bar) and Bottom boundary (24px above home indicator)
+      final topY24 = pad.top + 24.0;
+      final bottomY24 = size.height - pad.bottom - 24.0;
+      canvas.drawLine(Offset(0, topY24), Offset(size.width, topY24), paint24);
+      canvas.drawLine(Offset(0, bottomY24), Offset(size.width, bottomY24), paint24);
+
+      // Draw text labels for 16px / 24px near the top-left
+      final textPainter16 = TextPainter(
+        text: const TextSpan(
+          text: ' 16px margin ',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 8,
+            fontWeight: FontWeight.bold,
+            backgroundColor: Color(0xFFF43F5E),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      
+      final textPainter24 = TextPainter(
+        text: TextSpan(
+          text: ' 24px margin ',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 8,
+            fontWeight: FontWeight.bold,
+            backgroundColor: isDark ? const Color(0xFF0891B2) : const Color(0xFF0284C7),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      textPainter16.paint(canvas, Offset(16.0, pad.top + 32.0));
+      textPainter24.paint(canvas, Offset(24.0, pad.top + 45.0));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GridPainter oldDelegate) =>
+      oldDelegate.mode != mode ||
+      oldDelegate.isDark != isDark ||
+      oldDelegate.padding != padding;
 }
