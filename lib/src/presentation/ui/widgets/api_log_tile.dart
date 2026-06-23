@@ -9,7 +9,8 @@ import 'monitor_text.dart';
 
 class ApiLogTile extends StatefulWidget {
   final ApiLogItem log;
-  const ApiLogTile({super.key, required this.log});
+  final bool showOrder;
+  const ApiLogTile({super.key, required this.log, this.showOrder = true});
 
   @override
   State<ApiLogTile> createState() => _ApiLogTileState();
@@ -42,6 +43,7 @@ class _ApiLogTileState extends State<ApiLogTile> {
             log: log,
             statusColor: statusColor,
             expanded: _expanded,
+            showOrder: widget.showOrder,
             onTap: () => setState(() => _expanded = !_expanded),
           ),
           if (_expanded) _ExpandedDetail(log: log),
@@ -63,12 +65,14 @@ class _CollapsedRow extends StatelessWidget {
   final ApiLogItem log;
   final Color statusColor;
   final bool expanded;
+  final bool showOrder;
   final VoidCallback onTap;
 
   const _CollapsedRow({
     required this.log,
     required this.statusColor,
     required this.expanded,
+    required this.showOrder,
     required this.onTap,
   });
 
@@ -84,8 +88,10 @@ class _CollapsedRow extends StatelessWidget {
           children: [
             Row(
               children: [
-                _OrderBadge(order: log.orderNumber),
-                const SizedBox(width: 6),
+                if (showOrder) ...[
+                  _OrderBadge(order: log.orderNumber),
+                  const SizedBox(width: 6),
+                ],
                 _PhaseBadge(phase: log.phase),
                 const SizedBox(width: 6),
                 if (log.hasMultipleCalls) ...[

@@ -19,9 +19,11 @@ class _HeaderData {
 
 class _GroupedLogList extends StatelessWidget {
   final List<ApiLogItem> logs;
-  const _GroupedLogList({required this.logs});
+  final bool showHeaders;
+  const _GroupedLogList({required this.logs, required this.showHeaders});
 
   List<Object> _buildItems() {
+    if (!showHeaders) return logs;
     final items = <Object>[];
     String? prevKey;
 
@@ -54,7 +56,10 @@ class _GroupedLogList extends StatelessWidget {
       itemBuilder: (_, i) {
         final item = items[i];
         if (item is _HeaderData) return _SectionHeader(data: item);
-        return ApiLogTile(log: item as ApiLogItem);
+        return ApiLogTile(
+          log: item as ApiLogItem,
+          showOrder: showHeaders,
+        );
       },
     );
   }
@@ -66,11 +71,15 @@ class _FilterBar extends StatelessWidget {
   final List<ApiLogItem> allLogs;
   final String activeFilter;
   final ValueChanged<String> onChanged;
+  final bool showHeaders;
+  final ValueChanged<bool> onHeaderToggle;
 
   const _FilterBar({
     required this.allLogs,
     required this.activeFilter,
     required this.onChanged,
+    required this.showHeaders,
+    required this.onHeaderToggle,
   });
 
   @override
@@ -83,59 +92,76 @@ class _FilterBar extends StatelessWidget {
     return Container(
       color: MonitorColors.pageBackground,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _FilterChip(
-              label: 'ALL',
-              count: allLogs.length,
-              active: activeFilter == 'ALL',
-              color: MonitorColors.metricTotal,
-              onTap: () => onChanged('ALL'),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'ALL',
+                    count: allLogs.length,
+                    active: activeFilter == 'ALL',
+                    color: MonitorColors.metricTotal,
+                    onTap: () => onChanged('ALL'),
+                  ),
+                  if (slowCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _FilterChip(
+                      label: 'SLOW',
+                      count: slowCount,
+                      active: activeFilter == 'SLOW',
+                      color: MonitorColors.statusSlow,
+                      onTap: () => onChanged('SLOW'),
+                    ),
+                  ],
+                  if (errCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _FilterChip(
+                      label: 'ERR',
+                      count: errCount,
+                      active: activeFilter == 'ERR',
+                      color: MonitorColors.statusError,
+                      onTap: () => onChanged('ERR'),
+                    ),
+                  ],
+                  if (getCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _FilterChip(
+                      label: 'GET',
+                      count: getCount,
+                      active: activeFilter == 'GET',
+                      color: MonitorColors.methodGet,
+                      onTap: () => onChanged('GET'),
+                    ),
+                  ],
+                  if (postCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _FilterChip(
+                      label: 'POST',
+                      count: postCount,
+                      active: activeFilter == 'POST',
+                      color: MonitorColors.methodPost,
+                      onTap: () => onChanged('POST'),
+                    ),
+                  ],
+                ],
+              ),
             ),
-            if (slowCount > 0) ...[
-              SizedBox(width: 6),
-              _FilterChip(
-                label: 'SLOW',
-                count: slowCount,
-                active: activeFilter == 'SLOW',
-                color: MonitorColors.statusSlow,
-                onTap: () => onChanged('SLOW'),
-              ),
-            ],
-            if (errCount > 0) ...[
-              SizedBox(width: 6),
-              _FilterChip(
-                label: 'ERR',
-                count: errCount,
-                active: activeFilter == 'ERR',
-                color: MonitorColors.statusError,
-                onTap: () => onChanged('ERR'),
-              ),
-            ],
-            if (getCount > 0) ...[
-              SizedBox(width: 6),
-              _FilterChip(
-                label: 'GET',
-                count: getCount,
-                active: activeFilter == 'GET',
-                color: MonitorColors.methodGet,
-                onTap: () => onChanged('GET'),
-              ),
-            ],
-            if (postCount > 0) ...[
-              SizedBox(width: 6),
-              _FilterChip(
-                label: 'POST',
-                count: postCount,
-                active: activeFilter == 'POST',
-                color: MonitorColors.methodPost,
-                onTap: () => onChanged('POST'),
-              ),
-            ],
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 1,
+            height: 18,
+            color: MonitorColors.border,
+          ),
+          const SizedBox(width: 8),
+          _HeaderToggleButton(
+            active: showHeaders,
+            onTap: () => onHeaderToggle(!showHeaders),
+          ),
+        ],
       ),
     );
   }
@@ -271,6 +297,43 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HeaderToggleButton extends StatelessWidget {
+  final bool active;
+  final VoidCallback onTap;
+
+  const _HeaderToggleButton({
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = MonitorColors.metricTotal;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: active ? accent.withValues(alpha: 0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: active ? accent.withValues(alpha: 0.45) : MonitorColors.border,
+            width: 0.8,
+          ),
+        ),
+        child: Icon(
+          Icons.view_agenda_outlined,
+          size: 14,
+          color: active ? accent : MonitorColors.secondaryText,
+        ),
       ),
     );
   }

@@ -34,6 +34,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   bool _ramChartExpanded = false;
   int _activeTab = 0; // 0=API  1=ROUTES  2=ERRORS
   String _filterMode = 'ALL';
+  bool _showHeaders = true;
 
   MonitorController get _ctrl => MonitorController.instance;
 
@@ -144,6 +145,8 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
                 allLogs: allLogs,
                 activeFilter: _filterMode,
                 onChanged: (v) => setState(() => _filterMode = v),
+                showHeaders: _showHeaders,
+                onHeaderToggle: (v) => setState(() => _showHeaders = v),
               ),
             Expanded(
               child: switch (_activeTab) {
@@ -155,7 +158,10 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
                     : _ErrorList(errors: flutterErrors),
                 _ => filteredLogs.isEmpty
                     ? const _EmptyState()
-                    : _GroupedLogList(logs: filteredLogs),
+                    : _GroupedLogList(
+                        logs: filteredLogs,
+                        showHeaders: _showHeaders,
+                      ),
               },
             ),
           ],
