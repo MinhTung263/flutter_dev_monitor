@@ -164,12 +164,24 @@ class _FilterChip extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: active ? color.withValues(alpha: 0.15) : Colors.transparent,
+          color: active
+              ? color.withValues(alpha: 0.12)
+              : MonitorColors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color:
-                active ? color.withValues(alpha: 0.55) : MonitorColors.border,
+            color: active
+                ? color.withValues(alpha: 0.45)
+                : MonitorColors.border.withValues(alpha: 0.8),
+            width: active ? 1.0 : 0.8,
           ),
+          boxShadow: [
+            if (active)
+              BoxShadow(
+                color: color.withValues(alpha: 0.08),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -180,7 +192,7 @@ class _FilterChip extends StatelessWidget {
               size: 10,
               spacing: 0.3,
             ),
-            SizedBox(width: 5),
+            const SizedBox(width: 5),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
               decoration: BoxDecoration(

@@ -14,7 +14,9 @@ class MonitorHardwareGrid extends StatelessWidget {
       listenable: MonitorController.instance,
       builder: (context, _) {
         final ctrl = MonitorController.instance;
-        final samples = ctrl.ramHistoryMap[currentScreen] ?? [];
+        final samples = currentScreen == 'ALL'
+            ? ctrl.globalRamHistory
+            : ctrl.ramHistoryMap[currentScreen] ?? [];
         final ramUsed =
             samples.isNotEmpty ? samples.last : ctrl.currentRam;
         final ramTotal = ctrl.totalRam;

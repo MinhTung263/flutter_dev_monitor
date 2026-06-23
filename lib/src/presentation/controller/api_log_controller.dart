@@ -15,6 +15,7 @@ class ApiLogController {
   final List<String> _screenOrder = [];
 
   String? activePopup;
+  String currentViewedScreen = 'ALL';
 
   List<ApiLogItem> apiLogs = [];
   int initApiCount = 0;
@@ -25,6 +26,28 @@ class ApiLogController {
   int totalRefreshDuration = 0;
 
   int get errorCount => apiLogs.where((l) => l.statusCode != 200).length;
+
+  int get globalApiErrorCount {
+    int count = 0;
+    for (final logs in initLogsMap.values) {
+      count += logs.where((l) => !l.isSuccess).length;
+    }
+    for (final logs in refreshLogsMap.values) {
+      count += logs.where((l) => !l.isSuccess).length;
+    }
+    return count;
+  }
+
+  int get globalSlowApiCount {
+    int count = 0;
+    for (final logs in initLogsMap.values) {
+      count += logs.where((l) => l.isSlow).length;
+    }
+    for (final logs in refreshLogsMap.values) {
+      count += logs.where((l) => l.isSlow).length;
+    }
+    return count;
+  }
 
   bool isInRefresh(String screen) => _screenInRefreshMode[screen] == true;
 
@@ -170,10 +193,63 @@ class ApiLogController {
       }
     }
 
-    updateView(screen);
+    updateView(currentViewedScreen);
   }
 
   void updateView(String screen) {
+    currentViewedScreen = screen;
+    if (screen == 'ALL') {
+      final List<ApiLogItem> allInit = [];
+      for (final logs in initLogsMap.values) {
+        allInit.addAll(logs);
+      }
+      final List<ApiLogItem> allRefresh = [];
+      for (final logs in refreshLogsMap.values) {
+        allRefresh.addAll(logs);
+      }
+
+      int totalInitCount = 0;
+      int totalInitDuration = 0;
+      int totalRefreshCount = 0;
+      int totalRefreshDurationMs = 0;
+      int totalAllRefreshCount = 0;
+      int totalAllRefreshDuration = 0;
+
+      for (final screenName in initLogsMap.keys) {
+        final initLogs = initLogsMap[screenName] ?? [];
+        final currentInitCycle = _initCycleCounters[screenName] ?? 1;
+        final currentInitLogs =
+            initLogs.where((l) => l.refreshCycle == currentInitCycle);
+        totalInitCount += currentInitLogs.fold(0, (s, l) => s + l.callCount);
+        totalInitDuration += currentInitLogs.fold(0, (s, l) => s + l.duration);
+      }
+
+      for (final screenName in refreshLogsMap.keys) {
+        final refreshLogs = refreshLogsMap[screenName] ?? [];
+        final currentCycle = _refreshCycleCounters[screenName] ?? 0;
+        if (currentCycle > 0) {
+          final cycleLogs =
+              refreshLogs.where((l) => l.refreshCycle == currentCycle);
+          totalRefreshCount += cycleLogs.fold(0, (s, l) => s + l.callCount);
+          totalRefreshDurationMs += cycleLogs.fold(0, (s, l) => s + l.duration);
+        }
+        totalAllRefreshCount += refreshLogs.fold(0, (s, l) => s + l.callCount);
+        totalAllRefreshDuration +=
+            refreshLogs.fold(0, (s, l) => s + l.duration);
+      }
+
+      initApiCount = totalInitCount;
+      initTotalDuration = totalInitDuration;
+      refreshApiCount = totalRefreshCount;
+      refreshTotalDuration = totalRefreshDurationMs;
+      totalRefreshApiCount = totalAllRefreshCount;
+      totalRefreshDuration = totalAllRefreshDuration;
+
+      apiLogs = [...allRefresh, ...allInit]
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return;
+    }
+
     final initLogs = initLogsMap[screen] ?? [];
     final refreshLogs = refreshLogsMap[screen] ?? [];
     final currentCycle = _refreshCycleCounters[screen] ?? 0;
@@ -228,6 +304,7 @@ class ApiLogController {
     _sessionStartTime.clear();
     _screenOrder.clear();
     activePopup = null;
+    currentViewedScreen = 'ALL';
     initApiCount = 0;
     refreshApiCount = 0;
     initTotalDuration = 0;
@@ -246,6 +323,41 @@ class ApiLogController {
     int actionMs,
     int actionCycles,
   }) statsForScreen(String screen) {
+    if (screen == 'ALL') {
+      int openCount = 0;
+      int openMs = 0;
+      int actionCount = 0;
+      int actionMs = 0;
+
+      for (final screenName in initLogsMap.keys) {
+        final initLogs = initLogsMap[screenName] ?? [];
+        final currentInitCycle = _initCycleCounters[screenName] ?? 1;
+        final currentInitLogs =
+            initLogs.where((l) => l.refreshCycle == currentInitCycle).toList();
+        openCount += currentInitLogs.fold(0, (s, l) => s + l.callCount);
+        openMs += currentInitLogs.fold(0, (s, l) => s + l.duration);
+      }
+
+      for (final screenName in refreshLogsMap.keys) {
+        final refreshLogs = refreshLogsMap[screenName] ?? [];
+        final actionCycles = _refreshCycleCounters[screenName] ?? 0;
+        final latestActionLogs = actionCycles > 0
+            ? refreshLogs.where((l) => l.refreshCycle == actionCycles).toList()
+            : <ApiLogItem>[];
+        actionCount += latestActionLogs.fold(0, (s, l) => s + l.callCount);
+        actionMs += latestActionLogs.fold(0, (s, l) => s + l.duration);
+      }
+
+      return (
+        openCount: openCount,
+        openMs: openMs,
+        visitCount: 0,
+        actionCount: actionCount,
+        actionMs: actionMs,
+        actionCycles: 0,
+      );
+    }
+
     final initLogs = initLogsMap[screen] ?? [];
     final refreshLogs = refreshLogsMap[screen] ?? [];
     final currentInitCycle = _initCycleCounters[screen] ?? 1;

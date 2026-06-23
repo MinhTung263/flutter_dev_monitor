@@ -360,6 +360,18 @@ class _PillBadgeState extends State<_PillBadge>
                       ? MonitorColors.overlayBuild
                       : MonitorColors.overlayAlert;
 
+          final apiErr = ctrl.globalApiErrorCount;
+          final flutterErr = ctrl.flutterErrorCount;
+          final totalErr = apiErr + flutterErr;
+          final slowApi = ctrl.globalSlowApiCount;
+
+          final hasError = totalErr > 0;
+          final hasSlow = slowApi > 0;
+          final showAlert = hasError || hasSlow;
+          final alertColor = hasError
+              ? MonitorColors.overlayAlert
+              : MonitorColors.overlayBuild;
+
           const TextStyle _lbl = TextStyle(
             fontSize: 7,
             fontWeight: FontWeight.bold,
@@ -373,115 +385,158 @@ class _PillBadgeState extends State<_PillBadge>
             height: 1.2,
           );
 
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            decoration: BoxDecoration(
-              color: MonitorColors.overlayBg,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: fpsColor.withValues(alpha: 0.45), width: 0.8),
-              boxShadow: [
-                BoxShadow(
-                    color: fpsColor.withValues(alpha: 0.15), blurRadius: 6),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── FPS ──────────────────────────────────────────
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      margin: const EdgeInsets.only(bottom: 1),
-                      decoration: BoxDecoration(
-                          color: fpsColor, shape: BoxShape.circle),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(fps.toStringAsFixed(1),
-                        style: TextStyle(
-                            color: fpsColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'monospace',
-                            height: 1.1)),
-                    const SizedBox(width: 2),
-                    Text('fps',
-                        style: TextStyle(
-                            color: fpsColor.withValues(alpha: 0.6),
-                            fontSize: 8,
-                            fontFamily: 'monospace',
-                            height: 1.1)),
-                    if (jankCount > 0) ...[
-                      const SizedBox(width: 5),
-                      Text('⚡$jankCount',
-                          style: const TextStyle(
-                              color: MonitorColors.overlayGpu,
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: 'monospace',
-                              height: 1.1)),
-                    ],
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: MonitorColors.overlayBg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: showAlert
+                          ? alertColor.withValues(alpha: 0.65)
+                          : fpsColor.withValues(alpha: 0.45),
+                      width: 0.8),
+                  boxShadow: [
+                    BoxShadow(
+                        color: showAlert
+                            ? alertColor.withValues(alpha: 0.25)
+                            : fpsColor.withValues(alpha: 0.15),
+                        blurRadius: 6),
                   ],
                 ),
-                const SizedBox(height: 3),
-                // ── API + MEM ────────────────────────────────────
-                Row(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('API ',
-                        style: _lbl.copyWith(color: MonitorColors.overlayApi)),
-                    Text('$apiCount',
-                        style: _val.copyWith(color: MonitorColors.overlayApi)),
-                    const SizedBox(width: 6),
-                    Text('MEM ',
-                        style: _lbl.copyWith(color: MonitorColors.overlayMem)),
-                    Text('${memMb.toStringAsFixed(0)}M',
-                        style: _val.copyWith(color: MonitorColors.overlayMem)),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                // ── NET ──────────────────────────────────────────
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('NET ', style: _lbl.copyWith(color: pingColor)),
-                    Text(pingMs == null ? '--' : '${pingMs}ms',
-                        style: _val.copyWith(color: pingColor)),
-                  ],
-                ),
-                SizeTransition(
-                  sizeFactor: _hintAnim,
-                  axisAlignment: 1,
-                  child: FadeTransition(
-                    opacity: _hintAnim,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.touch_app_outlined,
-                              size: 9, color: Colors.white54),
-                          SizedBox(width: 4),
-                          Text('hold to open',
-                              style: TextStyle(
-                                color: Colors.white54,
-                                fontSize: 7,
+                    // ── FPS ──────────────────────────────────────────
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Container(
+                          width: 5,
+                          height: 5,
+                          margin: const EdgeInsets.only(bottom: 1),
+                          decoration: BoxDecoration(
+                              color: fpsColor, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(fps.toStringAsFixed(1),
+                            style: TextStyle(
+                                color: fpsColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
                                 fontFamily: 'monospace',
-                                height: 1.2,
-                              )),
+                                height: 1.1)),
+                        const SizedBox(width: 2),
+                        Text('fps',
+                            style: TextStyle(
+                                color: fpsColor.withValues(alpha: 0.6),
+                                fontSize: 8,
+                                fontFamily: 'monospace',
+                                height: 1.1)),
+                        if (jankCount > 0) ...[
+                          const SizedBox(width: 5),
+                          Text('⚡$jankCount',
+                              style: const TextStyle(
+                                  color: MonitorColors.overlayGpu,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'monospace',
+                                  height: 1.1)),
                         ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    // ── API + MEM ────────────────────────────────────
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('API ',
+                            style: _lbl.copyWith(color: MonitorColors.overlayApi)),
+                        Text('$apiCount',
+                            style: _val.copyWith(color: MonitorColors.overlayApi)),
+                        const SizedBox(width: 6),
+                        Text('MEM ',
+                            style: _lbl.copyWith(color: MonitorColors.overlayMem)),
+                        Text('${memMb.toStringAsFixed(0)}M',
+                            style: _val.copyWith(color: MonitorColors.overlayMem)),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    // ── NET ──────────────────────────────────────────
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('NET ', style: _lbl.copyWith(color: pingColor)),
+                        Text(pingMs == null ? '--' : '${pingMs}ms',
+                            style: _val.copyWith(color: pingColor)),
+                      ],
+                    ),
+                    SizeTransition(
+                      sizeFactor: _hintAnim,
+                      axisAlignment: 1,
+                      child: FadeTransition(
+                        opacity: _hintAnim,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.touch_app_outlined,
+                                  size: 9, color: Colors.white54),
+                              SizedBox(width: 4),
+                              Text('hold to open',
+                                  style: TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 7,
+                                    fontFamily: 'monospace',
+                                    height: 1.2,
+                                  )),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (showAlert)
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: alertColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: MonitorColors.overlayBg, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: alertColor.withValues(alpha: 0.5),
+                          blurRadius: 4,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: const Text(
+                      '!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'monospace',
+                        height: 1.0,
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+            ],
           );
         },
       ),
@@ -545,6 +600,10 @@ class _DetailsPanel extends StatelessWidget {
           final memMb = ctrl.currentRam;
           final apiCount = ctrl.currentPhaseApiCount;
           final pingMs = ctrl.currentPingMs;
+
+          final apiErr = ctrl.globalApiErrorCount;
+          final flutterErr = ctrl.flutterErrorCount;
+          final slowApi = ctrl.globalSlowApiCount;
 
           final fpsHist = List<double>.from(ctrl.overlayFpsHistory);
           final gpuHist = List<double>.from(ctrl.overlayGpuHistory);
@@ -691,7 +750,15 @@ class _DetailsPanel extends StatelessWidget {
                         gpuHist, 2),
                     _metricRow(
                         'Mem', '${memMb.toStringAsFixed(1)}MB', mMem, [], 1),
-                    _metricRow('API', '$apiCount calls', mApi, [], 0),
+                    (() {
+                      final List<String> alerts = [];
+                      if (apiErr > 0) alerts.add('${apiErr}e');
+                      if (slowApi > 0) alerts.add('${slowApi}s');
+                      final alertText = alerts.isNotEmpty ? ' (⚠️ ${alerts.join('·')})' : '';
+                      return _metricRow('API', '$apiCount calls$alertText', mApi, [], 0);
+                    })(),
+                    if (flutterErr > 0)
+                      _metricRow('ERR', '$flutterErr errors', mJank, [], 0),
                     _metricRow(
                         'NET',
                         pingMs == null ? '--' : '${pingMs}ms',

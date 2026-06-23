@@ -52,6 +52,8 @@ class MonitorController extends ChangeNotifier {
   int get totalRefreshApiCount => _apiLog.totalRefreshApiCount;
   int get totalRefreshDuration => _apiLog.totalRefreshDuration;
   int get errorCount => _apiLog.errorCount;
+  int get globalApiErrorCount => _apiLog.globalApiErrorCount;
+  int get globalSlowApiCount => _apiLog.globalSlowApiCount;
 
   ({int openCount, int openMs, int visitCount, int actionCount, int actionMs, int actionCycles}) screenStats(
           String screen) =>
@@ -114,6 +116,7 @@ class MonitorController extends ChangeNotifier {
   double get appDiskUsed => _hardware.appDiskUsed;
   double get totalDisk => _hardware.totalDisk;
   Map<String, List<double>> get ramHistoryMap => _hardware.ramHistoryMap;
+  List<double> get globalRamHistory => _hardware.globalRamHistory;
   String get deviceModel => _hardware.deviceModel;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────

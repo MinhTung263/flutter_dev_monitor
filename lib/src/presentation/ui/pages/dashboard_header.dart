@@ -238,11 +238,19 @@ class _ScreenPickerSheet extends StatelessWidget {
                                   : MonitorColors.border.withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(5),
                             ),
-                            child: MonoText('${i + 1}', 9,
-                                color: isSelected
-                                    ? accent
-                                    : MonitorColors.secondaryText,
-                                weight: FontWeight.bold),
+                            child: s == 'ALL'
+                                ? Icon(
+                                    Icons.all_inclusive_rounded,
+                                    size: 13,
+                                    color: isSelected
+                                        ? accent
+                                        : MonitorColors.secondaryText,
+                                  )
+                                : MonoText('$i', 9,
+                                    color: isSelected
+                                        ? accent
+                                        : MonitorColors.secondaryText,
+                                    weight: FontWeight.bold),
                           ),
                           const SizedBox(width: 10),
                           // Screen name + sub-path

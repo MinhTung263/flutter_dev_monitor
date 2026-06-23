@@ -9,6 +9,7 @@ class HardwareController {
   String deviceModel = '';
 
   Map<String, List<double>> ramHistoryMap = {};
+  final List<double> globalRamHistory = [];
 
   static const int _maxHistory = 40;
 
@@ -17,6 +18,11 @@ class HardwareController {
     totalRam = snapshot.ramTotal;
     appDiskUsed = snapshot.appDiskUsed;
     totalDisk = snapshot.diskTotal;
+
+    globalRamHistory.add(currentRam);
+    if (globalRamHistory.length > _maxHistory) {
+      globalRamHistory.removeAt(0);
+    }
 
     if (currentScreen == MonitorConstants.dashboardRoute ||
         currentScreen == MonitorConstants.unknownRoute) return;
@@ -32,6 +38,7 @@ class HardwareController {
 
   void clearAll() {
     ramHistoryMap = {};
+    globalRamHistory.clear();
     currentRam = 0.0;
     totalRam = 4096.0;
     appDiskUsed = 0.0;

@@ -104,13 +104,15 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
           SliverToBoxAdapter(
             child: _DashboardHeader(
               screen: _selectedScreen,
-              chartData:
-                  List<double>.from(_ctrl.fpsHistoryMap[_selectedScreen] ?? []),
+              chartData: _selectedScreen == 'ALL'
+                  ? List<double>.from(_ctrl.overlayFpsHistory)
+                  : List<double>.from(_ctrl.fpsHistoryMap[_selectedScreen] ?? []),
               chartExpanded: _chartExpanded,
               onChartToggle: () =>
                   setState(() => _chartExpanded = !_chartExpanded),
-              ramChartData:
-                  List<double>.from(_ctrl.ramHistoryMap[_selectedScreen] ?? []),
+              ramChartData: _selectedScreen == 'ALL'
+                  ? List<double>.from(_ctrl.globalRamHistory)
+                  : List<double>.from(_ctrl.ramHistoryMap[_selectedScreen] ?? []),
               ramChartExpanded: _ramChartExpanded,
               onRamChartToggle: () =>
                   setState(() => _ramChartExpanded = !_ramChartExpanded),
@@ -161,7 +163,10 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     // visitedScreens tracks all screens seen this session regardless of whether
     // their data was cleared on pop — so Login/Splash remain visible even after
     // navigating to Home.
-    final screens = _ctrl.visitedScreens.toList().reversed.toList();
+    final screens = <String>[
+      'ALL',
+      ..._ctrl.visitedScreens.toList().reversed,
+    ];
     if (!screens.contains(_selectedScreen) &&
         _selectedScreen.isNotEmpty &&
         _selectedScreen != '/unknown') {
@@ -183,28 +188,60 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   }
 
   AppBar _buildAppBar(BuildContext context) {
+    final isAll = _selectedScreen == 'ALL';
+    final accent = MonitorColors.metricTotal;
+
     return AppBar(
-      title: GestureDetector(
+      title: InkWell(
         onTap: () => _openScreenPicker(context),
-        behavior: HitTestBehavior.opaque,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 8,
-          children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 220),
-              child: MonoText(
-                _selectedScreen,
-                13,
-                color: MonitorColors.primaryText,
-                weight: FontWeight.bold,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: MonitorColors.dropdownBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isAll ? accent.withValues(alpha: 0.4) : MonitorColors.border,
+              width: 0.8,
             ),
-            Icon(Icons.keyboard_arrow_down_rounded,
-                color: MonitorColors.secondaryText),
-          ],
+            boxShadow: [
+              if (isAll)
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.08),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isAll ? Icons.all_inclusive_rounded : Icons.layers_outlined,
+                size: 13,
+                color: isAll ? accent : MonitorColors.secondaryText,
+              ),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: MonoText(
+                  _selectedScreen,
+                  11,
+                  color: MonitorColors.primaryText,
+                  weight: FontWeight.bold,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: MonitorColors.secondaryText,
+                size: 15,
+              ),
+            ],
+          ),
         ),
       ),
       centerTitle: true,
@@ -234,7 +271,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
           onPressed: () {
             _ctrl.clearAll();
             _ctrl.clearOverlayHistory();
-            setState(() => _selectedScreen = '/unknown');
+            setState(() => _selectedScreen = 'ALL');
           },
         ),
       ],
