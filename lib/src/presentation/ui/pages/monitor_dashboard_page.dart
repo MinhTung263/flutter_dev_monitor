@@ -32,7 +32,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   late String _selectedScreen;
   bool _chartExpanded = false;
   bool _ramChartExpanded = false;
-  int _activeTab = 0; // 0=API  1=ROUTES  2=ERRORS
+  int _activeTab = 0; // 0=API  1=ERRORS  2=ROUTES
   String _filterMode = 'ALL';
   bool _showHeaders = true;
 
@@ -150,12 +150,12 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
               ),
             Expanded(
               child: switch (_activeTab) {
-                1 => routeLogs.isEmpty
-                    ? const _EmptyRouteState()
-                    : _RouteLogList(logs: routeLogs),
-                2 => flutterErrors.isEmpty
+                1 => flutterErrors.isEmpty
                     ? const _EmptyErrorState()
                     : _ErrorList(errors: flutterErrors),
+                2 => routeLogs.isEmpty
+                    ? const _EmptyRouteState()
+                    : _RouteLogList(logs: routeLogs),
                 _ => filteredLogs.isEmpty
                     ? const _EmptyState()
                     : _GroupedLogList(
@@ -234,10 +234,10 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
                 color: isAll ? accent : MonitorColors.secondaryText,
               ),
               const SizedBox(width: 6),
-              ConstrainedBox(
+               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 180),
                 child: MonoText(
-                  _selectedScreen,
+                  MonitorController.formatRouteName(_selectedScreen),
                   11,
                   color: MonitorColors.primaryText,
                   weight: FontWeight.bold,

@@ -116,7 +116,7 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                       const SizedBox(width: 8),
                       Flexible(
                         child: MonoText(
-                          e.screen,
+                          MonitorController.formatRouteName(e.screen),
                           9,
                           color: MonitorColors.secondaryText,
                           maxLines: 1,

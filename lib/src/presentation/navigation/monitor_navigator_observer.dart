@@ -35,10 +35,12 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       final ctrl = MonitorController.instance;
       ctrl.startSession(name);
       ctrl.logRoutePush(name, previousRoute?.settings.name);
+      _updateActiveRouteTitle();
     } else if (route is PopupRoute) {
       MonitorController.instance.setActivePopup(name);
       MonitorController.instance
           .logRoutePush(name, previousRoute?.settings.name);
+      _updateActiveRouteTitle();
     }
   }
 
@@ -70,11 +72,13 @@ class MonitorNavigatorObserver extends NavigatorObserver {
           prevName != '/MonitorDashboardPage') {
         MonitorController.instance.updateDashboardView(prevName);
       }
+      _updateActiveRouteTitle();
     } else if (route is PopupRoute) {
       MonitorController.instance
         ..clearActivePopup(name)
         ..logRoutePop(name, prevName);
       MonitorController.instance.updateDashboardView(currentContentRoute);
+      _updateActiveRouteTitle();
     }
   }
 
@@ -109,6 +113,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       currentRoute = newName;
       pageStack.add(newName);
       MonitorController.instance.startSession(newName);
+      _updateActiveRouteTitle();
     }
 
     if (oldName != null &&
@@ -116,5 +121,51 @@ class MonitorNavigatorObserver extends NavigatorObserver {
         newName != '/MonitorDashboardPage') {
       MonitorController.instance.logRouteReplace(oldName, newName);
     }
+  }
+
+  void _updateActiveRouteTitle() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final title = _findAppBarTitle();
+      if (title != null && title.isNotEmpty) {
+        MonitorController.instance.updateCustomRouteName(currentRoute, title);
+      }
+    });
+  }
+
+  static String? _findAppBarTitle() {
+    final nav = navigatorState;
+    if (nav == null) return null;
+
+    String? foundTitle;
+
+    void visitor(Element element) {
+      if (foundTitle != null) return;
+
+      final widget = element.widget;
+      if (widget is AppBar) {
+        final titleWidget = widget.title;
+        if (titleWidget is Text) {
+          final text = titleWidget.data;
+          if (text != null && text.isNotEmpty) {
+            foundTitle = text;
+            return;
+          }
+        }
+      }
+
+      final children = <Element>[];
+      element.visitChildren((child) => children.add(child));
+      for (final child in children.reversed) {
+        visitor(child);
+      }
+    }
+
+    try {
+      nav.context.visitChildElements((element) {
+        visitor(element);
+      });
+    } catch (_) {}
+
+    return foundTitle;
   }
 }

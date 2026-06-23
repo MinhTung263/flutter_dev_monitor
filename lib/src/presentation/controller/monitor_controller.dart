@@ -50,6 +50,50 @@ class MonitorController extends ChangeNotifier {
     }
   }
 
+  /// Custom route name mappings (e.g., {'/home': 'Home Screen'})
+  static Map<String, String> customRouteNames = {};
+
+  void updateCustomRouteName(String route, String title) {
+    if (customRouteNames[route] != title) {
+      customRouteNames[route] = title;
+      notifyListeners();
+    }
+  }
+
+  static String formatRouteName(String route) {
+    if (customRouteNames.containsKey(route)) {
+      return customRouteNames[route]!;
+    }
+    if (route == 'ALL') return 'All Screens';
+    if (route == '/unknown') return 'Unknown Screen';
+    if (route.isEmpty) return '';
+
+    String path = route.startsWith('/') ? route.substring(1) : route;
+    final slashIdx = path.indexOf('/');
+    String mainPath = slashIdx == -1 ? path : path.substring(0, slashIdx);
+    String subPath = slashIdx == -1 ? '' : path.substring(slashIdx);
+
+    // camelCase to spaces
+    mainPath = mainPath.replaceAllMapped(
+      RegExp(r'([a-z])([A-Z])'),
+      (match) => '${match.group(1)} ${match.group(2)}',
+    );
+
+    // underscores/hyphens to spaces
+    mainPath = mainPath.replaceAll(RegExp(r'[_-]'), ' ');
+
+    // capitalize words
+    mainPath = mainPath.split(' ').map((word) {
+      if (word.isEmpty) return '';
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+
+    if (subPath.isNotEmpty) {
+      return '$mainPath ($subPath)';
+    }
+    return mainPath;
+  }
+
   // ── Expose API log state ──────────────────────────────────────────────
 
   List<ApiLogItem> get apiLogs => _apiLog.apiLogs;

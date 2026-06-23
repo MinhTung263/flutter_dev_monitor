@@ -127,7 +127,7 @@ class _RouteLogTile extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: MonoText(
-                          item.route,
+                          MonitorController.formatRouteName(item.route),
                           11,
                           color: MonitorColors.primaryText,
                           weight: FontWeight.w600,
@@ -147,10 +147,10 @@ class _RouteLogTile extends StatelessWidget {
                         Expanded(
                           child: MonoText(
                             item.event == RouteLogItem.eventPush
-                                ? 'from ${item.from}'
+                                ? 'from ${MonitorController.formatRouteName(item.from ?? "")}'
                                 : item.event == RouteLogItem.eventPop
-                                    ? '→ ${item.from}'
-                                    : 'was ${item.from}',
+                                    ? '→ ${MonitorController.formatRouteName(item.from ?? "")}'
+                                    : 'was ${MonitorController.formatRouteName(item.from ?? "")}',
                             10,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

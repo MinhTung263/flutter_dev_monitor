@@ -138,12 +138,36 @@ class _ScreenPickerSheet extends StatelessWidget {
     required this.onSelected,
   });
 
-  // "/PostDetail/123" → ("PostDetail", "/123")
   static (String title, String? sub) _parseRoute(String route) {
+    if (route == 'ALL') return ('All Screens', null);
+    if (route == '/unknown') return ('Unknown Screen', null);
+
+    if (MonitorController.customRouteNames.containsKey(route)) {
+      return (MonitorController.customRouteNames[route]!, null);
+    }
+
     final clean = route.startsWith('/') ? route.substring(1) : route;
     final idx = clean.indexOf('/');
-    if (idx == -1) return (clean.isEmpty ? route : clean, null);
-    return (clean.substring(0, idx), clean.substring(idx));
+    final mainPath =
+        idx == -1 ? (clean.isEmpty ? route : clean) : clean.substring(0, idx);
+    final sub = idx == -1 ? null : clean.substring(idx);
+
+    // camelCase to spaces
+    var formattedTitle = mainPath.replaceAllMapped(
+      RegExp(r'([a-z])([A-Z])'),
+      (match) => '${match.group(1)} ${match.group(2)}',
+    );
+
+    // underscores/hyphens to spaces
+    formattedTitle = formattedTitle.replaceAll(RegExp(r'[_-]'), ' ');
+
+    // capitalize words
+    formattedTitle = formattedTitle.split(' ').map((word) {
+      if (word.isEmpty) return '';
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+
+    return (formattedTitle, sub != null ? '($sub)' : null);
   }
 
   @override

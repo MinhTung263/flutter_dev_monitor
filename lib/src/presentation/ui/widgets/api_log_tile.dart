@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../domain/api_log_item.dart';
+import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 import 'monitor_text.dart';
 
@@ -1177,7 +1178,7 @@ class _LogFooter extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MonoText('${log.screen}  ·  ${log.phase}', 10, maxLines: 1, overflow: TextOverflow.ellipsis),
+        MonoText('${MonitorController.formatRouteName(log.screen)}  ·  ${log.phase}', 10, maxLines: 1, overflow: TextOverflow.ellipsis),
         if (log.hasCallerName) ...[
           const SizedBox(height: 3),
           Row(
