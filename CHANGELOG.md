@@ -1,3 +1,12 @@
+## 2.2.0
+
+* **Auto-captured Screen Names**: Dynamic runtime extraction of `AppBar.title` (if it's a `Text` widget) using Element tree post-frame traversal in `MonitorNavigatorObserver`, mapping route paths to user-friendly titles automatically. Fallback formatting converts camelCase/underscores and path variables (e.g. `/post_detail/123` ➔ `Post Detail (/123)`).
+* **All Screens Filter**: Added "ALL" option in the screen route picker, merging logs, global RAM/FPS histories, and aggregate counts chronologically.
+* **FPS Overlay Alerting & HUD Warning**: Visual indicators (blinking red/orange borders, exclamation warning badge `!`, and detailed inline error/slow API counts) on `FpsOverlay` when any screen encounters an API error, slow request, or uncaught exception. Automatically resets when opening the dashboard.
+* **Errors Route Filter**: Associated caught Flutter/Dart exceptions to active route names and filtered exception logs on the ERRORS tab by the active screen route.
+* **Reordered Log Tabs**: Shifted the `ERRORS` tab to the middle (API ➔ ERRORS ➔ ROUTES) for faster developer access.
+* **List Header & Order Badge Toggles**: Added a `_HeaderToggleButton` to show/hide group list headers (`OPEN #X`/`ACTION #Y`) and hide the order badge (`#X`) in API logs.
+
 ## 2.1.0
 
 * **Widget Alignment Grid & Crosshairs**: Added layout alignment guides. Cycle through Off ➔ Margins (Safe Area 16px/24px) ➔ 8px Grid ➔ 16px Grid ➔ Center Crosshairs directly from FpsOverlay. High-contrast cyan/blue colors for visibility.
