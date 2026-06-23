@@ -42,7 +42,10 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     super.initState();
     _selectedScreen = widget.initialScreen;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _ctrl.updateDashboardView(_selectedScreen);
+      if (mounted) {
+        _ctrl.updateDashboardView(_selectedScreen);
+        _ctrl.dismissAlerts();
+      }
     });
     MonitorController.instance.addListener(_onControllerUpdate);
   }
@@ -92,7 +95,9 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   Widget _buildPage(BuildContext context) {
     final allLogs = _ctrl.apiLogs;
     final filteredLogs = _applyFilter(allLogs);
-    final flutterErrors = _ctrl.errorLogs;
+    final flutterErrors = _selectedScreen == 'ALL'
+        ? _ctrl.errorLogs
+        : _ctrl.errorLogs.where((e) => e.screen == _selectedScreen).toList();
     final routeLogs = _ctrl.routeLogs;
 
     return Scaffold(

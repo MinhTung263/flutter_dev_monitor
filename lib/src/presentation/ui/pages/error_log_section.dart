@@ -113,6 +113,16 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                         child: LabelText(e.type, typeColor,
                             size: 7, spacing: 0.3),
                       ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: MonoText(
+                          e.screen,
+                          9,
+                          color: MonitorColors.secondaryText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                       const Spacer(),
                       MonoText(timeStr, 10),
                       const SizedBox(width: 8),

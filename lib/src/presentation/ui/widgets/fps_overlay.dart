@@ -367,7 +367,7 @@ class _PillBadgeState extends State<_PillBadge>
 
           final hasError = totalErr > 0;
           final hasSlow = slowApi > 0;
-          final showAlert = hasError || hasSlow;
+          final showAlert = (hasError || hasSlow) && !ctrl.alertsDismissed;
           final alertColor = hasError
               ? MonitorColors.overlayAlert
               : MonitorColors.overlayBuild;

@@ -7,6 +7,7 @@ class ErrorLogItem {
   final String stackTrace;
   final String type;
   final DateTime timestamp;
+  final String screen;
 
   const ErrorLogItem({
     required this.id,
@@ -14,5 +15,6 @@ class ErrorLogItem {
     required this.stackTrace,
     required this.type,
     required this.timestamp,
+    required this.screen,
   });
 }

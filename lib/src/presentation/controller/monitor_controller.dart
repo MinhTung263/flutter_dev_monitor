@@ -40,6 +40,16 @@ class MonitorController extends ChangeNotifier {
   Timer? _pingTimer;
   int? _currentPingMs;
 
+  bool _alertsDismissed = false;
+  bool get alertsDismissed => _alertsDismissed;
+
+  void dismissAlerts() {
+    if (!_alertsDismissed) {
+      _alertsDismissed = true;
+      notifyListeners();
+    }
+  }
+
   // ── Expose API log state ──────────────────────────────────────────────
 
   List<ApiLogItem> get apiLogs => _apiLog.apiLogs;
@@ -132,20 +142,28 @@ class MonitorController extends ChangeNotifier {
   void _hookFlutterErrors() {
     final originalOnError = FlutterError.onError;
     FlutterError.onError = (FlutterErrorDetails details) {
+      _alertsDismissed = false;
       _errorLog.addError(
         details.exceptionAsString(),
         details.stack?.toString() ?? '',
         ErrorLogItem.typeFlutter,
+        MonitorNavigatorObserver.currentRoute.isEmpty
+            ? '/unknown'
+            : MonitorNavigatorObserver.currentRoute,
       );
       notifyListeners();
       originalOnError?.call(details);
     };
 
     PlatformDispatcher.instance.onError = (error, stack) {
+      _alertsDismissed = false;
       _errorLog.addError(
         error.toString(),
         stack.toString(),
         ErrorLogItem.typeDart,
+        MonitorNavigatorObserver.currentRoute.isEmpty
+            ? '/unknown'
+            : MonitorNavigatorObserver.currentRoute,
       );
       notifyListeners();
       return false;
@@ -190,6 +208,10 @@ class MonitorController extends ChangeNotifier {
       MonitorNavigatorObserver.currentContentRoute = screen;
     }
 
+    if (!item.isSuccess || item.isSlow) {
+      _alertsDismissed = false;
+    }
+
     _apiLog.addLog(item, screen, popupSuffix);
     notifyListeners();
   }
@@ -211,6 +233,7 @@ class MonitorController extends ChangeNotifier {
     _errorLog.clearAll();
     _routeLog.clearAll();
     _visitedScreens.clear();
+    _alertsDismissed = false;
     notifyListeners();
   }
 

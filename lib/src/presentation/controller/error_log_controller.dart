@@ -9,7 +9,7 @@ class ErrorLogController {
   List<ErrorLogItem> get errors => List.unmodifiable(_errors);
   int get count => _errors.length;
 
-  void addError(String message, String stackTrace, String type) {
+  void addError(String message, String stackTrace, String type, String screen) {
     _errors.insert(
       0,
       ErrorLogItem(
@@ -18,6 +18,7 @@ class ErrorLogController {
         stackTrace: stackTrace,
         type: type,
         timestamp: DateTime.now(),
+        screen: screen,
       ),
     );
     if (_errors.length > _maxErrors) _errors.removeLast();
