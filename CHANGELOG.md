@@ -1,3 +1,9 @@
+## 2.2.1
+
+* **API Search Bar**: Added a search bar in the API tab to filter logs by URL, method, or status code.
+* **FormData & Binary Payload Support**: Added detailed formatting for `FormData` payloads (showing fields and file metadata like filename, length, and content type) and custom labels for `Uint8List` and `Stream` data.
+* **Custom AppBar Title Extraction**: Fixed auto-captured screen names when using custom AppBar wrappers (e.g. `BaseAppBar` with `AppText.title`) by recursively searching the title's element subtree for `Text` or `RichText` widgets.
+
 ## 2.2.0
 
 * **Auto-captured Screen Names**: Dynamic runtime extraction of `AppBar.title` (if it's a `Text` widget) using Element tree post-frame traversal in `MonitorNavigatorObserver`, mapping route paths to user-friendly titles automatically. Fallback formatting converts camelCase/underscores and path variables (e.g. `/post_detail/123` ➔ `Post Detail (/123)`).
