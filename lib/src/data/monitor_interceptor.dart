@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -105,6 +106,30 @@ class MonitorInterceptor extends Interceptor {
   String? _encodeBody(dynamic data) {
     if (data == null) return null;
     try {
+      if (data is FormData) {
+        final map = <String, dynamic>{};
+        for (final entry in data.fields) {
+          map[entry.key] = entry.value;
+        }
+        for (final entry in data.files) {
+          final file = entry.value;
+          map[entry.key] = {
+            'filename': file.filename,
+            'length': file.length,
+            if (file.contentType != null) 'contentType': file.contentType.toString(),
+          };
+        }
+        return const JsonEncoder.withIndent('  ').convert({
+          '@type': 'FormData',
+          '@fields': map,
+        });
+      }
+      if (data is Uint8List) {
+        return '[Binary Data] ${data.length} bytes';
+      }
+      if (data is Stream) {
+        return '[Stream Data]';
+      }
       if (data is String) {
         if (data.isEmpty) return null;
         try {

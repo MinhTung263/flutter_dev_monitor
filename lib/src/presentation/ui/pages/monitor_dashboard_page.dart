@@ -35,6 +35,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   int _activeTab = 0; // 0=API  1=ERRORS  2=ROUTES
   String _filterMode = 'ALL';
   bool _showHeaders = true;
+  String _searchQuery = '';
 
   MonitorController get _ctrl => MonitorController.instance;
 
@@ -66,23 +67,41 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
       _selectedScreen = screen;
       _filterMode = 'ALL';
       _activeTab = 0;
+      _searchQuery = '';
     });
     _ctrl.updateDashboardView(screen);
   }
 
   List<ApiLogItem> _applyFilter(List<ApiLogItem> logs) {
+    List<ApiLogItem> filtered;
     switch (_filterMode) {
       case 'SLOW':
-        return logs.where((l) => l.isSlow).toList();
+        filtered = logs.where((l) => l.isSlow).toList();
+        break;
       case 'ERR':
-        return logs.where((l) => !l.isSuccess).toList();
+        filtered = logs.where((l) => !l.isSuccess).toList();
+        break;
       case 'GET':
-        return logs.where((l) => l.method == 'GET').toList();
+        filtered = logs.where((l) => l.method == 'GET').toList();
+        break;
       case 'POST':
-        return logs.where((l) => l.method == 'POST').toList();
+        filtered = logs.where((l) => l.method == 'POST').toList();
+        break;
       default:
-        return logs;
+        filtered = logs.toList();
+        break;
     }
+
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      filtered = filtered.where((l) {
+        final urlMatch = l.url.toLowerCase().contains(q);
+        final methodMatch = l.method.toLowerCase().contains(q);
+        final statusMatch = l.statusCode.toString().contains(q);
+        return urlMatch || methodMatch || statusMatch;
+      }).toList();
+    }
+    return filtered;
   }
 
   @override
@@ -138,9 +157,10 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
               onTabChanged: (i) => setState(() {
                 _activeTab = i;
                 _filterMode = 'ALL';
+                _searchQuery = '';
               }),
             ),
-            if (_activeTab == 0)
+            if (_activeTab == 0) ...[
               _FilterBar(
                 allLogs: allLogs,
                 activeFilter: _filterMode,
@@ -148,6 +168,11 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
                 showHeaders: _showHeaders,
                 onHeaderToggle: (v) => setState(() => _showHeaders = v),
               ),
+              _SearchBar(
+                query: _searchQuery,
+                onChanged: (v) => setState(() => _searchQuery = v),
+              ),
+            ],
             Expanded(
               child: switch (_activeTab) {
                 1 => flutterErrors.isEmpty

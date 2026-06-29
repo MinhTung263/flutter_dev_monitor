@@ -289,6 +289,26 @@ class _ApiLabScreenState extends State<ApiLabScreen> {
         await dio.delete('/posts/1');
       });
 
+  /// POST with FormData (multipart) → tests FormData / File uploading
+  Future<void> _postFormData() => _run('POST with FormData (File)', () async {
+        final formData = FormData.fromMap({
+          'name': 'mario',
+          'age': '25',
+          'file': MultipartFile.fromString(
+            'Hello world this is a test file content!',
+            filename: 'test_upload.txt',
+          ),
+          'avatar': MultipartFile.fromString(
+            'fake image data',
+            filename: 'avatar.png',
+          ),
+        });
+        await dio.post(
+          'https://httpbin.org/post',
+          data: formData,
+        );
+      });
+
   /// 404 → tests error state (red tile)
   Future<void> _notFound() => _run('GET 404 not found', () async {
         try {
@@ -412,6 +432,13 @@ class _ApiLabScreenState extends State<ApiLabScreen> {
                   subtitle: '/posts/1 — empty {} response',
                   color: Colors.red,
                   onTap: _busy ? null : _delete,
+                ),
+                _LabButton(
+                  icon: Icons.upload_file,
+                  label: 'POST with FormData (File)',
+                  subtitle: 'Sends FormData fields and files to httpbin.org',
+                  color: Colors.teal,
+                  onTap: _busy ? null : _postFormData,
                 ),
                 const SizedBox(height: 8),
                 _SectionHeader('Error cases'),

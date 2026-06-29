@@ -338,3 +338,97 @@ class _HeaderToggleButton extends StatelessWidget {
     );
   }
 }
+
+// ─── Search Bar ──────────────────────────────────────────────────────────────
+
+class _SearchBar extends StatefulWidget {
+  final String query;
+  final ValueChanged<String> onChanged;
+
+  const _SearchBar({required this.query, required this.onChanged});
+
+  @override
+  State<_SearchBar> createState() => _SearchBarState();
+}
+
+class _SearchBarState extends State<_SearchBar> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.query);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SearchBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.query != oldWidget.query && widget.query != _controller.text) {
+      _controller.text = widget.query;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: MonitorColors.pageBackground,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Container(
+        height: 34,
+        decoration: BoxDecoration(
+          color: MonitorColors.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: MonitorColors.border.withValues(alpha: 0.8),
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Icon(Icons.search, size: 16, color: MonitorColors.secondaryText),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                onChanged: widget.onChanged,
+                style: TextStyle(
+                  color: MonitorColors.primaryText,
+                  fontSize: 12,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Search by URL, Method, or Status...',
+                  hintStyle: TextStyle(
+                    color: MonitorColors.secondaryText,
+                    fontSize: 12,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+              ),
+            ),
+            if (widget.query.isNotEmpty)
+              GestureDetector(
+                onTap: () {
+                  _controller.clear();
+                  widget.onChanged('');
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(Icons.clear, size: 16, color: MonitorColors.secondaryText),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
