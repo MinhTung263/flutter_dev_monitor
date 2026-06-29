@@ -138,17 +138,51 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
     String? foundTitle;
 
+    Element? findElementForWidget(Element root, Widget target) {
+      if (root.widget == target) return root;
+      Element? found;
+      root.visitChildren((child) {
+        if (found != null) return;
+        found = findElementForWidget(child, target);
+      });
+      return found;
+    }
+
+    String? findTextInElement(Element root) {
+      final widget = root.widget;
+      if (widget is Text) {
+        if (widget.data != null && widget.data!.isNotEmpty) {
+          return widget.data;
+        }
+      }
+      if (widget is RichText) {
+        final plainText = widget.text.toPlainText();
+        if (plainText.isNotEmpty) {
+          return plainText;
+        }
+      }
+      String? found;
+      root.visitChildren((child) {
+        if (found != null) return;
+        found = findTextInElement(child);
+      });
+      return found;
+    }
+
     void visitor(Element element) {
       if (foundTitle != null) return;
 
       final widget = element.widget;
       if (widget is AppBar) {
         final titleWidget = widget.title;
-        if (titleWidget is Text) {
-          final text = titleWidget.data;
-          if (text != null && text.isNotEmpty) {
-            foundTitle = text;
-            return;
+        if (titleWidget != null) {
+          final titleElement = findElementForWidget(element, titleWidget);
+          if (titleElement != null) {
+            final text = findTextInElement(titleElement);
+            if (text != null && text.isNotEmpty) {
+              foundTitle = text;
+              return;
+            }
           }
         }
       }
