@@ -15,7 +15,7 @@
     },
     {
       "name": "characters",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/characters-1.4.0",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/characters-1.4.1",
       "packageUri": "lib/",
       "languageVersion": "3.4"
     },
@@ -75,9 +75,9 @@
     },
     {
       "name": "flutter",
-      "rootUri": "file:///Users/minhtung/fvm/versions/3.32.8/packages/flutter",
+      "rootUri": "file:///Users/minhtung/fvm/versions/3.41.1/packages/flutter",
       "packageUri": "lib/",
-      "languageVersion": "3.7"
+      "languageVersion": "3.9"
     },
     {
       "name": "flutter_lints",
@@ -87,15 +87,15 @@
     },
     {
       "name": "flutter_test",
-      "rootUri": "file:///Users/minhtung/fvm/versions/3.32.8/packages/flutter_test",
+      "rootUri": "file:///Users/minhtung/fvm/versions/3.41.1/packages/flutter_test",
       "packageUri": "lib/",
-      "languageVersion": "3.7"
+      "languageVersion": "3.9"
     },
     {
       "name": "flutter_web_plugins",
-      "rootUri": "file:///Users/minhtung/fvm/versions/3.32.8/packages/flutter_web_plugins",
+      "rootUri": "file:///Users/minhtung/fvm/versions/3.41.1/packages/flutter_web_plugins",
       "packageUri": "lib/",
-      "languageVersion": "3.7"
+      "languageVersion": "3.9"
     },
     {
       "name": "http_parser",
@@ -105,19 +105,19 @@
     },
     {
       "name": "leak_tracker",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/leak_tracker-10.0.9",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/leak_tracker-11.0.2",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
     {
       "name": "leak_tracker_flutter_testing",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/leak_tracker_flutter_testing-3.0.9",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/leak_tracker_flutter_testing-3.0.10",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
     {
       "name": "leak_tracker_testing",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/leak_tracker_testing-3.0.1",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/leak_tracker_testing-3.0.2",
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
@@ -129,21 +129,21 @@
     },
     {
       "name": "matcher",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/matcher-0.12.17",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/matcher-0.12.18",
       "packageUri": "lib/",
-      "languageVersion": "3.4"
+      "languageVersion": "3.7"
     },
     {
       "name": "material_color_utilities",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/material_color_utilities-0.11.1",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/material_color_utilities-0.13.0",
       "packageUri": "lib/",
-      "languageVersion": "2.17"
+      "languageVersion": "3.5"
     },
     {
       "name": "meta",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/meta-1.16.0",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/meta-1.17.0",
       "packageUri": "lib/",
-      "languageVersion": "2.12"
+      "languageVersion": "3.5"
     },
     {
       "name": "mime",
@@ -165,9 +165,9 @@
     },
     {
       "name": "sky_engine",
-      "rootUri": "file:///Users/minhtung/fvm/versions/3.32.8/bin/cache/pkg/sky_engine",
+      "rootUri": "file:///Users/minhtung/fvm/versions/3.41.1/bin/cache/pkg/sky_engine",
       "packageUri": "lib/",
-      "languageVersion": "3.7"
+      "languageVersion": "3.9"
     },
     {
       "name": "source_span",
@@ -201,9 +201,9 @@
     },
     {
       "name": "test_api",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/test_api-0.7.4",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/test_api-0.7.9",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.7"
     },
     {
       "name": "typed_data",
@@ -213,9 +213,9 @@
     },
     {
       "name": "vector_math",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/vector_math-2.1.4",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/vector_math-2.2.0",
       "packageUri": "lib/",
-      "languageVersion": "2.14"
+      "languageVersion": "3.1"
     },
     {
       "name": "vm_service",
@@ -249,8 +249,8 @@
     }
   ],
   "generator": "pub",
-  "generatorVersion": "3.8.1",
-  "flutterRoot": "file:///Users/minhtung/fvm/versions/3.32.8",
-  "flutterVersion": "3.32.8",
+  "generatorVersion": "3.11.0",
+  "flutterRoot": "file:///Users/minhtung/fvm/versions/3.41.1",
+  "flutterVersion": "3.41.1",
   "pubCache": "file:///Users/minhtung/.pub-cache"
 }

@@ -14,10 +14,19 @@ public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "getSystemHardware":
-            result(getIosHardwareStats())
+            DispatchQueue.global(qos: .background).async { [weak self] in
+                guard let self = self else {
+                    result(nil)
+                    return
+                }
+                let stats = self.getIosHardwareStats()
+                DispatchQueue.main.async {
+                    result(stats)
+                }
+            }
         case "getTheme":
             let saved = UserDefaults.standard.object(forKey: "flutter_dev_monitor_dark_theme")
-            result(saved as? Bool ?? true)
+            result(saved as? Bool ?? false)
         case "setTheme":
             if let isDark = call.arguments as? Bool {
                 UserDefaults.standard.set(isDark, forKey: "flutter_dev_monitor_dark_theme")

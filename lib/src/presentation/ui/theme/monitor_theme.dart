@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 abstract class MonitorColors {
   static const _channel = MethodChannel('flutter_dev_monitor/system_monitor');
 
-  static final ValueNotifier<bool> isDarkNotifier = ValueNotifier<bool>(true);
+  static final ValueNotifier<bool> isDarkNotifier = ValueNotifier<bool>(false);
 
   static bool get isDark => isDarkNotifier.value;
   static set isDark(bool v) {

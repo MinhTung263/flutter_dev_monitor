@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
@@ -41,14 +42,20 @@ class HardwareDatasource {
 
   Future<int?> measurePing() async {
     try {
-      final sw = Stopwatch()..start();
-      final socket = await Socket.connect(
-        '1.1.1.1', 80,
-        timeout: const Duration(seconds: 3),
-      );
-      final ms = sw.elapsedMilliseconds;
-      socket.destroy();
-      return ms;
+      return await Isolate.run(() async {
+        try {
+          final sw = Stopwatch()..start();
+          final socket = await Socket.connect(
+            '1.1.1.1', 80,
+            timeout: const Duration(seconds: 2),
+          );
+          final ms = sw.elapsedMilliseconds;
+          socket.destroy();
+          return ms;
+        } catch (_) {
+          return null;
+        }
+      });
     } catch (_) {
       return null;
     }

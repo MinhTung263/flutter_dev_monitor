@@ -26,11 +26,25 @@ class FlutterDevMonitorPlugin : FlutterPlugin, MethodCallHandler {
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
-            "getSystemHardware" -> result.success(getHardwareStats())
+            "getSystemHardware" -> {
+                val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                Thread {
+                    try {
+                        val stats = getHardwareStats()
+                        mainHandler.post {
+                            result.success(stats)
+                        }
+                    } catch (e: Exception) {
+                        mainHandler.post {
+                            result.error("ERROR", e.message, null)
+                        }
+                    }
+                }.start()
+            }
             "getTheme" -> {
                 val prefs = applicationContext.getSharedPreferences(
                     "flutter_dev_monitor", android.content.Context.MODE_PRIVATE)
-                result.success(prefs.getBoolean("dark_theme", true))
+                result.success(prefs.getBoolean("dark_theme", false))
             }
             "setTheme" -> {
                 val isDark = call.arguments as? Boolean ?: true

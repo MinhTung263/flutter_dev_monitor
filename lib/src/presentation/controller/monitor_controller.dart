@@ -39,6 +39,7 @@ class MonitorController extends ChangeNotifier {
   Timer? _hardwareTimer;
   Timer? _pingTimer;
   int? _currentPingMs;
+  bool _disposed = false;
 
   bool _alertsDismissed = false;
   bool get alertsDismissed => _alertsDismissed;
@@ -216,6 +217,7 @@ class MonitorController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _hardwareTimer?.cancel();
     _pingTimer?.cancel();
     super.dispose();
@@ -312,16 +314,22 @@ class MonitorController extends ChangeNotifier {
   }
 
   void _startHardwareMonitoring() {
-    _fetchHardware();
-    _hardwareTimer = Timer.periodic(
-      const Duration(seconds: 3),
-      (_) => _fetchHardware(),
-    );
+    Future.delayed(const Duration(seconds: 3), () {
+      if (_disposed) return;
+      _fetchHardware();
+      _hardwareTimer = Timer.periodic(
+        const Duration(seconds: 3),
+        (_) => _fetchHardware(),
+      );
+    });
   }
 
   void _startPingMonitoring() {
-    _fetchPing();
-    _pingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchPing());
+    Future.delayed(const Duration(seconds: 5), () {
+      if (_disposed) return;
+      _fetchPing();
+      _pingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchPing());
+    });
   }
 
   Future<void> _fetchPing() async {
