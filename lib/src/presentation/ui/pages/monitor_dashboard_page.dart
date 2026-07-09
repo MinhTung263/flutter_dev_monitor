@@ -124,10 +124,13 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         : _ctrl.errorLogs.where((e) => e.screen == _selectedScreen).toList();
     final routeLogs = _ctrl.routeLogs;
 
-    return Scaffold(
-      backgroundColor: MonitorColors.pageBackground,
-      appBar: _buildAppBar(context),
-      body: NestedScrollView(
+    return GestureDetector(
+      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: MonitorColors.pageBackground,
+        appBar: _buildAppBar(context),
+        body: NestedScrollView(
         // Header slides away when scrolling down
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverToBoxAdapter(
@@ -196,7 +199,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
           ],
         ),
       ),
-    );
+    ),);
   }
 
   void _openScreenPicker(BuildContext context) {
