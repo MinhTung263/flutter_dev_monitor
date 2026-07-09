@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../controller/monitor_controller.dart';
 
+/// A navigator observer that tracks screen transitions and routes to DevMonitor.
 class MonitorNavigatorObserver extends NavigatorObserver {
   static MonitorNavigatorObserver? _instance;
 
+  /// Creates a new [MonitorNavigatorObserver] instance.
   MonitorNavigatorObserver() {
     _instance = this;
   }
@@ -12,6 +14,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   /// The NavigatorState of the host app — available after the first route push.
   static NavigatorState? get navigatorState => _instance?.navigator;
 
+  /// The history stack of visited page route names.
   static final List<String> pageStack = [];
 
   /// The most recently pushed page route name (excludes popups and dashboard).

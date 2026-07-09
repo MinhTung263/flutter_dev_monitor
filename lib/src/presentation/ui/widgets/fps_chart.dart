@@ -229,7 +229,9 @@ class _FpsChartPainter extends CustomPainter {
 
   void _drawFill(Canvas canvas, Size size, List<Offset> points) {
     final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (int i = 1; i < points.length; i++) path.lineTo(points[i].dx, points[i].dy);
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
     path
       ..lineTo(points.last.dx, size.height)
       ..lineTo(points.first.dx, size.height)
@@ -252,7 +254,9 @@ class _FpsChartPainter extends CustomPainter {
 
   void _drawLine(Canvas canvas, List<Offset> points) {
     final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (int i = 1; i < points.length; i++) path.lineTo(points[i].dx, points[i].dy);
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
     canvas.drawPath(
       path,
       Paint()

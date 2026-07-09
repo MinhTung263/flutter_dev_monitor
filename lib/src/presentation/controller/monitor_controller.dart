@@ -15,6 +15,7 @@ import 'fps_controller.dart';
 import 'hardware_controller.dart';
 import 'route_log_controller.dart';
 
+/// The main controller that holds the state of the dev monitor (logs, metrics, etc.).
 class MonitorController extends ChangeNotifier {
   MonitorController._() {
     _init();
@@ -22,8 +23,7 @@ class MonitorController extends ChangeNotifier {
 
   static MonitorController? _instance;
 
-  /// Lazy singleton. Works with any DI: pass [MonitorController.instance] to
-  /// Provider, Riverpod, GetX Get.put(), etc.
+  /// The singleton instance of [MonitorController].
   static MonitorController get instance => _instance ??= MonitorController._();
 
   final _apiLog    = ApiLogController();

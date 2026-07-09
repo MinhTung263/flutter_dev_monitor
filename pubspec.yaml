@@ -29,7 +29,7 @@ screenshots:
     path: screenshots/overlay_dark.png
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.11.0 <4.0.0"
   flutter: ">=3.10.0"
 
 flutter:
@@ -45,9 +45,9 @@ dependencies:
   flutter:
     sdk: flutter
   dio: ^5.9.0
-  device_info_plus: ^11.4.0
+  device_info_plus: ^13.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0

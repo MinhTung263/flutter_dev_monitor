@@ -33,15 +33,15 @@
     },
     {
       "name": "device_info_plus",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/device_info_plus-11.5.0",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/device_info_plus-13.2.0",
       "packageUri": "lib/",
-      "languageVersion": "3.7"
+      "languageVersion": "3.10"
     },
     {
       "name": "device_info_plus_platform_interface",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/device_info_plus_platform_interface-7.0.3",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/device_info_plus_platform_interface-8.1.0",
       "packageUri": "lib/",
-      "languageVersion": "3.7"
+      "languageVersion": "3.10"
     },
     {
       "name": "dio",
@@ -68,6 +68,12 @@
       "languageVersion": "3.7"
     },
     {
+      "name": "ffi_leak_tracker",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/ffi_leak_tracker-0.1.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.10"
+    },
+    {
       "name": "file",
       "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/file-7.0.1",
       "packageUri": "lib/",
@@ -81,9 +87,9 @@
     },
     {
       "name": "flutter_lints",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/flutter_lints-5.0.0",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/flutter_lints-6.0.0",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.8"
     },
     {
       "name": "flutter_test",
@@ -123,9 +129,9 @@
     },
     {
       "name": "lints",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/lints-5.1.1",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/lints-6.1.0",
       "packageUri": "lib/",
-      "languageVersion": "3.6"
+      "languageVersion": "3.8"
     },
     {
       "name": "matcher",
@@ -231,21 +237,21 @@
     },
     {
       "name": "win32",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/win32-5.15.0",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/win32-6.3.0",
       "packageUri": "lib/",
-      "languageVersion": "3.8"
+      "languageVersion": "3.10"
     },
     {
       "name": "win32_registry",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/win32_registry-2.1.0",
+      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/win32_registry-3.0.3",
       "packageUri": "lib/",
-      "languageVersion": "3.7"
+      "languageVersion": "3.10"
     },
     {
       "name": "flutter_dev_monitor",
       "rootUri": "../",
       "packageUri": "lib/",
-      "languageVersion": "3.0"
+      "languageVersion": "3.11"
     }
   ],
   "generator": "pub",

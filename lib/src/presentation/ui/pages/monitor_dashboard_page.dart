@@ -20,8 +20,12 @@ part 'api_log_section.dart';
 part 'error_log_section.dart';
 part 'route_log_section.dart';
 
+/// The full dashboard page for DevMonitor, displaying charts and logs.
 class MonitorDashboardPage extends StatefulWidget {
+  /// The route name of the initial screen to view in the dashboard.
   final String initialScreen;
+
+  /// Creates a [MonitorDashboardPage] to display performance stats and logs.
   const MonitorDashboardPage({super.key, required this.initialScreen});
 
   @override

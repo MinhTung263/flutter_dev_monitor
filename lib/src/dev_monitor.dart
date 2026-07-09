@@ -7,8 +7,12 @@ import 'data/monitor_interceptor.dart';
 import 'presentation/navigation/monitor_navigator_observer.dart';
 import 'presentation/ui/widgets/fps_overlay.dart';
 
+/// The main interface for configuring and managing the in-app developer monitor.
 abstract final class DevMonitor {
+  /// The navigator observer to track route transitions.
   static final MonitorNavigatorObserver observer = MonitorNavigatorObserver();
+
+  /// The HTTP interceptor for capturing Dio requests.
   static final MonitorInterceptor interceptor = MonitorInterceptor();
 
   static final ValueNotifier<bool> _overlayEnabled = ValueNotifier(true);

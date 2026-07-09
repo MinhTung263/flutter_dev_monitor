@@ -7,6 +7,8 @@ import '../domain/api_log_item.dart';
 import '../presentation/controller/monitor_controller.dart';
 import '../presentation/navigation/monitor_navigator_observer.dart';
 
+/// An interceptor for Dio HTTP client that automatically captures
+/// request, response, and error logs for DevMonitor.
 class MonitorInterceptor extends Interceptor {
 
   @override

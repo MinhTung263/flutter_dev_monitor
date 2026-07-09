@@ -184,7 +184,9 @@ class _FpsOverlayState extends State<FpsOverlay>
     final nav = MonitorNavigatorObserver.navigatorState;
     if (nav == null) return;
     if (MonitorNavigatorObserver.currentRoute ==
-        MonitorConstants.dashboardRoute) return;
+        MonitorConstants.dashboardRoute) {
+      return;
+    }
     final route = MonitorNavigatorObserver.currentRoute;
     nav.push(MaterialPageRoute(
       builder: (_) => MonitorDashboardPage(
@@ -372,13 +374,13 @@ class _PillBadgeState extends State<_PillBadge>
               ? MonitorColors.overlayAlert
               : MonitorColors.overlayBuild;
 
-          const TextStyle _lbl = TextStyle(
+          const TextStyle lblStyle = TextStyle(
             fontSize: 7,
             fontWeight: FontWeight.bold,
             fontFamily: 'monospace',
             height: 1.2,
           );
-          const TextStyle _val = TextStyle(
+          const TextStyle valStyle = TextStyle(
             fontSize: 9,
             fontWeight: FontWeight.w800,
             fontFamily: 'monospace',
@@ -456,14 +458,14 @@ class _PillBadgeState extends State<_PillBadge>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text('API ',
-                            style: _lbl.copyWith(color: MonitorColors.overlayApi)),
+                            style: lblStyle.copyWith(color: MonitorColors.overlayApi)),
                         Text('$apiCount',
-                            style: _val.copyWith(color: MonitorColors.overlayApi)),
+                            style: valStyle.copyWith(color: MonitorColors.overlayApi)),
                         const SizedBox(width: 6),
                         Text('MEM ',
-                            style: _lbl.copyWith(color: MonitorColors.overlayMem)),
+                            style: lblStyle.copyWith(color: MonitorColors.overlayMem)),
                         Text('${memMb.toStringAsFixed(0)}M',
-                            style: _val.copyWith(color: MonitorColors.overlayMem)),
+                            style: valStyle.copyWith(color: MonitorColors.overlayMem)),
                       ],
                     ),
                     const SizedBox(height: 2),
@@ -471,9 +473,9 @@ class _PillBadgeState extends State<_PillBadge>
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('NET ', style: _lbl.copyWith(color: pingColor)),
+                        Text('NET ', style: lblStyle.copyWith(color: pingColor)),
                         Text(pingMs == null ? '--' : '${pingMs}ms',
-                            style: _val.copyWith(color: pingColor)),
+                            style: valStyle.copyWith(color: pingColor)),
                       ],
                     ),
                     SizeTransition(
@@ -705,7 +707,7 @@ class _DetailsPanel extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '[${physW}×${physH}]',
+                          '[$physW×$physH]',
                           style: TextStyle(
                               color: subtleTxt,
                               fontSize: 8,

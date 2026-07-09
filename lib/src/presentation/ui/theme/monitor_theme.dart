@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// Defines the visual theme colors used by DevMonitor dashboard and overlay.
 abstract class MonitorColors {
   static const _channel = MethodChannel('flutter_dev_monitor/system_monitor');
 
