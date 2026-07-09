@@ -1,3 +1,10 @@
+## 2.3.0
+
+* **Fix Offline Boot Hang**: Shlipped native storage scans to background threads (JVM Thread on Android, GCD queue on iOS), isolated ping sockets inside a background `Isolate.run` with 2-second timeout, and delayed monitoring controllers to prevent splash screen freezes when offline.
+* **Default Light Mode Theme**: Configured the performance console dashboard and overlay HUD to start in light mode by default.
+* **Example App Premium Redesign**: Restructured the single-file codebase into a clean modular package under `screens/` and `services/`, and redesigned all views featuring macOS-style virtual console outputs, colored method badge cards, and pixel alignment blueprints.
+* **Updated pub.dev Screenshots**: Updated all 6 store screenshots with generic clean status bar configurations.
+
 ## 2.2.1
 
 * **API Search Bar**: Added a search bar in the API tab to filter logs by URL, method, or status code.
