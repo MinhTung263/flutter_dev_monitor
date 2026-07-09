@@ -121,7 +121,7 @@ class _ChartHeader extends StatelessWidget {
 }
 
 class _HBorder extends StatelessWidget {
-  _HBorder();
+  const _HBorder();
   @override
   Widget build(BuildContext context) =>
       Container(height: 1, color: MonitorColors.divider);

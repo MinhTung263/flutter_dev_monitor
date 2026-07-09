@@ -52,7 +52,7 @@ abstract final class DevMonitor {
     }
     return (context, child) => ValueListenableBuilder<bool>(
           valueListenable: _overlayEnabled,
-          builder: (_, enabled, __) => FpsOverlay(
+          builder: (_, enabled, _) => FpsOverlay(
             isShowing: enabled,
             expandedByDefault: expandedByDefault,
             onHide: hideOverlay,
@@ -66,7 +66,7 @@ abstract final class DevMonitor {
   static Widget appBuilder(BuildContext context, Widget? child) =>
       ValueListenableBuilder<bool>(
         valueListenable: _overlayEnabled,
-        builder: (_, enabled, __) => FpsOverlay(
+        builder: (_, enabled, _) => FpsOverlay(
           isShowing: enabled,
           onHide: hideOverlay,
           child: child ?? const SizedBox.shrink(),

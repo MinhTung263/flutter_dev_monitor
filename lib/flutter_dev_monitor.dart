@@ -1,5 +1,3 @@
-library flutter_dev_monitor;
-
 export 'src/dev_monitor.dart';
 export 'src/domain/api_log_item.dart';
 export 'src/domain/route_log_item.dart';

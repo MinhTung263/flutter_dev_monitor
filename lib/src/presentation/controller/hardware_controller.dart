@@ -25,7 +25,9 @@ class HardwareController {
     }
 
     if (currentScreen == MonitorConstants.dashboardRoute ||
-        currentScreen == MonitorConstants.unknownRoute) return;
+        currentScreen == MonitorConstants.unknownRoute) {
+      return;
+    }
 
     ramHistoryMap[currentScreen] ??= [];
     ramHistoryMap[currentScreen]!.add(currentRam);

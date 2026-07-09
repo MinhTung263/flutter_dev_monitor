@@ -112,7 +112,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: MonitorColors.isDarkNotifier,
-      builder: (context, _, __) => _buildPage(context),
+      builder: (context, _, _) => _buildPage(context),
     );
   }
 
