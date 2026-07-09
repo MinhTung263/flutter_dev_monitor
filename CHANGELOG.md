@@ -1,3 +1,7 @@
+## 2.3.1
+
+* **Broaden SDK Compatibility**: Downgraded Dart SDK constraint to `>=3.0.0 <4.0.0` (matching Flutter versions from 2023 and 2024 onwards) and renamed duplicate wildcard parameters to avoid analyzer errors on older Dart versions.
+
 ## 2.3.0
 
 * **Fix Offline Boot Hang**: Shlipped native storage scans to background threads (JVM Thread on Android, GCD queue on iOS), isolated ping sockets inside a background `Isolate.run` with 2-second timeout, and delayed monitoring controllers to prevent splash screen freezes when offline.
