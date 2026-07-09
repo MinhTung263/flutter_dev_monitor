@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
 
 import '../core/monitor_constants.dart';
@@ -63,17 +62,17 @@ class HardwareDatasource {
 
   Future<String> fetchDeviceModel() async {
     try {
-      final info = DeviceInfoPlugin();
       if (Platform.isIOS) {
-        final ios = await info.iosInfo;
-        final model = kIosDeviceMap[ios.utsname.machine] ?? ios.utsname.machine;
-        return '$model • iOS ${ios.systemVersion}';
+        final data = await _channel.invokeMethod<Map<dynamic, dynamic>>('getDeviceModel');
+        if (data != null) {
+          final machine = data['machine'] as String? ?? '';
+          final systemVersion = data['systemVersion'] as String? ?? '';
+          final model = kIosDeviceMap[machine] ?? machine;
+          return '$model • iOS $systemVersion';
+        }
       } else if (Platform.isAndroid) {
-        final android = await info.androidInfo;
-        final brand = android.brand.isNotEmpty
-            ? android.brand[0].toUpperCase() + android.brand.substring(1)
-            : android.manufacturer;
-        return '$brand ${android.model} • Android ${android.version.release}';
+        final model = await _channel.invokeMethod<String>('getDeviceModel');
+        if (model != null) return model;
       }
     } catch (_) {}
     return Platform.isIOS ? 'iPhone' : 'Android';

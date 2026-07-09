@@ -32,18 +32,6 @@
       "languageVersion": "3.4"
     },
     {
-      "name": "device_info_plus",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/device_info_plus-13.2.0",
-      "packageUri": "lib/",
-      "languageVersion": "3.10"
-    },
-    {
-      "name": "device_info_plus_platform_interface",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/device_info_plus_platform_interface-8.1.0",
-      "packageUri": "lib/",
-      "languageVersion": "3.10"
-    },
-    {
       "name": "dio",
       "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/dio-5.9.2",
       "packageUri": "lib/",
@@ -62,24 +50,6 @@
       "languageVersion": "3.3"
     },
     {
-      "name": "ffi",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/ffi-2.2.0",
-      "packageUri": "lib/",
-      "languageVersion": "3.7"
-    },
-    {
-      "name": "ffi_leak_tracker",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/ffi_leak_tracker-0.1.2",
-      "packageUri": "lib/",
-      "languageVersion": "3.10"
-    },
-    {
-      "name": "file",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/file-7.0.1",
-      "packageUri": "lib/",
-      "languageVersion": "3.0"
-    },
-    {
       "name": "flutter",
       "rootUri": "file:///Users/minhtung/fvm/versions/3.41.1/packages/flutter",
       "packageUri": "lib/",
@@ -94,12 +64,6 @@
     {
       "name": "flutter_test",
       "rootUri": "file:///Users/minhtung/fvm/versions/3.41.1/packages/flutter_test",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-    },
-    {
-      "name": "flutter_web_plugins",
-      "rootUri": "file:///Users/minhtung/fvm/versions/3.41.1/packages/flutter_web_plugins",
       "packageUri": "lib/",
       "languageVersion": "3.9"
     },
@@ -162,12 +126,6 @@
       "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/path-1.9.1",
       "packageUri": "lib/",
       "languageVersion": "3.4"
-    },
-    {
-      "name": "plugin_platform_interface",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/plugin_platform_interface-2.1.8",
-      "packageUri": "lib/",
-      "languageVersion": "3.0"
     },
     {
       "name": "sky_engine",
@@ -234,18 +192,6 @@
       "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/web-1.1.1",
       "packageUri": "lib/",
       "languageVersion": "3.4"
-    },
-    {
-      "name": "win32",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/win32-6.3.0",
-      "packageUri": "lib/",
-      "languageVersion": "3.10"
-    },
-    {
-      "name": "win32_registry",
-      "rootUri": "file:///Users/minhtung/.pub-cache/hosted/pub.dev/win32_registry-3.0.3",
-      "packageUri": "lib/",
-      "languageVersion": "3.10"
     },
     {
       "name": "flutter_dev_monitor",

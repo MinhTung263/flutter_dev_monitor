@@ -1,3 +1,7 @@
+## 2.3.2
+
+* **Remove `device_info_plus` Dependency**: Implemented native platform channel calls (`getDeviceModel`) on Android and iOS to retrieve hardware details directly, resolving potential dependency conflicts and reducing the package weight.
+
 ## 2.3.1
 
 * **Broaden SDK Compatibility**: Downgraded Dart SDK constraint to `>=3.0.0 <4.0.0` (matching Flutter versions from 2023 and 2024 onwards) and renamed duplicate wildcard parameters to avoid analyzer errors on older Dart versions.

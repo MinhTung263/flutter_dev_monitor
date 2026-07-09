@@ -41,6 +41,14 @@ class FlutterDevMonitorPlugin : FlutterPlugin, MethodCallHandler {
                     }
                 }.start()
             }
+            "getDeviceModel" -> {
+                val brand = android.os.Build.BRAND.let {
+                    if (it.isNotEmpty()) it[0].uppercaseChar() + it.substring(1) else android.os.Build.MANUFACTURER
+                }
+                val model = android.os.Build.MODEL
+                val release = android.os.Build.VERSION.RELEASE
+                result.success("$brand $model • Android $release")
+            }
             "getTheme" -> {
                 val prefs = applicationContext.getSharedPreferences(
                     "flutter_dev_monitor", android.content.Context.MODE_PRIVATE)
