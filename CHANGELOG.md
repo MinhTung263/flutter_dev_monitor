@@ -1,3 +1,7 @@
+## 2.3.3
+
+* **Auto-Dismiss Virtual Keyboard**: Automatically unfocuses the search text field and dismisses the keyboard when the user taps anywhere outside the search bar on the dashboard.
+
 ## 2.3.2
 
 * **Remove `device_info_plus` Dependency**: Implemented native platform channel calls (`getDeviceModel`) on Android and iOS to retrieve hardware details directly, resolving potential dependency conflicts and reducing the package weight.
