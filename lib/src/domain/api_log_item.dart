@@ -115,6 +115,7 @@ class ApiLogItem {
     int? callCount,
     String? phase,
     int? refreshCycle,
+    DateTime? timestamp,
   }) {
     return ApiLogItem(
       orderNumber: orderNumber ?? this.orderNumber,
@@ -124,7 +125,7 @@ class ApiLogItem {
       duration: duration ?? this.duration,
       responseBytes: responseBytes ?? this.responseBytes,
       screen: screen,
-      timestamp: timestamp,
+      timestamp: timestamp ?? this.timestamp,
       callerName: callerName,
       phase: phase ?? this.phase,
       callCount: callCount ?? this.callCount,

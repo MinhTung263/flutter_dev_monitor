@@ -1,14 +1,21 @@
-import 'dart:io' show Platform;
+// ignore_for_file: unnecessary_getters_setters
+
 import 'dart:ui' show FramePhase;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
-import '../../../core/monitor_constants.dart';
 import '../../controller/monitor_controller.dart';
+import '../../controller/overlay_controller.dart';
+import '../../../domain/overlay_state_entity.dart';
 import '../../navigation/monitor_navigator_observer.dart';
 import '../pages/monitor_dashboard_page.dart';
 import '../theme/monitor_theme.dart';
+
+import 'fps_overlay_grid_painter.dart';
+import 'fps_overlay_tucked_handle.dart';
+import 'fps_overlay_pill_badge.dart';
+import 'fps_overlay_details_panel.dart';
 
 class FpsOverlay extends StatefulWidget {
   final Widget child;
@@ -40,35 +47,16 @@ class _FpsOverlayState extends State<FpsOverlay>
   double _pendingFps = 0.0;
   double _pendingBuild = 0.0;
   double _pendingGpu = 0.0;
-
   Ticker? _ticker;
   Duration _lastPublish = Duration.zero;
 
-  // ── Overlay position & state ─────────────────────────────────────────
-  double? _top;
-  double? _left;
-  bool _positionInit = false;
-  late bool _isExpanded;
-  GridMode _gridMode = GridMode.off;
-
+  OverlayController get _overlayCtrl => OverlayController.instance;
   MonitorController get _ctrl => MonitorController.instance;
-
-  void _onToggleGrid() {
-    setState(() {
-      _gridMode = switch (_gridMode) {
-        GridMode.off => GridMode.margins,
-        GridMode.margins => GridMode.grid8,
-        GridMode.grid8 => GridMode.grid16,
-        GridMode.grid16 => GridMode.crosshair,
-        GridMode.crosshair => GridMode.off,
-      };
-    });
-  }
 
   @override
   void initState() {
     super.initState();
-    _isExpanded = widget.expandedByDefault;
+    _ctrl.addListener(_onMonitorControllerChanged);
     _manageListening();
   }
 
@@ -80,6 +68,7 @@ class _FpsOverlayState extends State<FpsOverlay>
 
   @override
   void dispose() {
+    _ctrl.removeListener(_onMonitorControllerChanged);
     _ticker?.dispose();
     if (_isListening) {
       SchedulerBinding.instance.removeTimingsCallback(_onTimings);
@@ -87,8 +76,13 @@ class _FpsOverlayState extends State<FpsOverlay>
     super.dispose();
   }
 
+  void _onMonitorControllerChanged() {
+    _manageListening();
+  }
+
   void _manageListening() {
-    if (widget.isShowing && !_isListening) {
+    final bool shouldListen = widget.isShowing && !_ctrl.isDashboardOpen;
+    if (shouldListen && !_isListening) {
       _isListening = true;
       SchedulerBinding.instance.addTimingsCallback(_onTimings);
       if (_ticker == null) {
@@ -96,9 +90,15 @@ class _FpsOverlayState extends State<FpsOverlay>
       } else {
         _ticker!.start();
       }
-    } else if (!widget.isShowing && _isListening) {
+    } else if (!shouldListen && _isListening) {
       _isListening = false;
-      _isExpanded = false;
+      if (!widget.isShowing) {
+        _overlayCtrl.collapse(
+          MediaQuery.of(context).size.width,
+          OverlayLayout.pillW,
+          OverlayLayout.edgeMargin,
+        );
+      }
       SchedulerBinding.instance.removeTimingsCallback(_onTimings);
       _ticker?.stop();
       _vsyncHistory.clear();
@@ -130,7 +130,6 @@ class _FpsOverlayState extends State<FpsOverlay>
           microseconds: t.timestampInMicroseconds(FramePhase.buildStart)));
       final buildUs = t.buildDuration.inMicroseconds;
       final rasterUs = t.rasterDuration.inMicroseconds;
-      // Count frames that exceed 16.67ms budget (60fps threshold)
       if (buildUs + rasterUs > 16667) {
         _ctrl.recordJankFrame();
       }
@@ -170,21 +169,20 @@ class _FpsOverlayState extends State<FpsOverlay>
     _timingBatchCount = 0;
   }
 
-  void _onExpandPanel() => setState(() => _isExpanded = true);
+  void _onExpandPanel() => _overlayCtrl.expand();
 
   void _onCollapse() {
-    final sw = MediaQuery.of(context).size.width;
-    setState(() {
-      _isExpanded = false;
-      _left = sw - OverlayLayout.pillW - OverlayLayout.edgeMargin;
-    });
+    _overlayCtrl.collapse(
+      MediaQuery.of(context).size.width,
+      OverlayLayout.pillW,
+      OverlayLayout.edgeMargin,
+    );
   }
 
   void _onOpenDashboard() {
     final nav = MonitorNavigatorObserver.navigatorState;
     if (nav == null) return;
-    if (MonitorNavigatorObserver.currentRoute ==
-        MonitorConstants.dashboardRoute) {
+    if (_ctrl.isDashboardOpen) {
       return;
     }
     final route = MonitorNavigatorObserver.currentRoute;
@@ -193,976 +191,212 @@ class _FpsOverlayState extends State<FpsOverlay>
           initialScreen: route.isEmpty ? '/unknown' : route),
       settings: const RouteSettings(name: '/MonitorDashboardPage'),
     ));
-    if (mounted) {
-      setState(() {
-        _isExpanded = false;
-        _top = MediaQuery.of(context).padding.top + 60;
-      });
-    }
   }
 
   void _onClearData() {
     _ctrl.clearAll();
   }
 
+  void _onToggleGrid() => _overlayCtrl.toggleGrid();
+
   @override
   Widget build(BuildContext context) {
     if (!widget.isShowing) return widget.child;
 
-    if (!_positionInit) {
-      final size = MediaQuery.of(context).size;
-      final padding = MediaQuery.of(context).padding;
-      _top = padding.top + OverlayLayout.edgeMargin;
-      _left = size.width - OverlayLayout.pillW - OverlayLayout.edgeMargin;
-      _positionInit = true;
-    }
+    return ListenableBuilder(
+      listenable: _overlayCtrl,
+      builder: (context, _) {
+        if (!_overlayCtrl.isInitialized) {
+          return widget.child;
+        }
 
-    final mq = MediaQuery.of(context);
-    final sw = mq.size.width;
-    final sh = mq.size.height;
-    final pad = mq.padding;
-    final w = _isExpanded ? OverlayLayout.expandedW : OverlayLayout.pillW;
-    final h = _isExpanded ? OverlayLayout.expandedH : OverlayLayout.pillH;
-    final minLeft = OverlayLayout.edgeMargin;
-    final maxLeft = sw - w - OverlayLayout.edgeMargin;
-    final minTop = pad.top + OverlayLayout.edgeMargin;
-    final maxTop = sh - pad.bottom - h - OverlayLayout.edgeMargin;
+        final state = _overlayCtrl.state;
 
-    _left = (_left ?? minLeft).clamp(minLeft, maxLeft.clamp(minLeft, sw - w));
-    _top = (_top ?? minTop).clamp(minTop, maxTop.clamp(minTop, sh));
+        // Initializing position if not set
+        if (!state.positionInit) {
+          final size = MediaQuery.of(context).size;
+          final padding = MediaQuery.of(context).padding;
+          final top = padding.top + OverlayLayout.edgeMargin;
+          final left =
+              size.width - OverlayLayout.pillW - OverlayLayout.edgeMargin;
 
-    return Stack(
-      children: [
-        widget.child,
-        if (_gridMode != GridMode.off)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: ListenableBuilder(
-                listenable: MonitorColors.isDarkNotifier,
-                builder: (context, _) {
-                  return CustomPaint(
-                    painter: _GridPainter(
-                      mode: _gridMode,
-                      isDark: MonitorColors.isDark,
-                      padding: pad,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        Positioned(
-          top: _top,
-          left: _left,
-          child: GestureDetector(
-            onPanUpdate: (d) {
-              final mq = MediaQuery.of(context);
-              final sw = mq.size.width;
-              final sh = mq.size.height;
-              final pad = mq.padding;
-              final w =
-                  _isExpanded ? OverlayLayout.expandedW : OverlayLayout.pillW;
-              final h =
-                  _isExpanded ? OverlayLayout.expandedH : OverlayLayout.pillH;
-              setState(() {
-                _top = ((_top ?? 0) + d.delta.dy).clamp(
-                  pad.top + OverlayLayout.edgeMargin,
-                  sh - pad.bottom - h - OverlayLayout.edgeMargin,
-                );
-                _left = ((_left ?? 0) + d.delta.dx).clamp(
-                  OverlayLayout.edgeMargin,
-                  sw - w - OverlayLayout.edgeMargin,
-                );
-              });
-            },
-            onTap: _isExpanded ? _onCollapse : _onOpenDashboard,
-            onLongPress: _isExpanded ? null : _onExpandPanel,
-            child: _isExpanded
-                ? _DetailsPanel(
-                    onCollapse: _onCollapse,
-                    onHide: widget.onHide,
-                    onOpenDashboard: _onOpenDashboard,
-                    onClear: _onClearData,
-                    gridMode: _gridMode,
-                    onToggleGrid: _onToggleGrid,
-                  )
-                : const _PillBadge(),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Collapsed pill badge ─────────────────────────────────────────────────────
-
-class _PillBadge extends StatefulWidget {
-  const _PillBadge();
-
-  @override
-  State<_PillBadge> createState() => _PillBadgeState();
-}
-
-class _PillBadgeState extends State<_PillBadge>
-    with SingleTickerProviderStateMixin {
-  static bool _hintShown = false;
-
-  late final AnimationController _hintCtrl;
-  late final Animation<double> _hintAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _hintCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _hintAnim = CurvedAnimation(parent: _hintCtrl, curve: Curves.easeInOut);
-
-    if (!_hintShown) {
-      _hintShown = true;
-      Future.delayed(const Duration(seconds: 1), () {
-        if (!mounted) return;
-        _hintCtrl.forward().then((_) {
-          Future.delayed(const Duration(milliseconds: 2500), () {
-            if (mounted) _hintCtrl.reverse();
+          // Let initialization defer so it doesn't trigger build locks
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _overlayCtrl.initializePosition(top, left);
           });
-        });
-      });
-    }
-  }
+        }
 
-  @override
-  void dispose() {
-    _hintCtrl.dispose();
-    super.dispose();
-  }
+        final mq = MediaQuery.of(context);
+        final sw = mq.size.width;
+        final sh = mq.size.height;
+        final pad = mq.padding;
 
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: ListenableBuilder(
-        listenable: MonitorController.instance,
-        builder: (context, _) {
-          final ctrl = MonitorController.instance;
-          final fps = ctrl.currentFps;
-          final memMb = ctrl.currentRam;
-          final apiCount = ctrl.currentPhaseApiCount;
-          final jankCount = ctrl.jankFrameCount;
-          final pingMs = ctrl.currentPingMs;
-          final jank = fps < 50 && fps > 0;
-          final fpsColor =
-              jank ? MonitorColors.overlayAlert : MonitorColors.overlayFps;
-          final pingColor = pingMs == null
-              ? Colors.white24
-              : pingMs < 50
-                  ? MonitorColors.overlayFps
-                  : pingMs < 150
-                      ? MonitorColors.overlayBuild
-                      : MonitorColors.overlayAlert;
+        final isExpanded = state.isExpanded;
+        final isTucked = state.isTucked;
+        final tuckedLeft = state.tuckedLeft;
+        final gridMode = state.gridMode;
 
-          final apiErr = ctrl.globalApiErrorCount;
-          final flutterErr = ctrl.flutterErrorCount;
-          final totalErr = apiErr + flutterErr;
-          final slowApi = ctrl.globalSlowApiCount;
+        final w = isExpanded ? OverlayLayout.expandedW : OverlayLayout.pillW;
+        final h = isExpanded ? OverlayLayout.expandedH : OverlayLayout.pillH;
+        final minLeft = OverlayLayout.edgeMargin;
+        final maxLeft = sw - w - OverlayLayout.edgeMargin;
+        final minTop = pad.top + OverlayLayout.edgeMargin;
+        final maxTop = sh - pad.bottom - h - OverlayLayout.edgeMargin;
 
-          final hasError = totalErr > 0;
-          final hasSlow = slowApi > 0;
-          final showAlert = (hasError || hasSlow) && !ctrl.alertsDismissed;
-          final alertColor = hasError
-              ? MonitorColors.overlayAlert
-              : MonitorColors.overlayBuild;
+        double currentLeft = state.left ?? minLeft;
+        double currentTop = state.top ?? minTop;
 
-          const TextStyle lblStyle = TextStyle(
-            fontSize: 7,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'monospace',
-            height: 1.2,
-          );
-          const TextStyle valStyle = TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w800,
-            fontFamily: 'monospace',
-            height: 1.2,
-          );
+        if (!isTucked) {
+          final double safeMaxTop = maxTop < minTop ? minTop : maxTop;
+          
+          if (isExpanded) {
+            final double safeMaxLeft = maxLeft < minLeft ? minLeft : maxLeft;
+            currentLeft = currentLeft.clamp(minLeft, safeMaxLeft);
+            currentTop = currentTop.clamp(minTop, safeMaxTop);
+          } else {
+            // During drag of the small pill, allow it to go slightly offscreen to trigger tucking.
+            final minLeftDrag = -w * 0.5;
+            final maxLeftDragDrag = sw - w * 0.5;
+            final double safeMaxLeftDrag = maxLeftDragDrag < minLeftDrag ? minLeftDrag : maxLeftDragDrag;
+            
+            currentLeft = currentLeft.clamp(minLeftDrag, safeMaxLeftDrag);
+            currentTop = currentTop.clamp(minTop, safeMaxTop);
+          }
+        }
 
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(
-                  color: MonitorColors.overlayBg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                      color: showAlert
-                          ? alertColor.withValues(alpha: 0.65)
-                          : fpsColor.withValues(alpha: 0.45),
-                      width: 0.8),
-                  boxShadow: [
-                    BoxShadow(
-                        color: showAlert
-                            ? alertColor.withValues(alpha: 0.25)
-                            : fpsColor.withValues(alpha: 0.15),
-                        blurRadius: 6),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        return Stack(
+          children: [
+            widget.child,
+            ListenableBuilder(
+              listenable: _ctrl,
+              builder: (context, _) {
+                if (_ctrl.isDashboardOpen) {
+                  return const SizedBox.shrink();
+                }
+
+                return Stack(
                   children: [
-                    // ── FPS ──────────────────────────────────────────
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Container(
-                          width: 5,
-                          height: 5,
-                          margin: const EdgeInsets.only(bottom: 1),
-                          decoration: BoxDecoration(
-                              color: fpsColor, shape: BoxShape.circle),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(fps.toStringAsFixed(1),
-                            style: TextStyle(
-                                color: fpsColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'monospace',
-                                height: 1.1)),
-                        const SizedBox(width: 2),
-                        Text('fps',
-                            style: TextStyle(
-                                color: fpsColor.withValues(alpha: 0.6),
-                                fontSize: 8,
-                                fontFamily: 'monospace',
-                                height: 1.1)),
-                        if (jankCount > 0) ...[
-                          const SizedBox(width: 5),
-                          Text('⚡$jankCount',
-                              style: const TextStyle(
-                                  color: MonitorColors.overlayGpu,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w700,
-                                  fontFamily: 'monospace',
-                                  height: 1.1)),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    // ── API + MEM ────────────────────────────────────
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('API ',
-                            style: lblStyle.copyWith(color: MonitorColors.overlayApi)),
-                        Text('$apiCount',
-                            style: valStyle.copyWith(color: MonitorColors.overlayApi)),
-                        const SizedBox(width: 6),
-                        Text('MEM ',
-                            style: lblStyle.copyWith(color: MonitorColors.overlayMem)),
-                        Text('${memMb.toStringAsFixed(0)}M',
-                            style: valStyle.copyWith(color: MonitorColors.overlayMem)),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    // ── NET ──────────────────────────────────────────
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('NET ', style: lblStyle.copyWith(color: pingColor)),
-                        Text(pingMs == null ? '--' : '${pingMs}ms',
-                            style: valStyle.copyWith(color: pingColor)),
-                      ],
-                    ),
-                    SizeTransition(
-                      sizeFactor: _hintAnim,
-                      axisAlignment: 1,
-                      child: FadeTransition(
-                        opacity: _hintAnim,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.touch_app_outlined,
-                                  size: 9, color: Colors.white54),
-                              SizedBox(width: 4),
-                              Text('hold to open',
-                                  style: TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 7,
-                                    fontFamily: 'monospace',
-                                    height: 1.2,
-                                  )),
-                            ],
+                    if (gridMode != GridMode.off)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: ListenableBuilder(
+                            listenable: MonitorColors.isDarkNotifier,
+                            builder: (context, _) {
+                              return CustomPaint(
+                                painter: FpsOverlayGridPainter(
+                                  mode: gridMode,
+                                  isDark: MonitorColors.isDark,
+                                  padding: pad,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              if (showAlert)
-                Positioned(
-                  top: -4,
-                  right: -4,
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: alertColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: MonitorColors.overlayBg, width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: alertColor.withValues(alpha: 0.5),
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: const Text(
-                      '!',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        fontFamily: 'monospace',
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
+                    Positioned(
+                      top: currentTop,
+                      left: currentLeft,
+                      child: GestureDetector(
+                        onPanUpdate: (d) {
+                          if (isTucked) {
+                            final double currentX = d.globalPosition.dx;
+                            const double pullThreshold = 45.0;
 
-// ─── Expanded details panel ───────────────────────────────────────────────────
+                            bool shouldUntuck = false;
+                            if (tuckedLeft) {
+                              if (currentX > pullThreshold) {
+                                shouldUntuck = true;
+                              }
+                            } else {
+                              if (currentX < sw - pullThreshold) {
+                                shouldUntuck = true;
+                              }
+                            }
 
-class _DetailsPanel extends StatelessWidget {
-  final VoidCallback onCollapse;
-  final VoidCallback? onHide;
-  final VoidCallback onOpenDashboard;
-  final VoidCallback onClear;
-  final GridMode gridMode;
-  final VoidCallback onToggleGrid;
+                            if (shouldUntuck) {
+                              _overlayCtrl.untuck(
+                                sw,
+                                OverlayLayout.pillW,
+                                OverlayLayout.expandedW,
+                                OverlayLayout.edgeMargin,
+                                dragX: currentX,
+                              );
+                            } else {
+                              final double nextTop = (currentTop + d.delta.dy).clamp(
+                                pad.top + OverlayLayout.edgeMargin,
+                                sh - pad.bottom - 48.0 - OverlayLayout.edgeMargin,
+                              );
+                              _overlayCtrl.updatePosition(nextTop, currentLeft);
+                            }
+                            return;
+                          }
 
-  const _DetailsPanel({
-    required this.onCollapse,
-    this.onHide,
-    required this.onOpenDashboard,
-    required this.onClear,
-    required this.gridMode,
-    required this.onToggleGrid,
-  });
+                          final double nextTop = (currentTop + d.delta.dy).clamp(
+                            pad.top + OverlayLayout.edgeMargin,
+                            sh - pad.bottom - h - OverlayLayout.edgeMargin,
+                          );
+                          final minLeftDrag = -w * 0.5;
+                          final maxLeftDrag = sw - w * 0.5;
+                          final double nextLeft =
+                              (currentLeft + d.delta.dx).clamp(minLeftDrag, maxLeftDrag);
 
-  static const _cFps = MonitorColors.overlayFps;
-  static const _cJank = MonitorColors.overlayAlert;
-  static const _cGpu = MonitorColors.overlayGpu;
-  static const _cBuild = MonitorColors.overlayBuild;
-  static const _cMem = MonitorColors.overlayMem;
-  static const _cApi = MonitorColors.overlayApi;
+                          _overlayCtrl.updatePosition(nextTop, nextLeft);
+                        },
+                        onPanEnd: (details) {
+                          if (isTucked) {
+                            _overlayCtrl.finalizePosition(currentTop, currentLeft);
+                            return;
+                          }
 
-  @override
-  Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    final dpr = mq.devicePixelRatio;
-    final physW = (mq.size.width * dpr).round();
-    final physH = (mq.size.height * dpr).round();
-    final ctrl = MonitorController.instance;
-    final rawModel = ctrl.deviceModel.isNotEmpty
-        ? ctrl.deviceModel
-        : (Platform.isIOS ? 'iPhone' : 'Android');
-    final parts = rawModel.split(' • ');
-    final deviceName = parts.first;
-    final osVersion = parts.length > 1 ? parts.last : '';
-
-    double hz = 60.0;
-    try {
-      hz = View.of(context).display.refreshRate;
-    } catch (_) {}
-
-    return Material(
-      color: Colors.transparent,
-      child: ListenableBuilder(
-        listenable: Listenable.merge([ctrl, MonitorColors.isDarkNotifier]),
-        builder: (context, _) {
-          final fps = ctrl.currentFps;
-          final buildMs = ctrl.currentBuildMs;
-          final gpuMs = ctrl.currentGpuMs;
-          final memMb = ctrl.currentRam;
-          final apiCount = ctrl.currentPhaseApiCount;
-          final pingMs = ctrl.currentPingMs;
-
-          final apiErr = ctrl.globalApiErrorCount;
-          final flutterErr = ctrl.flutterErrorCount;
-          final slowApi = ctrl.globalSlowApiCount;
-
-          final fpsHist = List<double>.from(ctrl.overlayFpsHistory);
-          final gpuHist = List<double>.from(ctrl.overlayGpuHistory);
-          final buildHist = List<double>.from(ctrl.overlayBuildHistory);
-
-          final jank = fps < 50 && fps > 0;
-
-          // Theme-aware colors
-          final dark = MonitorColors.isDark;
-
-          // Panel structure
-          final panelBg =
-              dark ? const Color(0xFF0D0D0D) : const Color(0xFFF1F5F9);
-          final panelBorderColor = dark
-              ? Colors.white.withValues(alpha: 0.12)
-              : const Color(0xFFCBD5E1);
-          final panelBorderW = dark ? 0.5 : 1.0;
-          final panelShadow = dark
-              ? <BoxShadow>[]
-              : [
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.10),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3))
-                ];
-
-          // Text
-          final infoTxt = dark
-              ? Colors.white.withValues(alpha: 0.70)
-              : const Color(0xFF334155);
-          final subtleTxt = dark
-              ? Colors.white.withValues(alpha: 0.35)
-              : const Color(0xFF94A3B8);
-          final divColor = dark
-              ? Colors.white.withValues(alpha: 0.20)
-              : const Color(0xFFE2E8F0);
-          final btnIconColor = dark
-              ? Colors.white.withValues(alpha: 0.80)
-              : const Color(0xFF475569);
-
-          final IconData gridIcon = switch (gridMode) {
-            GridMode.off => Icons.grid_off_outlined,
-            GridMode.grid8 => Icons.grid_on_outlined,
-            GridMode.grid16 => Icons.grid_4x4_outlined,
-            GridMode.crosshair => Icons.center_focus_strong,
-            GridMode.margins => Icons.filter_frames_outlined,
-          };
-          final Color gridIconColor = gridMode == GridMode.off
-              ? btnIconColor
-              : (dark ? const Color(0xFF22D3EE) : const Color(0xFF0891B2));
-          final Color? gridBorderColor = gridMode == GridMode.off
-              ? null
-              : (dark
-                  ? const Color(0xFF22D3EE).withValues(alpha: 0.40)
-                  : const Color(0xFF0891B2).withValues(alpha: 0.40));
-
-          // Metric accent colors — darker variants in light mode for readability
-          final mFps = dark ? _cFps : const Color(0xFF16A34A);
-          final mJank = dark ? _cJank : const Color(0xFFDC2626);
-          final mGpu = dark ? _cGpu : const Color(0xFFEA580C);
-          final mBuild = dark ? _cBuild : const Color(0xFFD97706);
-          final mMem = dark ? _cMem : const Color(0xFFDB2777);
-          final mApi = dark ? _cApi : const Color(0xFF2563EB);
-          final mFpsActive = jank ? mJank : mFps;
-
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 210,
-                decoration: BoxDecoration(
-                  color: panelBg,
-                  borderRadius: BorderRadius.circular(6),
-                  border:
-                      Border.all(color: panelBorderColor, width: panelBorderW),
-                  boxShadow: panelShadow,
-                ),
-                padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Row 1: device name + resolution
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            deviceName,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: infoTxt,
-                                fontSize: 9,
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.w700,
-                                height: 1.2),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '[$physW×$physH]',
-                          style: TextStyle(
-                              color: subtleTxt,
-                              fontSize: 8,
-                              fontFamily: 'monospace',
-                              height: 1.2),
-                        ),
-                      ],
-                    ),
-                    // Row 2: OS version + DPR / Hz
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (osVersion.isNotEmpty)
-                          Flexible(
-                            child: Text(
-                              osVersion,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  color: subtleTxt,
-                                  fontSize: 8,
-                                  fontFamily: 'monospace',
-                                  height: 1.2),
-                            ),
-                          ),
-                        const Spacer(),
-                        Text(
-                          '${dpr.toStringAsFixed(1)}x  ${hz.round()}Hz',
-                          style: TextStyle(
-                              color: subtleTxt,
-                              fontSize: 8,
-                              fontFamily: 'monospace',
-                              height: 1.2),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Container(height: 0.5, color: divColor),
-                    const SizedBox(height: 4),
-                    _metricRow('Pre', '${buildMs.toStringAsFixed(2)}ms', mBuild,
-                        buildHist, 2),
-                    _metricRow('GPU', '${gpuMs.toStringAsFixed(2)}ms', mGpu,
-                        gpuHist, 2),
-                    _metricRow(
-                        'Mem', '${memMb.toStringAsFixed(1)}MB', mMem, [], 1),
-                    (() {
-                      final List<String> alerts = [];
-                      if (apiErr > 0) alerts.add('${apiErr}e');
-                      if (slowApi > 0) alerts.add('${slowApi}s');
-                      final alertText = alerts.isNotEmpty ? ' (⚠️ ${alerts.join('·')})' : '';
-                      return _metricRow('API', '$apiCount calls$alertText', mApi, [], 0);
-                    })(),
-                    if (flutterErr > 0)
-                      _metricRow('ERR', '$flutterErr errors', mJank, [], 0),
-                    _metricRow(
-                        'NET',
-                        pingMs == null ? '--' : '${pingMs}ms',
-                        pingMs == null
-                            ? subtleTxt
-                            : pingMs < 50
-                                ? mFps
-                                : pingMs < 150
-                                    ? mBuild
-                                    : mJank,
-                        [],
-                        0),
-                    _metricRow(
-                        'FPS', fps.toStringAsFixed(2), mFpsActive, fpsHist, 2),
-                    const SizedBox(height: 4),
-                    Container(height: 0.5, color: divColor),
-                    const SizedBox(height: 3),
-                    SizedBox(
-                      height: 28,
-                      width: double.infinity,
-                      child: CustomPaint(
-                        painter: _SparklinePainter(
-                          fpsHistory: fpsHist,
-                          gpuHistory: gpuHist,
-                          maxFps: hz,
-                          isDark: dark,
-                        ),
+                          // Only tuck if dragged intentionally deep into the edge (at least 25% offscreen)
+                          if (currentLeft < -w * 0.25) {
+                            _overlayCtrl.tuck(true, sw, 18.0);
+                          } else if (currentLeft + w > sw + w * 0.25) {
+                            _overlayCtrl.tuck(false, sw, 18.0);
+                          } else {
+                            final center = currentLeft + w / 2;
+                            final double snapLeft = center < sw / 2
+                                ? OverlayLayout.edgeMargin
+                                : sw - w - OverlayLayout.edgeMargin;
+                            _overlayCtrl.finalizePosition(currentTop, snapLeft);
+                          }
+                        },
+                        onTap: () {
+                          if (isTucked) {
+                            _overlayCtrl.untuck(
+                              sw,
+                              OverlayLayout.pillW,
+                              OverlayLayout.expandedW,
+                              OverlayLayout.edgeMargin,
+                            );
+                          } else {
+                            if (!isExpanded) {
+                              _onOpenDashboard();
+                            }
+                          }
+                        },
+                        onLongPress: (isExpanded || isTucked) ? null : _onExpandPanel,
+                        child: isExpanded
+                            ? FpsOverlayDetailsPanel(
+                                onCollapse: _onCollapse,
+                                onHide: widget.onHide,
+                                onOpenDashboard: _onOpenDashboard,
+                                onClear: _onClearData,
+                                gridMode: gridMode,
+                                onToggleGrid: _onToggleGrid,
+                              )
+                            : isTucked
+                                ? FpsOverlayTuckedHandle(tuckedLeft: tuckedLeft)
+                                : const FpsOverlayPillBadge(),
                       ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ActionButton(
-                      onTap: onCollapse,
-                      icon: Icons.close_fullscreen,
-                      iconColor: btnIconColor),
-                  const SizedBox(height: 10),
-                  _ActionButton(
-                      onTap: onToggleGrid,
-                      icon: gridIcon,
-                      iconColor: gridIconColor,
-                      borderColor: gridBorderColor),
-                  const SizedBox(height: 10),
-                  if (onHide != null) ...[
-                    _ActionButton(
-                        onTap: onHide!,
-                        icon: Icons.close,
-                        iconColor:
-                            const Color(0xFFFF5555).withValues(alpha: 0.80),
-                        borderColor:
-                            const Color(0xFFFF5555).withValues(alpha: 0.30)),
-                    const SizedBox(height: 10),
-                  ],
-                  if (MonitorNavigatorObserver.currentRoute !=
-                      MonitorConstants.dashboardRoute) ...[
-                    _ActionButton(
-                        onTap: onOpenDashboard,
-                        icon: Icons.fullscreen_exit_rounded,
-                        iconColor: btnIconColor),
-                    const SizedBox(height: 10),
-                  ],
-                  _ActionButton(
-                      onTap: onClear,
-                      icon: Icons.restart_alt,
-                      iconColor: MonitorColors.statusError,
-                      borderColor:
-                          MonitorColors.statusError.withValues(alpha: 0.30)),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  static Widget _metricRow(String label, String value, Color color,
-      List<double> history, int decimals) {
-    final range = _rangeStr(history, decimals);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1.0),
-      child: Row(
-        children: [
-          Text('$label: ',
-              style: TextStyle(
-                  color: color,
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w600,
-                  height: 1.2)),
-          Text(value,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w700,
-                  height: 1.2)),
-          if (range.isNotEmpty) ...[
-            const Spacer(),
-            Text(range,
-                style: TextStyle(
-                    color: color.withValues(alpha: 0.65),
-                    fontSize: 9,
-                    fontFamily: 'monospace',
-                    height: 1.2)),
+                );
+              },
+            ),
           ],
-        ],
-      ),
+        );
+      },
     );
   }
-
-  static String _rangeStr(List<double> h, int decimals) {
-    if (h.length < 2) return '';
-    final mn = h.reduce((a, b) => a < b ? a : b).toStringAsFixed(decimals);
-    final mx = h.reduce((a, b) => a > b ? a : b).toStringAsFixed(decimals);
-    return '[$mn $mx]';
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final VoidCallback onTap;
-  final IconData icon;
-  final Color iconColor;
-  final Color? borderColor;
-
-  const _ActionButton(
-      {required this.onTap,
-      required this.icon,
-      required this.iconColor,
-      this.borderColor});
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = MonitorColors.isDark;
-    final bg = dark ? const Color(0xFF1A1A1A) : MonitorColors.surface;
-    final defaultBorder =
-        dark ? Colors.white.withValues(alpha: 0.15) : MonitorColors.border;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: borderColor ?? defaultBorder,
-            width: 0.5,
-          ),
-        ),
-        child: Icon(icon, size: 17, color: iconColor),
-      ),
-    );
-  }
-}
-
-// ─── Sparkline ────────────────────────────────────────────────────────────────
-
-class _SparklinePainter extends CustomPainter {
-  final List<double> fpsHistory;
-  final List<double> gpuHistory;
-  final double maxFps;
-  final bool isDark;
-
-  const _SparklinePainter({
-    required this.fpsHistory,
-    required this.gpuHistory,
-    required this.maxFps,
-    required this.isDark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final refY = (1 - (60.0 / maxFps).clamp(0.0, 1.0)) * size.height;
-    canvas.drawLine(
-      Offset(0, refY),
-      Offset(size.width, refY),
-      Paint()
-        ..color =
-            isDark ? Colors.white.withValues(alpha: 0.06) : MonitorColors.border
-        ..strokeWidth = 0.5,
-    );
-    _drawFilled(canvas, size, fpsHistory, maxFps, const Color(0xFF4ADE80),
-        highIsGood: true);
-    _drawLine(canvas, size, gpuHistory, 33.3, const Color(0xFFFB923C),
-        highIsGood: true);
-  }
-
-  void _drawFilled(
-      Canvas canvas, Size size, List<double> data, double maxVal, Color color,
-      {required bool highIsGood}) {
-    if (data.length < 2) return;
-    final n = data.length;
-    final stepX = size.width / (n - 1);
-    final stroke = Path();
-    for (int i = 0; i < n; i++) {
-      final x = i * stepX;
-      final ratio = (data[i] / maxVal).clamp(0.0, 1.0);
-      final y = highIsGood ? (1 - ratio) * size.height : ratio * size.height;
-      i == 0 ? stroke.moveTo(x, y) : stroke.lineTo(x, y);
-    }
-    final fill = Path.from(stroke);
-    fill.lineTo((n - 1) * stepX, size.height);
-    fill.lineTo(0, size.height);
-    fill.close();
-    canvas.drawPath(
-        fill,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              color.withValues(alpha: 0.28),
-              color.withValues(alpha: 0.0)
-            ],
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)));
-    canvas.drawPath(
-        stroke,
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round);
-  }
-
-  void _drawLine(
-      Canvas canvas, Size size, List<double> data, double maxVal, Color color,
-      {required bool highIsGood}) {
-    if (data.length < 2) return;
-    final n = data.length;
-    final stepX = size.width / (n - 1);
-    final path = Path();
-    for (int i = 0; i < n; i++) {
-      final x = i * stepX;
-      final ratio = (data[i] / maxVal).clamp(0.0, 1.0);
-      final y = highIsGood ? (1 - ratio) * size.height : ratio * size.height;
-      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
-    }
-    canvas.drawPath(
-        path,
-        Paint()
-          ..color = color.withValues(alpha: 0.85)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SparklinePainter old) =>
-      old.isDark != isDark ||
-      old.fpsHistory.length != fpsHistory.length ||
-      (fpsHistory.isNotEmpty &&
-          old.fpsHistory.isNotEmpty &&
-          old.fpsHistory.last != fpsHistory.last);
-}
-
-// ─── Grid Mode and Painter ───────────────────────────────────────────────────
-
-enum GridMode { off, grid8, grid16, crosshair, margins }
-
-class _GridPainter extends CustomPainter {
-  final GridMode mode;
-  final bool isDark;
-  final EdgeInsets? padding;
-
-  const _GridPainter({required this.mode, required this.isDark, this.padding});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (mode == GridMode.off) return;
-
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
-
-    // Use high-contrast blue/cyan colors that stand out on white/black backgrounds
-    final Color baseColor = isDark
-        ? const Color(0xFF22D3EE) // Cyan accent
-        : const Color(0xFF0284C7); // Light Blue accent
-
-    final Color mainLineColor = baseColor.withValues(alpha: 0.35);
-    final Color majorLineColor = baseColor.withValues(alpha: 0.70);
-
-    if (mode == GridMode.grid8 || mode == GridMode.grid16) {
-      final double spacing = mode == GridMode.grid8 ? 8.0 : 16.0;
-
-      // Draw vertical lines
-      for (double x = 0.0; x < size.width; x += spacing) {
-        final int lineIndex = (x / spacing).round();
-        final isMajor = lineIndex % 5 == 0;
-        paint.color = isMajor ? majorLineColor : mainLineColor;
-        paint.strokeWidth = isMajor ? 1.5 : 0.8;
-        canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-      }
-
-      // Draw horizontal lines
-      for (double y = 0.0; y < size.height; y += spacing) {
-        final int lineIndex = (y / spacing).round();
-        final isMajor = lineIndex % 5 == 0;
-        paint.color = isMajor ? majorLineColor : mainLineColor;
-        paint.strokeWidth = isMajor ? 1.5 : 0.8;
-        canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-      }
-    } else if (mode == GridMode.crosshair) {
-      final centerPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0
-        ..color = isDark ? const Color(0xFF22D3EE) : const Color(0xFF0891B2);
-
-      final centerX = size.width / 2;
-      final centerY = size.height / 2;
-
-      // Draw center cross
-      canvas.drawLine(Offset(centerX, 0), Offset(centerX, size.height), centerPaint);
-      canvas.drawLine(Offset(0, centerY), Offset(size.width, centerY), centerPaint);
-
-      // Draw 25% / 75% reference lines
-      final dashPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color = baseColor.withValues(alpha: 0.50);
-
-      canvas.drawLine(Offset(size.width * 0.25, 0), Offset(size.width * 0.25, size.height), dashPaint);
-      canvas.drawLine(Offset(size.width * 0.75, 0), Offset(size.width * 0.75, size.height), dashPaint);
-      canvas.drawLine(Offset(0, size.height * 0.25), Offset(size.width, size.height * 0.25), dashPaint);
-      canvas.drawLine(Offset(0, size.height * 0.75), Offset(size.width, size.height * 0.75), dashPaint);
-    } else if (mode == GridMode.margins) {
-      final pad = padding ?? EdgeInsets.zero;
-
-      // 16px Margins (Coral Red)
-      final paint16 = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = const Color(0xFFF43F5E);
-
-      // Outer boundary: Left = 16, Right = width - 16
-      canvas.drawLine(Offset(16.0, 0), Offset(16.0, size.height), paint16);
-      canvas.drawLine(Offset(size.width - 16.0, 0), Offset(size.width - 16.0, size.height), paint16);
-
-      // Top boundary (16px below status bar) and Bottom boundary (16px above home indicator)
-      final topY16 = pad.top + 16.0;
-      final bottomY16 = size.height - pad.bottom - 16.0;
-      canvas.drawLine(Offset(0, topY16), Offset(size.width, topY16), paint16);
-      canvas.drawLine(Offset(0, bottomY16), Offset(size.width, bottomY16), paint16);
-
-      // 24px Margins (Cyan / Blue)
-      final paint24 = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = isDark ? const Color(0xFF22D3EE) : const Color(0xFF0284C7);
-
-      // Outer boundary: Left = 24, Right = width - 24
-      canvas.drawLine(Offset(24.0, 0), Offset(24.0, size.height), paint24);
-      canvas.drawLine(Offset(size.width - 24.0, 0), Offset(size.width - 24.0, size.height), paint24);
-
-      // Top boundary (24px below status bar) and Bottom boundary (24px above home indicator)
-      final topY24 = pad.top + 24.0;
-      final bottomY24 = size.height - pad.bottom - 24.0;
-      canvas.drawLine(Offset(0, topY24), Offset(size.width, topY24), paint24);
-      canvas.drawLine(Offset(0, bottomY24), Offset(size.width, bottomY24), paint24);
-
-      // Draw text labels for 16px / 24px near the top-left
-      final textPainter16 = TextPainter(
-        text: const TextSpan(
-          text: ' 16px margin ',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 8,
-            fontWeight: FontWeight.bold,
-            backgroundColor: Color(0xFFF43F5E),
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      
-      final textPainter24 = TextPainter(
-        text: TextSpan(
-          text: ' 24px margin ',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 8,
-            fontWeight: FontWeight.bold,
-            backgroundColor: isDark ? const Color(0xFF0891B2) : const Color(0xFF0284C7),
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      textPainter16.paint(canvas, Offset(16.0, pad.top + 32.0));
-      textPainter24.paint(canvas, Offset(24.0, pad.top + 45.0));
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _GridPainter oldDelegate) =>
-      oldDelegate.mode != mode ||
-      oldDelegate.isDark != isDark ||
-      oldDelegate.padding != padding;
 }

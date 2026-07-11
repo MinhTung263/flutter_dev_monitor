@@ -11,7 +11,17 @@ import 'monitor_text.dart';
 class ApiLogTile extends StatefulWidget {
   final ApiLogItem log;
   final bool showOrder;
-  const ApiLogTile({super.key, required this.log, this.showOrder = true});
+  final bool showScreenBadge;
+  final int? lane;
+  final bool compact;
+  const ApiLogTile({
+    super.key,
+    required this.log,
+    this.showOrder = true,
+    this.showScreenBadge = false,
+    this.lane,
+    this.compact = false,
+  });
 
   @override
   State<ApiLogTile> createState() => _ApiLogTileState();
@@ -20,13 +30,23 @@ class ApiLogTile extends StatefulWidget {
 class _ApiLogTileState extends State<ApiLogTile> {
   bool _expanded = false;
 
+  static const List<Color> _palette = [
+    Color(0xFF4D9EFF), // blue
+    Color(0xFF57D888), // green
+    Color(0xFFE07B39), // orange
+    Color(0xFF9B67EE), // purple
+    Color(0xFF4DCFDE), // cyan
+    Color(0xFFEE6B9E), // pink
+  ];
+
   @override
   Widget build(BuildContext context) {
     final log = widget.log;
     final statusColor = _statusColor(log);
+    final laneColor = widget.lane != null ? _palette[widget.lane! % _palette.length] : null;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 5),
       decoration: BoxDecoration(
         color: MonitorColors.surface,
         borderRadius: BorderRadius.circular(8),
@@ -36,19 +56,46 @@ class _ApiLogTileState extends State<ApiLogTile> {
               : (log.isSuccess
                   ? MonitorColors.border
                   : MonitorColors.statusError.withValues(alpha: 0.35)),
+          width: 1.0,
         ),
       ),
-      child: Column(
-        children: [
-          _CollapsedRow(
-            log: log,
-            statusColor: statusColor,
-            expanded: _expanded,
-            showOrder: widget.showOrder,
-            onTap: () => setState(() => _expanded = !_expanded),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(7),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (laneColor != null)
+                Container(
+                  width: 4.5,
+                  color: laneColor,
+                ),
+              Expanded(
+                child: Column(
+                  children: [
+                    widget.compact
+                        ? _CompactCollapsedRow(
+                            log: log,
+                            statusColor: statusColor,
+                            expanded: _expanded,
+                            onTap: () => setState(() => _expanded = !_expanded),
+                          )
+                        : _CollapsedRow(
+                            log: log,
+                            statusColor: statusColor,
+                            expanded: _expanded,
+                            showOrder: widget.showOrder,
+                            showScreenBadge: widget.showScreenBadge,
+                            lane: widget.lane,
+                            onTap: () => setState(() => _expanded = !_expanded),
+                          ),
+                    if (_expanded) _ExpandedDetail(log: log),
+                  ],
+                ),
+              ),
+            ],
           ),
-          if (_expanded) _ExpandedDetail(log: log),
-        ],
+        ),
       ),
     );
   }
@@ -67,6 +114,8 @@ class _CollapsedRow extends StatelessWidget {
   final Color statusColor;
   final bool expanded;
   final bool showOrder;
+  final bool showScreenBadge;
+  final int? lane;
   final VoidCallback onTap;
 
   const _CollapsedRow({
@@ -74,6 +123,8 @@ class _CollapsedRow extends StatelessWidget {
     required this.statusColor,
     required this.expanded,
     required this.showOrder,
+    required this.showScreenBadge,
+    this.lane,
     required this.onTap,
   });
 
@@ -83,46 +134,265 @@ class _CollapsedRow extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Row 1: Primary API signature (Method + URL path + Duration)
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (showOrder) ...[
-                  _OrderBadge(order: log.orderNumber),
-                  const SizedBox(width: 6),
-                ],
-                _PhaseBadge(phase: log.phase),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: _MethodBadge(method: log.method),
+                ),
                 const SizedBox(width: 6),
-                if (log.hasMultipleCalls) ...[
-                  _CallCountBadge(count: log.callCount),
-                  const SizedBox(width: 6),
-                ],
-                _MethodBadge(method: log.method),
-                const Spacer(),
-                _DurationLabel(
-                    duration: log.duration,
-                    isSlow: log.isSlow,
-                    color: statusColor),
-                const SizedBox(width: 8),
-                Icon(
-                  expanded ? Icons.expand_less : Icons.expand_more,
-                  color: MonitorColors.secondaryText,
-                  size: 16,
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: MonoText(
+                      log.url,
+                      11.5,
+                      color: MonitorColors.primaryText,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: _DurationLabel(
+                      duration: log.duration,
+                      isSlow: log.isSlow,
+                      color: statusColor),
+                ),
+                const SizedBox(width: 6),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => MonitorApiDetailPage(log: log),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 4),
+                      child: Icon(
+                        Icons.open_in_new_rounded,
+                        color: MonitorColors.secondaryText,
+                        size: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    color: MonitorColors.secondaryText,
+                    size: 14,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            MonoText(log.url, 11.5, color: MonitorColors.primaryText, weight: FontWeight.w500, height: 1.3),
-            if (log.hasCallerName) ...[
-              const SizedBox(height: 4),
-              _CallerRow(
-                  callerName: log.callerName,
-                  color: MonitorColors.secondaryText),
+            // Row 2: Screen, Caller, and Call Count Metadata
+            if (showScreenBadge || log.hasCallerName || log.hasMultipleCalls) ...[
+              const SizedBox(height: 5),
+              Row(
+                children: [
+                  if (showScreenBadge) ...[
+                    _ScreenBadge(screen: log.screen, lane: lane),
+                    const SizedBox(width: 6),
+                  ],
+                  if (log.hasMultipleCalls) ...[
+                    _CallCountBadge(count: log.callCount),
+                    const SizedBox(width: 6),
+                  ],
+                  if (log.hasCallerName)
+                    Expanded(
+                      child: _CallerRow(
+                        callerName: log.callerName,
+                        color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CompactCollapsedRow extends StatelessWidget {
+  final ApiLogItem log;
+  final Color statusColor;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  const _CompactCollapsedRow({
+    required this.log,
+    required this.statusColor,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isGet = log.method == 'GET';
+    final methodColor =
+        isGet ? MonitorColors.methodGet : MonitorColors.methodPost;
+
+    // Shorten URL path
+    String displayUrl = log.url;
+    try {
+      final uri = Uri.parse(log.url);
+      displayUrl = uri.path;
+      if (uri.query.isNotEmpty) {
+        displayUrl += '?${uri.query}';
+      }
+    } catch (_) {}
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: Row(
+          children: [
+            // Method Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: methodColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                    color: methodColor.withValues(alpha: 0.3), width: 0.5),
+              ),
+              child: LabelText(
+                log.method,
+                methodColor,
+                size: 7.5,
+                spacing: 0.2,
+              ),
+            ),
+            const SizedBox(width: 6),
+            // URL Path
+            Expanded(
+              child: MonoText(
+                displayUrl,
+                10,
+                color: MonitorColors.primaryText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 6),
+            // Duration
+            MonoText(
+              '${log.duration}ms',
+              9,
+              color: log.duration > 800
+                  ? MonitorColors.statusSlow
+                  : MonitorColors.secondaryText,
+            ),
+            const SizedBox(width: 6),
+            // Status Code
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: MonoText(
+                '${log.statusCode}',
+                8.5,
+                color: statusColor,
+                weight: FontWeight.bold,
+              ),
+            ),
+            if (log.hasMultipleCalls) ...[
+              const SizedBox(width: 4),
+              _CallCountBadge(count: log.callCount),
+            ],
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => MonitorApiDetailPage(log: log),
+                  ),
+                );
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Icon(
+                  Icons.open_in_new_rounded,
+                  color: MonitorColors.secondaryText,
+                  size: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              expanded ? Icons.expand_less : Icons.expand_more,
+              color: MonitorColors.secondaryText,
+              size: 14,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScreenBadge extends StatelessWidget {
+  final String screen;
+  final int? lane;
+  const _ScreenBadge({required this.screen, this.lane});
+
+  static const List<Color> _palette = [
+    Color(0xFF4D9EFF), // blue
+    Color(0xFF57D888), // green
+    Color(0xFFE07B39), // orange
+    Color(0xFF9B67EE), // purple
+    Color(0xFF4DCFDE), // cyan
+    Color(0xFFEE6B9E), // pink
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final title = MonitorController.formatRouteName(screen);
+    final badgeColor = lane != null ? _palette[lane! % _palette.length] : const Color(0xFFA78BFA);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: badgeColor.withValues(alpha: 0.35),
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.layers_outlined, size: 9, color: badgeColor),
+          const SizedBox(width: 3),
+          LabelText(
+            title,
+            badgeColor,
+            size: 7.5,
+            spacing: 0.3,
+          ),
+        ],
       ),
     );
   }
@@ -907,25 +1177,59 @@ class _BodyBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = MonitorColors.isDark;
+    final headerBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+    final bodyBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+    final borderCol = MonitorColors.border.withValues(alpha: 0.8);
+
     return Container(
-      constraints: const BoxConstraints(maxHeight: 220),
       decoration: BoxDecoration(
-        color: MonitorColors.surface,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: MonitorColors.border),
+        color: bodyBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderCol, width: 0.8),
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(10, 8, 38, 8),
-            child: SelectionArea(
-              child: MonoText(text, 10, color: MonitorColors.primaryText, height: 1.55),
+          // Header Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: headerBg,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(7.2),
+                topRight: Radius.circular(7.2),
+              ),
+              border: Border(
+                bottom: BorderSide(color: borderCol, width: 0.8),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                MonoText(
+                  text.trim().startsWith('{') || text.trim().startsWith('[')
+                      ? 'JSON'
+                      : 'TEXT',
+                  9,
+                  color: MonitorColors.secondaryText,
+                  weight: FontWeight.bold,
+                ),
+                _CopyButton(text: text),
+              ],
             ),
           ),
-          Positioned(
-            top: 6,
-            right: 6,
-            child: _CopyButton(text: text),
+          // Code Content
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: SelectionArea(
+              child: MonoText(
+                text,
+                10,
+                color: MonitorColors.primaryText,
+                height: 1.55,
+              ),
+            ),
           ),
         ],
       ),
@@ -955,63 +1259,45 @@ class _CopyButtonState extends State<_CopyButton> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: _copy,
-      child: Container(
-        padding: const EdgeInsets.all(5),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
-          color: MonitorColors.expandedDetailBg,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: MonitorColors.border),
-        ),
-        child: Icon(
-          _copied ? Icons.check_rounded : Icons.copy_rounded,
-          size: 12,
           color: _copied
-              ? MonitorColors.statusSuccess
-              : MonitorColors.secondaryText,
+              ? MonitorColors.statusSuccess.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _copied ? Icons.check_rounded : Icons.copy_rounded,
+              size: 10.5,
+              color: _copied
+                  ? MonitorColors.statusSuccess
+                  : MonitorColors.secondaryText,
+            ),
+            const SizedBox(width: 4),
+            BodyText(
+              _copied ? 'Copied' : 'Copy',
+              9.5,
+              color: _copied
+                  ? MonitorColors.statusSuccess
+                  : MonitorColors.secondaryText,
+              weight: FontWeight.w600,
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ─── Small badge / label widgets ─────────────────────────────────────────────
 
-class _OrderBadge extends StatelessWidget {
-  final int order;
-  const _OrderBadge({required this.order});
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: MonitorColors.orderBadgeBg,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: MonoText('#$order', 9, color: MonitorColors.orderBadgeText, weight: FontWeight.bold),
-    );
-  }
-}
 
-class _PhaseBadge extends StatelessWidget {
-  final String phase;
-  const _PhaseBadge({required this.phase});
-
-  @override
-  Widget build(BuildContext context) {
-    final isRefresh = phase == ApiLogItem.phaseRefresh;
-    final color =
-        isRefresh ? MonitorColors.refreshPhase : MonitorColors.initPhase;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: BodyText(phase, 7, color: color, weight: FontWeight.bold),
-    );
-  }
-}
 
 class _MethodBadge extends StatelessWidget {
   final String method;
@@ -1195,5 +1481,312 @@ class _LogFooter extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+class MonitorApiDetailPage extends StatefulWidget {
+  final ApiLogItem log;
+  const MonitorApiDetailPage({super.key, required this.log});
+
+  @override
+  State<MonitorApiDetailPage> createState() => _MonitorApiDetailPageState();
+}
+
+class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
+  late final ScrollController _scrollController;
+  bool _showUrlInAppBar = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final showUrl = _scrollController.offset > 60.0;
+    if (showUrl != _showUrlInAppBar) {
+      setState(() {
+        _showUrlInAppBar = showUrl;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final log = widget.log;
+    final displayUrl = log.url;
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: MonitorColors.isDarkNotifier,
+      builder: (context, _, __) {
+        final statusColor = _ApiLogTileState._statusColor(log);
+        return Scaffold(
+          backgroundColor: MonitorColors.pageBackground,
+          appBar: AppBar(
+            backgroundColor: MonitorColors.surface,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded,
+                  color: MonitorColors.primaryText, size: 18),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: child,
+                );
+              },
+              child: _showUrlInAppBar
+                  ? Column(
+                      key: const ValueKey('url_title'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MonoText(
+                          displayUrl,
+                          11.5,
+                          color: MonitorColors.primaryText,
+                          weight: FontWeight.bold,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        MonoText(
+                          log.method,
+                          9,
+                          color: log.isSuccess
+                              ? MonitorColors.statusSuccess
+                              : MonitorColors.statusError,
+                          weight: FontWeight.bold,
+                        ),
+                      ],
+                    )
+                  : Column(
+                      key: const ValueKey('default_title'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MonoText(
+                          'API Detail',
+                          14,
+                          color: MonitorColors.primaryText,
+                          weight: FontWeight.bold,
+                        ),
+                        const SizedBox(height: 2),
+                        MonoText(
+                          log.method,
+                          9.5,
+                          color: log.isSuccess
+                              ? MonitorColors.statusSuccess
+                              : MonitorColors.statusError,
+                          weight: FontWeight.bold,
+                        ),
+                      ],
+                    ),
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(
+                color: MonitorColors.border,
+                height: 1,
+              ),
+            ),
+          ),
+          body: SafeArea(
+            bottom: false,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // API Main Info Card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: MonitorColors.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: log.isSlow
+                              ? MonitorColors.statusSlow.withValues(alpha: 0.4)
+                              : (log.isSuccess
+                                  ? MonitorColors.border
+                                  : MonitorColors.statusError.withValues(alpha: 0.35)),
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _MethodBadge(method: log.method),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: SelectionArea(
+                                  child: MonoText(
+                                    log.url,
+                                    11.5,
+                                    color: MonitorColors.primaryText,
+                                    weight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _DurationLabel(
+                                duration: log.duration,
+                                isSlow: log.isSlow,
+                                color: statusColor,
+                              ),
+                            ],
+                          ),
+                          if (log.hasCallerName || log.hasMultipleCalls) ...[
+                            const SizedBox(height: 10),
+                            Container(color: MonitorColors.divider, height: 0.8),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                if (log.hasMultipleCalls) ...[
+                                  _CallCountBadge(count: log.callCount),
+                                  const SizedBox(width: 8),
+                                ],
+                                if (log.hasCallerName)
+                                  Expanded(
+                                    child: _CallerRow(
+                                      callerName: log.callerName,
+                                      color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Detail Tabs Section
+                    Container(
+                      decoration: BoxDecoration(
+                        color: MonitorColors.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: MonitorColors.border,
+                          width: 1.0,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: _DetailTabsSection(log: log),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DetailTabsSection extends StatefulWidget {
+  final ApiLogItem log;
+  const _DetailTabsSection({required this.log});
+
+  @override
+  State<_DetailTabsSection> createState() => _DetailTabsSectionState();
+}
+
+class _DetailTabsSectionState extends State<_DetailTabsSection> {
+  int _tab = 0;
+  static const _tabLabels = ['TIMELINE', 'REQUEST', 'RESPONSE', 'HEADERS'];
+
+  @override
+  Widget build(BuildContext context) {
+    final log = widget.log;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (log.isSlow) _SlowBanner(duration: log.duration),
+        // Tab bar + copy-all button
+        Container(
+          color: MonitorColors.expandedDetailBg,
+          child: Row(
+            children: [
+              Expanded(
+                child: _TabBar(
+                  tabs: _tabLabels,
+                  active: _tab,
+                  onTap: (i) => setState(() => _tab = i),
+                ),
+              ),
+              // Vertical divider
+              Container(
+                width: 1,
+                height: 34,
+                color: MonitorColors.border,
+              ),
+              // Copy-all button
+              GestureDetector(
+                onTap: () => _showCopySheet(context, log),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  height: 34,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.copy_all_rounded,
+                    size: 16,
+                    color: MonitorColors.secondaryText,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(color: MonitorColors.border, height: 1),
+        Container(
+          decoration: BoxDecoration(
+            color: MonitorColors.expandedDetailBg,
+          ),
+          child: _buildContent(log),
+        ),
+      ],
+    );
+  }
+
+  void _showCopySheet(BuildContext context, ApiLogItem log) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _CopyActionsSheet(log: log),
+    );
+  }
+
+  Widget _buildContent(ApiLogItem log) {
+    switch (_tab) {
+      case 0:
+        return _TimelineContent(log: log);
+      case 1:
+        return _RequestContent(log: log);
+      case 2:
+        return _ResponseContent(log: log);
+      case 3:
+        return _HeadersContent(log: log);
+      default:
+        return const SizedBox();
+    }
   }
 }

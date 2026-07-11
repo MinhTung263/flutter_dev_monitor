@@ -24,13 +24,11 @@ class _LogTabHeader extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _TabButton(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: _TabButton(
                   label: 'API',
                   count: apiCount,
                   icon: Icons.api_outlined,
@@ -38,7 +36,9 @@ class _LogTabHeader extends StatelessWidget {
                   activeColor: MonitorColors.metricTotal,
                   onTap: () => onTabChanged(0),
                 ),
-                _TabButton(
+              ),
+              Expanded(
+                child: _TabButton(
                   label: 'ERRORS',
                   count: errorCount,
                   icon: Icons.bug_report_outlined,
@@ -46,7 +46,9 @@ class _LogTabHeader extends StatelessWidget {
                   activeColor: MonitorColors.statusError,
                   onTap: () => onTabChanged(1),
                 ),
-                _TabButton(
+              ),
+              Expanded(
+                child: _TabButton(
                   label: 'ROUTES',
                   count: routeCount,
                   icon: Icons.route_outlined,
@@ -54,8 +56,18 @@ class _LogTabHeader extends StatelessWidget {
                   activeColor: const Color(0xFFA78BFA),
                   onTap: () => onTabChanged(2),
                 ),
-              ],
-            ),
+              ),
+              Expanded(
+                child: _TabButton(
+                  label: 'FLOW',
+                  count: apiCount + routeCount,
+                  icon: Icons.alt_route_rounded,
+                  active: activeTab == 3,
+                  activeColor: const Color(0xFF57D888),
+                  onTap: () => onTabChanged(3),
+                ),
+              ),
+            ],
           ),
           Container(height: 1, color: MonitorColors.divider),
         ],
@@ -86,42 +98,46 @@ class _TabButton extends StatelessWidget {
     final color = active ? activeColor : MonitorColors.secondaryText;
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            child: Row(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 11, color: color),
-                const SizedBox(width: 5),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 12, color: color),
+                    if (count > 0) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                        decoration: BoxDecoration(
+                          color: activeColor.withValues(alpha: active ? 0.18 : 0.07),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: MonoText(
+                          '$count',
+                          8,
+                          color: active ? activeColor : MonitorColors.secondaryText,
+                          weight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 3),
                 LabelText(
                   label,
                   color,
-                  size: 11,
-                  spacing: 0.3,
+                  size: 9,
+                  spacing: 0.2,
                 ),
-                if (count > 0) ...[
-                  const SizedBox(width: 5),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                      color:
-                          activeColor.withValues(alpha: active ? 0.18 : 0.07),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: MonoText(
-                      '$count',
-                      9,
-                      color: active
-                          ? activeColor
-                          : MonitorColors.secondaryText,
-                      weight: FontWeight.bold,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

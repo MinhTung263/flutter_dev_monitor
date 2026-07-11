@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../controller/monitor_controller.dart';
+import '../../navigation/monitor_navigator_observer.dart';
 import '../theme/monitor_theme.dart';
 import '../widgets/api_log_tile.dart';
 import '../../../domain/api_log_item.dart';
@@ -20,7 +23,6 @@ part 'api_log_section.dart';
 part 'error_log_section.dart';
 part 'route_log_section.dart';
 
-/// The full dashboard page for DevMonitor, displaying charts and logs.
 class MonitorDashboardPage extends StatefulWidget {
   /// The route name of the initial screen to view in the dashboard.
   final String initialScreen;
@@ -40,6 +42,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   String _filterMode = 'ALL';
   bool _showHeaders = true;
   String _searchQuery = '';
+  bool _apiOldestFirst = false;
 
   MonitorController get _ctrl => MonitorController.instance;
 
@@ -49,6 +52,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     _selectedScreen = widget.initialScreen;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _ctrl.isDashboardOpen = true;
         _ctrl.updateDashboardView(_selectedScreen);
         _ctrl.dismissAlerts();
       }
@@ -58,6 +62,9 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ctrl.isDashboardOpen = false;
+    });
     MonitorController.instance.removeListener(_onControllerUpdate);
     super.dispose();
   }
@@ -70,7 +77,6 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     setState(() {
       _selectedScreen = screen;
       _filterMode = 'ALL';
-      _activeTab = 0;
       _searchQuery = '';
     });
     _ctrl.updateDashboardView(screen);
@@ -122,7 +128,25 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     final flutterErrors = _selectedScreen == 'ALL'
         ? _ctrl.errorLogs
         : _ctrl.errorLogs.where((e) => e.screen == _selectedScreen).toList();
-    final routeLogs = _ctrl.routeLogs;
+    final List<RouteLogItem> routeLogs;
+    if (_selectedScreen == 'ALL') {
+      routeLogs = _ctrl.routeLogs;
+    } else {
+      final baseRoute = _selectedScreen.contains('/')
+          ? (_selectedScreen.split('/').length > 3
+              ? _selectedScreen
+                  .split('/')
+                  .sublist(0, _selectedScreen.split('/').length - 1)
+                  .join('/')
+              : _selectedScreen)
+          : _selectedScreen;
+
+      final nodes = _buildGitNodes(_ctrl.routeLogs);
+      routeLogs = nodes
+          .where((n) => n.activeStack.contains(baseRoute))
+          .map((n) => n.item as RouteLogItem)
+          .toList();
+    }
 
     return GestureDetector(
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
@@ -131,84 +155,98 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         backgroundColor: MonitorColors.pageBackground,
         appBar: _buildAppBar(context),
         body: NestedScrollView(
-        // Header slides away when scrolling down
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverToBoxAdapter(
-            child: _DashboardHeader(
-              screen: _selectedScreen,
-              chartData: _selectedScreen == 'ALL'
-                  ? List<double>.from(_ctrl.overlayFpsHistory)
-                  : List<double>.from(_ctrl.fpsHistoryMap[_selectedScreen] ?? []),
-              chartExpanded: _chartExpanded,
-              onChartToggle: () =>
-                  setState(() => _chartExpanded = !_chartExpanded),
-              ramChartData: _selectedScreen == 'ALL'
-                  ? List<double>.from(_ctrl.globalRamHistory)
-                  : List<double>.from(_ctrl.ramHistoryMap[_selectedScreen] ?? []),
-              ramChartExpanded: _ramChartExpanded,
-              onRamChartToggle: () =>
-                  setState(() => _ramChartExpanded = !_ramChartExpanded),
-              totalRam: _ctrl.totalRam,
-            ),
-          ),
-        ],
-        // Body stays pinned — MetricsBar + TabHeader + FilterBar always visible
-        body: Column(
-          children: [
-            MonitorMetricsBar(screen: _selectedScreen),
-            _LogTabHeader(
-              apiCount: allLogs.length,
-              routeCount: routeLogs.length,
-              errorCount: flutterErrors.length,
-              activeTab: _activeTab,
-              onTabChanged: (i) => setState(() {
-                _activeTab = i;
-                _filterMode = 'ALL';
-                _searchQuery = '';
-              }),
-            ),
-            if (_activeTab == 0) ...[
-              _FilterBar(
-                allLogs: allLogs,
-                activeFilter: _filterMode,
-                onChanged: (v) => setState(() => _filterMode = v),
-                showHeaders: _showHeaders,
-                onHeaderToggle: (v) => setState(() => _showHeaders = v),
+          // Header slides away when scrolling down
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverToBoxAdapter(
+              child: _DashboardHeader(
+                screen: _selectedScreen,
+                chartData: _selectedScreen == 'ALL'
+                    ? List<double>.from(_ctrl.overlayFpsHistory)
+                    : List<double>.from(
+                        _ctrl.fpsHistoryMap[_selectedScreen] ?? []),
+                chartExpanded: _chartExpanded,
+                onChartToggle: () =>
+                    setState(() => _chartExpanded = !_chartExpanded),
+                ramChartData: _selectedScreen == 'ALL'
+                    ? List<double>.from(_ctrl.globalRamHistory)
+                    : List<double>.from(
+                        _ctrl.ramHistoryMap[_selectedScreen] ?? []),
+                ramChartExpanded: _ramChartExpanded,
+                onRamChartToggle: () =>
+                    setState(() => _ramChartExpanded = !_ramChartExpanded),
+                totalRam: _ctrl.totalRam,
               ),
-              _SearchBar(
-                query: _searchQuery,
-                onChanged: (v) => setState(() => _searchQuery = v),
-              ),
-            ],
-            Expanded(
-              child: switch (_activeTab) {
-                1 => flutterErrors.isEmpty
-                    ? const _EmptyErrorState()
-                    : _ErrorList(errors: flutterErrors),
-                2 => routeLogs.isEmpty
-                    ? const _EmptyRouteState()
-                    : _RouteLogList(logs: routeLogs),
-                _ => filteredLogs.isEmpty
-                    ? const _EmptyState()
-                    : _GroupedLogList(
-                        logs: filteredLogs,
-                        showHeaders: _showHeaders,
-                      ),
-              },
             ),
           ],
+          // Body stays pinned — MetricsBar + TabHeader + FilterBar always visible
+          body: Column(
+            children: [
+              MonitorMetricsBar(screen: _selectedScreen),
+              _LogTabHeader(
+                apiCount: allLogs.length,
+                routeCount: routeLogs.length,
+                errorCount: flutterErrors.length,
+                activeTab: _activeTab,
+                onTabChanged: (i) => setState(() {
+                  _activeTab = i;
+                  _filterMode = 'ALL';
+                  _searchQuery = '';
+                }),
+              ),
+              if (_activeTab == 0) ...[
+                _FilterBar(
+                  allLogs: allLogs,
+                  activeFilter: _filterMode,
+                  onChanged: (v) => setState(() => _filterMode = v),
+                  showHeaders: _showHeaders,
+                  onHeaderToggle: (v) => setState(() => _showHeaders = v),
+                  oldestFirst: _apiOldestFirst,
+                  onSortToggle: () =>
+                      setState(() => _apiOldestFirst = !_apiOldestFirst),
+                  showHeaderToggle: false,
+                ),
+                _SearchBar(
+                  query: _searchQuery,
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                ),
+              ],
+              Expanded(
+                child: switch (_activeTab) {
+                  1 => flutterErrors.isEmpty
+                      ? const _EmptyErrorState()
+                      : _ErrorList(
+                          errors: flutterErrors,
+                          selectedScreen: _selectedScreen,
+                        ),
+                  2 => routeLogs.isEmpty
+                      ? const _EmptyRouteState()
+                      : _RouteLogList(logs: routeLogs),
+                  3 => (_ctrl.globalApiLogs.isEmpty && _ctrl.routeLogs.isEmpty)
+                      ? const _EmptyState()
+                      : const _FlowLogList(),
+                  _ => filteredLogs.isEmpty
+                      ? const _EmptyState()
+                      : _GroupedLogList(
+                          logs: filteredLogs,
+                          showHeaders: _showHeaders,
+                          selectedScreen: _selectedScreen,
+                          oldestFirst: _apiOldestFirst,
+                          query: _searchQuery,
+                        ),
+                },
+              ),
+            ],
+          ),
         ),
       ),
-    ),);
+    );
   }
 
   void _openScreenPicker(BuildContext context) {
-    // visitedScreens tracks all screens seen this session regardless of whether
-    // their data was cleared on pop — so Login/Splash remain visible even after
-    // navigating to Home.
+    // visitedScreens is already newest-first (most recently visited screen at top).
     final screens = <String>[
       'ALL',
-      ..._ctrl.visitedScreens.toList().reversed,
+      ..._ctrl.visitedScreens,
     ];
     if (!screens.contains(_selectedScreen) &&
         _selectedScreen.isNotEmpty &&
@@ -245,7 +283,8 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
             color: MonitorColors.dropdownBg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isAll ? accent.withValues(alpha: 0.4) : MonitorColors.border,
+              color:
+                  isAll ? accent.withValues(alpha: 0.4) : MonitorColors.border,
               width: 0.8,
             ),
             boxShadow: [
@@ -266,7 +305,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
                 color: isAll ? accent : MonitorColors.secondaryText,
               ),
               const SizedBox(width: 6),
-               ConstrainedBox(
+              ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 180),
                 child: MonoText(
                   MonitorController.formatRouteName(_selectedScreen),

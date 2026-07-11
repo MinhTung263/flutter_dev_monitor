@@ -16,6 +16,7 @@ class ApiLogController {
 
   String? activePopup;
   String currentViewedScreen = 'ALL';
+  bool isDashboardOpen = false;
 
   List<ApiLogItem> apiLogs = [];
   int initApiCount = 0;
@@ -50,6 +51,8 @@ class ApiLogController {
   }
 
   bool isInRefresh(String screen) => _screenInRefreshMode[screen] == true;
+
+  DateTime? sessionStartTime(String screen) => _sessionStartTime[screen];
 
   void startSession(String screenName) {
     if (!initLogsMap.containsKey(screenName)) {
@@ -196,6 +199,26 @@ class ApiLogController {
     updateView(currentViewedScreen);
   }
 
+  List<ApiLogItem> _groupDuplicateApis(List<ApiLogItem> rawLogs) {
+    final Map<String, ApiLogItem> grouped = {};
+    for (final log in rawLogs) {
+      final key = '${log.method}_${log.url}';
+      final existing = grouped[key];
+      if (existing == null) {
+        grouped[key] = log;
+      } else {
+        final isLatest = log.timestamp.isAfter(existing.timestamp);
+        grouped[key] = existing.copyWith(
+          callCount: existing.callCount + log.callCount,
+          duration: isLatest ? log.duration : existing.duration,
+          statusCode: isLatest ? log.statusCode : existing.statusCode,
+          timestamp: isLatest ? log.timestamp : existing.timestamp,
+        );
+      }
+    }
+    return grouped.values.toList();
+  }
+
   void updateView(String screen) {
     currentViewedScreen = screen;
     if (screen == 'ALL') {
@@ -220,7 +243,8 @@ class ApiLogController {
         final currentInitCycle = _initCycleCounters[screenName] ?? 1;
         final currentInitLogs =
             initLogs.where((l) => l.refreshCycle == currentInitCycle);
-        totalInitCount += currentInitLogs.fold(0, (s, l) => s + l.callCount);
+        totalInitCount +=
+            currentInitLogs.map((l) => '${l.method}_${l.url}').toSet().length;
         totalInitDuration += currentInitLogs.fold(0, (s, l) => s + l.duration);
       }
 
@@ -230,10 +254,12 @@ class ApiLogController {
         if (currentCycle > 0) {
           final cycleLogs =
               refreshLogs.where((l) => l.refreshCycle == currentCycle);
-          totalRefreshCount += cycleLogs.fold(0, (s, l) => s + l.callCount);
+          totalRefreshCount +=
+              cycleLogs.map((l) => '${l.method}_${l.url}').toSet().length;
           totalRefreshDurationMs += cycleLogs.fold(0, (s, l) => s + l.duration);
         }
-        totalAllRefreshCount += refreshLogs.fold(0, (s, l) => s + l.callCount);
+        totalAllRefreshCount +=
+            refreshLogs.map((l) => '${l.method}_${l.url}').toSet().length;
         totalAllRefreshDuration +=
             refreshLogs.fold(0, (s, l) => s + l.duration);
       }
@@ -245,7 +271,12 @@ class ApiLogController {
       totalRefreshApiCount = totalAllRefreshCount;
       totalRefreshDuration = totalAllRefreshDuration;
 
-      apiLogs = [...allRefresh, ...allInit]
+      if (!isDashboardOpen) {
+        apiLogs = const [];
+        return;
+      }
+
+      apiLogs = _groupDuplicateApis([...allRefresh, ...allInit])
         ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
       return;
     }
@@ -258,15 +289,18 @@ class ApiLogController {
     // MetricsBar and overlay show current visit's init stats only.
     final currentInitLogs =
         initLogs.where((l) => l.refreshCycle == currentInitCycle).toList();
-    initApiCount = currentInitLogs.fold(0, (s, l) => s + l.callCount);
+    initApiCount =
+        currentInitLogs.map((l) => '${l.method}_${l.url}').toSet().length;
     initTotalDuration = currentInitLogs.fold(0, (s, l) => s + l.duration);
 
     if (currentCycle > 0) {
       final cycleLogs =
           refreshLogs.where((l) => l.refreshCycle == currentCycle).toList();
-      refreshApiCount = cycleLogs.fold(0, (s, l) => s + l.callCount);
+      refreshApiCount =
+          cycleLogs.map((l) => '${l.method}_${l.url}').toSet().length;
       refreshTotalDuration = cycleLogs.fold(0, (s, l) => s + l.duration);
-      totalRefreshApiCount = refreshLogs.fold(0, (s, l) => s + l.callCount);
+      totalRefreshApiCount =
+          refreshLogs.map((l) => '${l.method}_${l.url}').toSet().length;
       totalRefreshDuration = refreshLogs.fold(0, (s, l) => s + l.duration);
     } else {
       refreshApiCount = 0;
@@ -275,8 +309,13 @@ class ApiLogController {
       totalRefreshDuration = 0;
     }
 
+    if (!isDashboardOpen) {
+      apiLogs = const [];
+      return;
+    }
+
     // Newest call on top, oldest at bottom — pure chronological order.
-    apiLogs = [...refreshLogs, ...initLogs]
+    apiLogs = _groupDuplicateApis([...refreshLogs, ...initLogs])
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
 
@@ -390,4 +429,17 @@ class ApiLogController {
       route.contains('dialog') ||
       route.contains('bottomSheet') ||
       activePopup != null;
+
+  List<ApiLogItem> get globalApiLogs {
+    final List<ApiLogItem> allInit = [];
+    for (final logs in initLogsMap.values) {
+      allInit.addAll(logs);
+    }
+    final List<ApiLogItem> allRefresh = [];
+    for (final logs in refreshLogsMap.values) {
+      allRefresh.addAll(logs);
+    }
+    return [...allRefresh, ...allInit]
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
 }

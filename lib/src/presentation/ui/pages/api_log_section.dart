@@ -2,49 +2,23 @@ part of 'monitor_dashboard_page.dart';
 
 // ─── Grouped log list ─────────────────────────────────────────────────────────
 
-class _HeaderData {
-  final String phase;
-  final int refreshCycle;
-  final int callCount;
-  final int totalDuration;
-  final int totalBytes;
-  const _HeaderData({
-    required this.phase,
-    required this.refreshCycle,
-    required this.callCount,
-    required this.totalDuration,
-    required this.totalBytes,
-  });
-}
-
 class _GroupedLogList extends StatelessWidget {
   final List<ApiLogItem> logs;
   final bool showHeaders;
-  const _GroupedLogList({required this.logs, required this.showHeaders});
+  final String selectedScreen;
+  final bool oldestFirst;
+  final String query;
 
-  List<Object> _buildItems() {
-    if (!showHeaders) return logs;
-    final items = <Object>[];
-    String? prevKey;
+  const _GroupedLogList({
+    required this.logs,
+    required this.showHeaders,
+    required this.selectedScreen,
+    required this.oldestFirst,
+    required this.query,
+  });
 
-    for (final log in logs) {
-      final key = '${log.phase}_${log.refreshCycle}';
-      if (key != prevKey) {
-        prevKey = key;
-        final groupLogs = logs.where(
-            (l) => l.phase == log.phase && l.refreshCycle == log.refreshCycle);
-        items.add(_HeaderData(
-          phase: log.phase,
-          refreshCycle: log.refreshCycle,
-          callCount: groupLogs.fold(0, (s, l) => s + l.callCount),
-          totalDuration: groupLogs.fold(0, (s, l) => s + l.duration),
-          totalBytes: groupLogs.fold(0, (s, l) => s + l.responseBytes),
-        ));
-      }
-      items.add(log);
-    }
-
-    return items;
+  List<ApiLogItem> _buildItems() {
+    return oldestFirst ? logs.reversed.toList() : logs;
   }
 
   @override
@@ -55,10 +29,10 @@ class _GroupedLogList extends StatelessWidget {
       itemCount: items.length,
       itemBuilder: (_, i) {
         final item = items[i];
-        if (item is _HeaderData) return _SectionHeader(data: item);
         return ApiLogTile(
-          log: item as ApiLogItem,
-          showOrder: showHeaders,
+          log: item,
+          showOrder: false,
+          showScreenBadge: selectedScreen == 'ALL',
         );
       },
     );
@@ -73,6 +47,9 @@ class _FilterBar extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final bool showHeaders;
   final ValueChanged<bool> onHeaderToggle;
+  final bool oldestFirst;
+  final VoidCallback onSortToggle;
+  final bool showHeaderToggle;
 
   const _FilterBar({
     required this.allLogs,
@@ -80,6 +57,9 @@ class _FilterBar extends StatelessWidget {
     required this.onChanged,
     required this.showHeaders,
     required this.onHeaderToggle,
+    required this.oldestFirst,
+    required this.onSortToggle,
+    this.showHeaderToggle = true,
   });
 
   @override
@@ -151,15 +131,21 @@ class _FilterBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            width: 1,
-            height: 18,
-            color: MonitorColors.border,
-          ),
-          const SizedBox(width: 8),
-          _HeaderToggleButton(
-            active: showHeaders,
-            onTap: () => onHeaderToggle(!showHeaders),
+          GestureDetector(
+            onTap: onSortToggle,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: MonitorColors.surface,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: MonitorColors.border),
+              ),
+              child: Icon(
+                oldestFirst ? Icons.south_rounded : Icons.north_rounded,
+                size: 14,
+                color: MonitorColors.primaryText,
+              ),
+            ),
           ),
         ],
       ),
@@ -240,104 +226,7 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final _HeaderData data;
-  const _SectionHeader({required this.data});
 
-  static String _fmtBytes(int bytes) {
-    if (bytes <= 0) return '';
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)}MB';
-  }
-
-  String _sectionSummary(_HeaderData d) {
-    final size = _fmtBytes(d.totalBytes);
-    final parts = ['${d.callCount} calls'];
-    if (size.isNotEmpty) parts.add(size);
-    parts.add('${d.totalDuration}ms');
-    return parts.join(' · ');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isRefresh = data.phase == ApiLogItem.phaseRefresh;
-    final color =
-        isRefresh ? MonitorColors.metricRefresh : MonitorColors.metricInit;
-    final label = isRefresh
-        ? 'ACTION #${data.refreshCycle}'
-        : 'OPEN #${data.refreshCycle}';
-
-    return Container(
-      margin: const EdgeInsets.only(top: 8, bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(6),
-        border: Border(left: BorderSide(color: color, width: 3)),
-      ),
-      child: Row(
-        children: [
-          LabelText(
-            label,
-            color,
-            size: 10,
-            spacing: 0.8,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: MonoText(
-              _sectionSummary(data),
-              9,
-              color: color.withValues(alpha: 0.70),
-              weight: FontWeight.w600,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeaderToggleButton extends StatelessWidget {
-  final bool active;
-  final VoidCallback onTap;
-
-  const _HeaderToggleButton({
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = MonitorColors.metricTotal;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          color: active ? accent.withValues(alpha: 0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: active ? accent.withValues(alpha: 0.45) : MonitorColors.border,
-            width: 0.8,
-          ),
-        ),
-        child: Icon(
-          Icons.view_agenda_outlined,
-          size: 14,
-          color: active ? accent : MonitorColors.secondaryText,
-        ),
-      ),
-    );
-  }
-}
 
 // ─── Search Bar ──────────────────────────────────────────────────────────────
 
@@ -429,6 +318,334 @@ class _SearchBarState extends State<_SearchBar> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _Event {
+  final DateTime timestamp;
+  final bool isApi;
+  final Object item;
+  _Event({required this.timestamp, required this.isApi, required this.item});
+}
+
+List<_GitNode> _buildCombinedGitNodes(List<ApiLogItem> apiLogs, List<RouteLogItem> routeLogs) {
+  final List<_Event> events = [];
+  for (final api in apiLogs) {
+    events.add(_Event(timestamp: api.timestamp, isApi: true, item: api));
+  }
+  for (final route in routeLogs) {
+    events.add(_Event(timestamp: route.timestamp, isApi: false, item: route));
+  }
+  events.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+  final List<String> stack = [];
+  final Map<String, int> screenLanes = {};
+  final List<int> freeLanes = [];
+  int nextLane = 0;
+
+  int getOrCreateLane(String screen) {
+    if (screenLanes.containsKey(screen)) {
+      return screenLanes[screen]!;
+    }
+    int l;
+    if (freeLanes.isNotEmpty) {
+      freeLanes.sort();
+      l = freeLanes.removeAt(0);
+    } else {
+      l = nextLane++;
+    }
+    screenLanes[screen] = l;
+    return l;
+  }
+
+  void freeLaneFor(String screen) {
+    final l = screenLanes.remove(screen);
+    if (l != null) {
+      freeLanes.add(l);
+    }
+  }
+
+  final List<_GitNode> nodes = [];
+  final Map<String, int> currentVisitApis = {};
+
+  for (final ev in events) {
+    final beforeLanes = screenLanes.values.toSet();
+
+    if (ev.isApi) {
+      final api = ev.item as ApiLogItem;
+      String screenKey = api.screen;
+      if (!screenLanes.containsKey(screenKey)) {
+        screenKey = stack.isNotEmpty ? stack.last : api.screen;
+      }
+      final l = getOrCreateLane(screenKey);
+      final key = '${api.method}_${api.url}';
+
+      if (currentVisitApis.containsKey(key)) {
+        final nodeIndex = currentVisitApis[key]!;
+        final existingNode = nodes[nodeIndex];
+        final existingApi = existingNode.item as ApiLogItem;
+
+        final isLatest = api.timestamp.isAfter(existingApi.timestamp);
+        final mergedApi = existingApi.copyWith(
+          callCount: existingApi.callCount + api.callCount,
+          duration: isLatest ? api.duration : existingApi.duration,
+          statusCode: isLatest ? api.statusCode : existingApi.statusCode,
+          timestamp: isLatest ? api.timestamp : existingApi.timestamp,
+        );
+
+        nodes[nodeIndex] = _GitNode(
+          item: mergedApi,
+          lane: existingNode.lane,
+          topLanes: existingNode.topLanes,
+          bottomLanes: existingNode.bottomLanes,
+          activeStack: existingNode.activeStack,
+        );
+      } else {
+        nodes.add(_GitNode(
+          item: api,
+          lane: l,
+          topLanes: screenLanes.values.toSet(),
+          bottomLanes: screenLanes.values.toSet(),
+          activeStack: List.from(stack),
+        ));
+        currentVisitApis[key] = nodes.length - 1;
+      }
+    } else {
+      currentVisitApis.clear();
+      final route = ev.item as RouteLogItem;
+      final bool isPush = route.event == RouteLogItem.eventPush;
+      final bool isPop = route.event == RouteLogItem.eventPop;
+
+      if (isPush) {
+        final l = getOrCreateLane(route.route);
+        stack.add(route.route);
+        final afterLanes = screenLanes.values.toSet();
+
+        nodes.add(_GitNode(
+          item: route,
+          lane: l,
+          topLanes: beforeLanes,
+          bottomLanes: afterLanes,
+          isBranch: true,
+          activeStack: List.from(stack),
+        ));
+      } else if (isPop) {
+        if (stack.isNotEmpty && stack.last == route.route) {
+          stack.removeLast();
+        }
+        final l = getOrCreateLane(route.route);
+        freeLaneFor(route.route);
+        final afterLanes = screenLanes.values.toSet();
+
+        nodes.add(_GitNode(
+          item: route,
+          lane: l,
+          topLanes: beforeLanes,
+          bottomLanes: afterLanes,
+          isMerge: true,
+          activeStack: List.from(stack),
+        ));
+      } else {
+        if (stack.isNotEmpty) {
+          final old = stack.removeLast();
+          freeLaneFor(old);
+        }
+        final l = getOrCreateLane(route.route);
+        stack.add(route.route);
+        final afterLanes = screenLanes.values.toSet();
+
+        nodes.add(_GitNode(
+          item: route,
+          lane: l,
+          topLanes: beforeLanes,
+          bottomLanes: afterLanes,
+          activeStack: List.from(stack),
+        ));
+      }
+    }
+  }
+
+  return nodes;
+}
+
+class _FlowLogList extends StatefulWidget {
+  const _FlowLogList();
+
+  @override
+  State<_FlowLogList> createState() => _FlowLogListState();
+}
+
+class _FlowLogListState extends State<_FlowLogList> {
+  bool _oldestFirst = false;
+
+  List<_GitNode> _buildItems() {
+    final globalLogs = MonitorController.instance.globalApiLogs;
+    final List<RouteLogItem> routeLogsCopy = List.from(MonitorController.instance.routeLogs);
+    
+    final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
+        ? MonitorNavigatorObserver.pageStack.last
+        : '/unknown';
+        
+    final newestRouteLog = routeLogsCopy.isNotEmpty ? routeLogsCopy.first : null;
+    final needVirtualCurrent = topRoute != '/unknown' &&
+        (newestRouteLog == null ||
+            newestRouteLog.route != topRoute ||
+            newestRouteLog.event == RouteLogItem.eventPop);
+
+    if (needVirtualCurrent) {
+      final virtualItem = RouteLogItem(
+        id: 0,
+        event: RouteLogItem.eventReplace,
+        route: topRoute,
+        timestamp: DateTime.now(),
+      );
+      routeLogsCopy.insert(0, virtualItem);
+    }
+
+    final allCombinedNodes = _buildCombinedGitNodes(globalLogs, routeLogsCopy);
+    if (_oldestFirst) {
+      return allCombinedNodes;
+    }
+
+    // Newest First: Group by screen visits and reverse the groups
+    final List<List<_GitNode>> groups = [];
+    List<_GitNode>? currentGroup;
+
+    for (final node in allCombinedNodes) {
+      if (node.item is RouteLogItem) {
+        currentGroup = [node];
+        groups.add(currentGroup);
+      } else {
+        if (currentGroup == null) {
+          currentGroup = [];
+          groups.add(currentGroup);
+        }
+        currentGroup.add(node);
+      }
+    }
+
+    final List<_GitNode> result = [];
+    for (final group in groups.reversed) {
+      if (group.isEmpty) continue;
+      final hasHeader = group[0].item is RouteLogItem;
+      if (hasHeader) {
+        result.add(group[0]); // Header stays at the top of the group!
+        result.addAll(group.sublist(1).reversed); // APIs are reversed underneath
+      } else {
+        result.addAll(group.reversed);
+      }
+    }
+
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _buildItems();
+    if (items.isEmpty) return const _EmptyState();
+
+    final maxLane = items.fold(0, (m, n) => math.max(m, n.maxLane));
+    final graphW = (maxLane + 1) * _GitLanePainter.laneW + 10.0;
+    final totalSteps = items.length;
+
+    final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
+        ? MonitorNavigatorObserver.pageStack.last
+        : '/unknown';
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          color: MonitorColors.pageBackground,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.alt_route_rounded, size: 13, color: const Color(0xFF57D888)),
+                  const SizedBox(width: 6),
+                  BodyText(
+                    'FLOW TRACE (ALL)',
+                    10.5,
+                    color: MonitorColors.primaryText,
+                    weight: FontWeight.bold,
+                  ),
+                ],
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _oldestFirst = !_oldestFirst),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: MonitorColors.surface,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: MonitorColors.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _oldestFirst ? Icons.south_rounded : Icons.north_rounded,
+                        size: 11,
+                        color: MonitorColors.primaryText,
+                      ),
+                      const SizedBox(width: 4),
+                      LabelText(
+                        _oldestFirst ? 'CŨ NHẤT TRƯỚC' : 'MỚI NHẤT TRƯỚC',
+                        MonitorColors.primaryText,
+                        size: 8.5,
+                        spacing: 0.3,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+            itemCount: items.length,
+            itemBuilder: (_, i) {
+              final node = items[i];
+              final stepNum = _oldestFirst ? i + 1 : totalSteps - i;
+
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: graphW,
+                      child: CustomPaint(painter: _GitLanePainter(node)),
+                    ),
+                    Expanded(
+                      child: node.item is RouteLogItem
+                          ? _GitRouteInfo(
+                              node: node,
+                              isCurrent: (node.item as RouteLogItem).route == topRoute &&
+                                  (node.item as RouteLogItem).event != RouteLogItem.eventPop,
+                              stepNum: stepNum,
+                            )
+                          : Padding(
+                              padding: const EdgeInsets.only(left: 14, top: 4, bottom: 4),
+                              child: ApiLogTile(
+                                log: node.item as ApiLogItem,
+                                showOrder: false,
+                                showScreenBadge: false,
+                                lane: node.lane,
+                                compact: true,
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

@@ -33,13 +33,26 @@ class MonitorController extends ChangeNotifier {
   final _routeLog  = RouteLogController();
   final _datasource = HardwareDatasource();
 
-  // All screen names seen this session — never cleared on pop, only on clearAll()
-  final Set<String> _visitedScreens = {};
+  // All screen names seen this session — ordered by last visit (most recent last).
+  // A screen that is re-visited is moved to the end so .reversed gives newest-first.
+  final List<String> _visitedScreens = [];
 
   Timer? _hardwareTimer;
   Timer? _pingTimer;
   int? _currentPingMs;
   bool _disposed = false;
+  bool _isReportingError = false;
+
+  bool _isDashboardOpen = false;
+  bool get isDashboardOpen => _isDashboardOpen;
+  set isDashboardOpen(bool value) {
+    if (_isDashboardOpen != value) {
+      _isDashboardOpen = value;
+      _apiLog.isDashboardOpen = value;
+      _apiLog.updateView(_apiLog.currentViewedScreen);
+      notifyListeners();
+    }
+  }
 
   bool _alertsDismissed = false;
   bool get alertsDismissed => _alertsDismissed;
@@ -98,6 +111,7 @@ class MonitorController extends ChangeNotifier {
   // ── Expose API log state ──────────────────────────────────────────────
 
   List<ApiLogItem> get apiLogs => _apiLog.apiLogs;
+  List<ApiLogItem> get globalApiLogs => _apiLog.globalApiLogs;
   Map<String, List<ApiLogItem>> get initLogsMap => _apiLog.initLogsMap;
   Map<String, List<ApiLogItem>> get refreshLogsMap => _apiLog.refreshLogsMap;
   int get initApiCount => _apiLog.initApiCount;
@@ -110,6 +124,8 @@ class MonitorController extends ChangeNotifier {
   int get globalApiErrorCount => _apiLog.globalApiErrorCount;
   int get globalSlowApiCount => _apiLog.globalSlowApiCount;
 
+  DateTime? sessionStartTime(String screen) => _apiLog.sessionStartTime(screen);
+
   ({int openCount, int openMs, int visitCount, int actionCount, int actionMs, int actionCycles}) screenStats(
           String screen) =>
       _apiLog.statsForScreen(screen);
@@ -117,8 +133,13 @@ class MonitorController extends ChangeNotifier {
   bool get isCurrentScreenInRefresh =>
       _apiLog.isInRefresh(MonitorNavigatorObserver.currentRoute);
 
-  int get currentPhaseApiCount =>
-      isCurrentScreenInRefresh ? refreshApiCount : initApiCount;
+  int get currentPhaseApiCount {
+    if (isDashboardOpen) {
+      return _apiLog.apiLogs.length;
+    } else {
+      return isCurrentScreenInRefresh ? refreshApiCount : initApiCount;
+    }
+  }
 
   // ── Expose FPS state ──────────────────────────────────────────────────
 
@@ -131,9 +152,10 @@ class MonitorController extends ChangeNotifier {
   List<double> get overlayGpuHistory => _fps.overlayGpuHistory;
   List<double> get overlayBuildHistory => _fps.overlayBuildHistory;
 
-  // ── Visited screens (never cleared on pop) ───────────────────────────
+  // ── Visited screens (never cleared on pop, ordered by last visit) ────
 
-  Set<String> get visitedScreens => Set.unmodifiable(_visitedScreens);
+  /// Returns screen names in last-visited-first order (newest at index 0).
+  List<String> get visitedScreens => List.unmodifiable(_visitedScreens.reversed.toList());
 
   // ── Expose error log state ────────────────────────────────────────────
 
@@ -187,30 +209,49 @@ class MonitorController extends ChangeNotifier {
   void _hookFlutterErrors() {
     final originalOnError = FlutterError.onError;
     FlutterError.onError = (FlutterErrorDetails details) {
-      _alertsDismissed = false;
-      _errorLog.addError(
-        details.exceptionAsString(),
-        details.stack?.toString() ?? '',
-        ErrorLogItem.typeFlutter,
-        MonitorNavigatorObserver.currentRoute.isEmpty
-            ? '/unknown'
-            : MonitorNavigatorObserver.currentRoute,
-      );
-      notifyListeners();
+      if (_isReportingError) {
+        originalOnError?.call(details);
+        return;
+      }
+      _isReportingError = true;
+      try {
+        _alertsDismissed = false;
+        _errorLog.addError(
+          details.exceptionAsString(),
+          details.stack?.toString() ?? '',
+          ErrorLogItem.typeFlutter,
+          MonitorNavigatorObserver.currentRoute.isEmpty
+              ? '/unknown'
+              : MonitorNavigatorObserver.currentRoute,
+        );
+        notifyListeners();
+      } catch (_) {
+      } finally {
+        _isReportingError = false;
+      }
       originalOnError?.call(details);
     };
 
     PlatformDispatcher.instance.onError = (error, stack) {
-      _alertsDismissed = false;
-      _errorLog.addError(
-        error.toString(),
-        stack.toString(),
-        ErrorLogItem.typeDart,
-        MonitorNavigatorObserver.currentRoute.isEmpty
-            ? '/unknown'
-            : MonitorNavigatorObserver.currentRoute,
-      );
-      notifyListeners();
+      if (_isReportingError) {
+        return false;
+      }
+      _isReportingError = true;
+      try {
+        _alertsDismissed = false;
+        _errorLog.addError(
+          error.toString(),
+          stack.toString(),
+          ErrorLogItem.typeDart,
+          MonitorNavigatorObserver.currentRoute.isEmpty
+              ? '/unknown'
+              : MonitorNavigatorObserver.currentRoute,
+        );
+        notifyListeners();
+      } catch (_) {
+      } finally {
+        _isReportingError = false;
+      }
       return false;
     };
   }
@@ -229,6 +270,9 @@ class MonitorController extends ChangeNotifier {
     if (screenName.isNotEmpty &&
         screenName != MonitorConstants.dashboardRoute &&
         screenName != MonitorConstants.unknownRoute) {
+      // Remove then re-add so the screen moves to the END of the list,
+      // making .reversed give newest-first order in the picker.
+      _visitedScreens.remove(screenName);
       _visitedScreens.add(screenName);
     }
     _apiLog.startSession(screenName);
@@ -281,6 +325,10 @@ class MonitorController extends ChangeNotifier {
     _visitedScreens.clear();
     _alertsDismissed = false;
     notifyListeners();
+  }
+
+  void removeVisitedScreen(String screenName) {
+    _visitedScreens.remove(screenName);
   }
 
   void clearOverlayHistory() => _fps.clearOverlayHistory();

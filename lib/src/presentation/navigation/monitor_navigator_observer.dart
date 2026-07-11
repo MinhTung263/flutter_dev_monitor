@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/monitor_constants.dart';
 import '../controller/monitor_controller.dart';
 
 /// A navigator observer that tracks screen transitions and routes to DevMonitor.
@@ -18,10 +19,133 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   static final List<String> pageStack = [];
 
   /// The most recently pushed page route name (excludes popups and dashboard).
-  static String currentContentRoute = '/unknown';
+  static String _currentContentRoute = '/unknown';
+  static String get currentContentRoute {
+    _scheduleTabRouteResolution();
+    try {
+      return _resolveNestedTabRoute(_currentContentRoute);
+    } catch (_) {
+      return _resolveTabRouteFor(_currentContentRoute);
+    }
+  }
+
+  static set currentContentRoute(String value) => _currentContentRoute = value;
 
   /// The topmost active route (including popups).
-  static String currentRoute = '/unknown';
+  static String _currentRoute = '/unknown';
+  static String _lastResolvedRoute = '/unknown';
+  static String? _lastResolvedTabName;
+  static String? _lastTabTitle;
+  static bool _tabResolutionScheduled = false;
+
+  static String get currentRoute {
+    _scheduleTabRouteResolution();
+    try {
+      return _resolveNestedTabRoute(_currentRoute);
+    } catch (_) {
+      return _resolveTabRouteFor(_currentRoute);
+    }
+  }
+
+  /// Synchronously resolves the active tab route and title. Call only from user interaction handlers.
+  static void resolveTabRouteContent() {
+    final nav = navigatorState;
+    if (nav == null) return;
+    try {
+      final resolved = _resolveNestedTabRoute(_currentContentRoute);
+      if (resolved != '/unknown') {
+        final oldRoute = _lastResolvedRoute;
+        final isNewRoute = resolved != oldRoute;
+        if (isNewRoute) {
+          _lastResolvedRoute = resolved;
+          final ctrl = MonitorController.instance;
+          ctrl.startSession(resolved);
+          if (oldRoute != '/unknown' &&
+              oldRoute != resolved &&
+              !resolved.startsWith('$oldRoute/')) {
+            ctrl.logRouteReplace(oldRoute, resolved);
+          }
+        }
+        String? displayTitle;
+        if (_lastResolvedTabName != null) {
+          displayTitle = _lastTabTitle;
+        } else {
+          displayTitle = _findActiveAppBarTitle();
+        }
+
+        if (displayTitle != null) {
+          MonitorController.instance.updateCustomRouteName(
+            resolved,
+            displayTitle,
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  static set currentRoute(String value) {
+    _currentRoute = value;
+  }
+
+  static void _scheduleTabRouteResolution() {
+    if (_tabResolutionScheduled) return;
+    final nav = navigatorState;
+    if (nav == null) return;
+
+    _tabResolutionScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tabResolutionScheduled = false;
+      final resolved = _resolveNestedTabRoute(_currentContentRoute);
+      if (resolved != '/unknown') {
+        final oldRoute = _lastResolvedRoute;
+        final isNewRoute = resolved != oldRoute;
+
+        if (isNewRoute) {
+          _lastResolvedRoute = resolved;
+          final ctrl = MonitorController.instance;
+          ctrl.startSession(resolved);
+          if (oldRoute != '/unknown' &&
+              oldRoute != resolved &&
+              !resolved.startsWith('$oldRoute/')) {
+            ctrl.logRouteReplace(oldRoute, resolved);
+          }
+        }
+
+        String? displayTitle;
+        if (_lastResolvedTabName != null) {
+          displayTitle = _lastTabTitle;
+        } else {
+          displayTitle = _findActiveAppBarTitle();
+        }
+
+        if (displayTitle != null) {
+          MonitorController.instance.updateCustomRouteName(
+            resolved,
+            displayTitle,
+          );
+        }
+      }
+    });
+  }
+
+  static String _resolveTabRouteFor(String route) {
+    // Keep the dashboard route as is
+    if (route == '/MonitorDashboardPage') return route;
+
+    if (_lastResolvedRoute != '/unknown' && _lastResolvedTabName != null) {
+      final suffix = '/$_lastResolvedTabName';
+      if (_lastResolvedRoute.endsWith(suffix)) {
+        final cleanBase = _lastResolvedRoute.substring(
+          0,
+          _lastResolvedRoute.length - suffix.length,
+        );
+        if (route == cleanBase) {
+          return _lastResolvedRoute;
+        }
+      }
+    }
+    return route;
+  }
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
@@ -29,11 +153,14 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     final name = route.settings.name;
     if (name == null || name.isEmpty) return;
 
+    if (name == MonitorConstants.dashboardRoute) return;
+
     currentRoute = name;
 
-    if (name == '/MonitorDashboardPage') return;
-
     if (route is PageRoute) {
+      _currentContentRoute = name;
+      _lastResolvedRoute = name;
+      _lastResolvedTabName = null;
       pageStack.add(name);
       final ctrl = MonitorController.instance;
       ctrl.startSession(name);
@@ -41,8 +168,10 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       _updateActiveRouteTitle();
     } else if (route is PopupRoute) {
       MonitorController.instance.setActivePopup(name);
-      MonitorController.instance
-          .logRoutePush(name, previousRoute?.settings.name);
+      MonitorController.instance.logRoutePush(
+        name,
+        previousRoute?.settings.name,
+      );
       _updateActiveRouteTitle();
     }
   }
@@ -53,7 +182,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     final name = route.settings.name;
     final prevName = previousRoute?.settings.name;
 
-    if (prevName != null && prevName.isNotEmpty) {
+    if (prevName != null &&
+        prevName.isNotEmpty &&
+        prevName != MonitorConstants.dashboardRoute) {
       currentRoute = prevName;
     } else {
       final tempStack = List<String>.from(pageStack);
@@ -63,10 +194,17 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       currentRoute = tempStack.isNotEmpty ? tempStack.last : '/unknown';
     }
 
-    if (name == null || name.isEmpty || name == '/MonitorDashboardPage') return;
+    if (name == null || name.isEmpty || name == MonitorConstants.dashboardRoute)
+      return;
 
     if (route is PageRoute) {
       pageStack.remove(name);
+      final prevContentName =
+          pageStack.isNotEmpty ? pageStack.last : '/unknown';
+      _currentContentRoute = prevContentName;
+      _lastResolvedRoute = prevContentName;
+      _lastResolvedTabName = null;
+
       if (!pageStack.contains(name)) {
         MonitorController.instance.logRoutePop(name, prevName);
       }
@@ -126,6 +264,11 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     }
   }
 
+  /// Public static method to trigger a dynamic route title update.
+  static void updateActiveRouteTitle() {
+    _instance?._updateActiveRouteTitle();
+  }
+
   void _updateActiveRouteTitle() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final title = _findAppBarTitle();
@@ -177,6 +320,16 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
       final widget = element.widget;
       if (widget is AppBar) {
+        final route = _findModalRouteOf(element);
+        if (route == null || route.isCurrent == false) {
+          // Skip AppBars that don't belong to the current active route
+          return;
+        }
+        if (route.settings.name == MonitorConstants.dashboardRoute) {
+          // Skip the dashboard's own AppBar to avoid taking its title
+          // as the route name.
+          return;
+        }
         final titleWidget = widget.title;
         if (titleWidget != null) {
           final titleElement = findElementForWidget(element, titleWidget);
@@ -188,6 +341,21 @@ class MonitorNavigatorObserver extends NavigatorObserver {
             }
           }
         }
+      }
+
+      // Prune subtrees that cannot contain an AppBar to optimize performance
+      if (widget is Scrollable ||
+          widget is ListView ||
+          widget is GridView ||
+          widget is CustomScrollView ||
+          widget is SingleChildScrollView ||
+          widget is ListTile ||
+          widget is Card ||
+          widget is Text ||
+          widget is RichText ||
+          widget is Icon ||
+          widget is Image) {
+        return;
       }
 
       final children = <Element>[];
@@ -204,5 +372,286 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     } catch (_) {}
 
     return foundTitle;
+  }
+
+  static String _resolveNestedTabRoute(String baseRoute) {
+    final nav = navigatorState;
+    if (nav == null) return baseRoute;
+
+    dynamic foundBottomBarWidget;
+
+    void visitor(Element element) {
+      if (foundBottomBarWidget != null) return;
+
+      final widget = element.widget;
+      try {
+        final dynamic w = widget;
+        final int? index = w.currentIndex as int?;
+        if (index != null) {
+          final route = _findModalRouteOf(element);
+          if (route == null) return;
+          // Only match if the bottom bar is part of the topmost route,
+          // or part of the current active content route (e.g. if the dashboard is overlayed on top)
+          if (!route.isCurrent && route.settings.name != _currentContentRoute) {
+            return;
+          }
+
+          dynamic list;
+          try {
+            list = w.items;
+          } catch (_) {}
+          try {
+            list ??= w.itemsData;
+          } catch (_) {}
+          try {
+            list ??= w.tabs;
+          } catch (_) {}
+
+          if (list != null && list is Iterable) {
+            foundBottomBarWidget = widget;
+            return;
+          }
+        }
+      } catch (_) {}
+
+      // Prune subtrees that cannot contain a navigation bar to optimize performance
+      if (widget is Scrollable ||
+          widget is ListView ||
+          widget is GridView ||
+          widget is CustomScrollView ||
+          widget is SingleChildScrollView ||
+          widget is ListTile ||
+          widget is Card ||
+          widget is Text ||
+          widget is RichText ||
+          widget is Icon ||
+          widget is Image) {
+        return;
+      }
+
+      final children = <Element>[];
+      element.visitChildren((child) => children.add(child));
+      for (final child in children.reversed) {
+        visitor(child);
+      }
+    }
+
+    try {
+      nav.context.visitChildElements((element) {
+        visitor(element);
+      });
+    } catch (_) {}
+
+    if (foundBottomBarWidget != null) {
+      try {
+        final dynamic w = foundBottomBarWidget;
+        final int currentIndex = w.currentIndex as int;
+
+        dynamic rawItems;
+        try {
+          rawItems = w.items;
+        } catch (_) {}
+        try {
+          rawItems ??= w.itemsData;
+        } catch (_) {}
+        try {
+          rawItems ??= w.tabs;
+        } catch (_) {}
+
+        final list = rawItems as Iterable;
+
+        if (currentIndex >= 0 && currentIndex < list.length) {
+          final dynamic item = list.elementAt(currentIndex);
+
+          // Get localized title/label dynamically
+          String? title;
+          try {
+            title = item.title as String?;
+          } catch (_) {}
+          try {
+            title ??= item.label as String?;
+          } catch (_) {}
+
+          // Get route segment identifier dynamically
+          String? tabName;
+          try {
+            final dynamic tabEnum = item.tabEnum;
+            tabName = tabEnum.toString().split('.').last;
+          } catch (_) {}
+          tabName ??= title?.toLowerCase().replaceAll(' ', '_');
+          tabName ??= 'tab_$currentIndex';
+
+          _lastResolvedTabName = tabName;
+          _lastTabTitle =
+              (title != null && title.isNotEmpty) ? title : 'Tab $currentIndex';
+
+          // Normalize baseRoute: strip any existing /tabName suffix to avoid infinite nesting
+          String cleanBase = baseRoute;
+          for (final dynamic it in list) {
+            String? itName;
+            try {
+              itName = it.tabEnum.toString().split('.').last;
+            } catch (_) {}
+            try {
+              itName ??= (it.label as String?)?.toLowerCase().replaceAll(
+                    ' ',
+                    '_',
+                  );
+            } catch (_) {}
+            try {
+              itName ??= (it.title as String?)?.toLowerCase().replaceAll(
+                    ' ',
+                    '_',
+                  );
+            } catch (_) {}
+
+            if (itName != null &&
+                itName.isNotEmpty &&
+                cleanBase.endsWith('/$itName')) {
+              cleanBase = cleanBase.substring(
+                0,
+                cleanBase.length - itName.length - 1,
+              );
+              break;
+            }
+          }
+          final finalRoute = '$cleanBase/$tabName';
+          return finalRoute;
+        }
+      } catch (_) {}
+    }
+
+    _lastResolvedTabName = null;
+    return baseRoute;
+  }
+
+  static bool _isElementOffstage(Element element) {
+    bool offstage = false;
+    element.visitAncestorElements((ancestor) {
+      final w = ancestor.widget;
+      if (w is Offstage && w.offstage) {
+        offstage = true;
+        return false;
+      }
+      if (w is Visibility && !w.visible) {
+        offstage = true;
+        return false;
+      }
+      return true;
+    });
+    return offstage;
+  }
+
+  static String? _findActiveAppBarTitle() {
+    final nav = navigatorState;
+    if (nav == null) return null;
+
+    String? foundTitle;
+
+    Element? findElementForWidget(Element root, Widget target) {
+      if (root.widget == target) return root;
+      Element? found;
+      root.visitChildren((child) {
+        if (found != null) return;
+        found = findElementForWidget(child, target);
+      });
+      return found;
+    }
+
+    String? findTextInElement(Element root) {
+      final widget = root.widget;
+      if (widget is Text) {
+        if (widget.data != null && widget.data!.isNotEmpty) {
+          return widget.data;
+        }
+      }
+      if (widget is RichText) {
+        final plainText = widget.text.toPlainText();
+        if (plainText.isNotEmpty) {
+          return plainText;
+        }
+      }
+      String? found;
+      root.visitChildren((child) {
+        if (found != null) return;
+        found = findTextInElement(child);
+      });
+      return found;
+    }
+
+    void visitor(Element element) {
+      if (foundTitle != null) return;
+
+      final widget = element.widget;
+      if (widget is AppBar) {
+        final route = _findModalRouteOf(element);
+        final isContentRoute =
+            route != null && route.settings.name == _currentContentRoute;
+        if (route != null &&
+            (route.isCurrent || isContentRoute) &&
+            !_isElementOffstage(element)) {
+          if (route.settings.name == MonitorConstants.dashboardRoute) return;
+          final titleWidget = widget.title;
+          if (titleWidget != null) {
+            final titleElement = findElementForWidget(element, titleWidget);
+            if (titleElement != null) {
+              final text = findTextInElement(titleElement);
+              if (text != null && text.isNotEmpty) {
+                foundTitle = text;
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      // Prune subtrees that cannot contain an AppBar to optimize performance
+      if (widget is Scrollable ||
+          widget is ListView ||
+          widget is GridView ||
+          widget is CustomScrollView ||
+          widget is SingleChildScrollView ||
+          widget is ListTile ||
+          widget is Card ||
+          widget is Text ||
+          widget is RichText ||
+          widget is Icon ||
+          widget is Image) {
+        return;
+      }
+
+      final children = <Element>[];
+      element.visitChildren((child) => children.add(child));
+      for (final child in children.reversed) {
+        visitor(child);
+      }
+    }
+
+    try {
+      nav.context.visitChildElements((element) {
+        visitor(element);
+      });
+    } catch (_) {}
+
+    return foundTitle;
+  }
+
+  static ModalRoute? _findModalRouteOf(Element element) {
+    ModalRoute? route;
+    element.visitAncestorElements((ancestor) {
+      final w = ancestor.widget;
+      if (w is InheritedWidget) {
+        try {
+          final dynamic scope = w;
+          final dynamic possibleRoute = scope.route;
+          if (possibleRoute is ModalRoute) {
+            route = possibleRoute;
+            return false; // stop traversal
+          }
+        } catch (_) {}
+      }
+      return true;
+    });
+    return route;
   }
 }

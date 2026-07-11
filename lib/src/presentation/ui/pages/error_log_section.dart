@@ -33,16 +33,94 @@ class _EmptyErrorState extends StatelessWidget {
   }
 }
 
-class _ErrorList extends StatelessWidget {
+class _ErrorList extends StatefulWidget {
   final List<ErrorLogItem> errors;
-  const _ErrorList({required this.errors});
+  final String selectedScreen;
+  const _ErrorList({required this.errors, required this.selectedScreen});
+
+  @override
+  State<_ErrorList> createState() => _ErrorListState();
+}
+
+class _ErrorListState extends State<_ErrorList> {
+  final Set<String> _collapsedScreens = {};
 
   @override
   Widget build(BuildContext context) {
+    final List<List<ErrorLogItem>> visits = [];
+    List<ErrorLogItem>? currentVisit;
+
+    final globalErrors = MonitorController.instance.errorLogs;
+    final List<ErrorLogItem> chronoErrors = globalErrors.reversed.toList();
+    for (final err in chronoErrors) {
+      if (currentVisit == null || currentVisit.last.screen != err.screen) {
+        currentVisit = [err];
+        visits.add(currentVisit);
+      } else {
+        currentVisit.add(err);
+      }
+    }
+
+    final items = <Object>[];
+    final totalVisits = visits.length;
+    final List<int> visitOrder = List.generate(totalVisits, (i) => i);
+    visitOrder.sort((a, b) => b.compareTo(a));
+
+    for (final i in visitOrder) {
+      final visitRawErrors = visits[i];
+      final screen = visitRawErrors[0].screen;
+      final stepNum = i + 1;
+
+      final List<ErrorLogItem> visitErrors = visitRawErrors.where((err) => widget.errors.contains(err)).toList();
+      if (visitErrors.isEmpty) continue;
+
+      final isReturn = visits.sublist(0, i).any((v) => v[0].screen == screen);
+      final List<ErrorLogItem> displayErrors = visitErrors.reversed.toList();
+
+      final collapsedKey = 'visit_$i';
+      final isCollapsed = _collapsedScreens.contains(collapsedKey);
+
+      items.add(_VisitHeaderData(
+        visitIndex: i,
+        screenRoute: screen,
+        isCollapsed: isCollapsed,
+        totalApis: visitErrors.length,
+        isReturn: isReturn,
+        stepNumber: stepNum,
+        isCurrent: (i == totalVisits - 1),
+      ));
+
+      if (isCollapsed) continue;
+      items.addAll(displayErrors);
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-      itemCount: errors.length,
-      itemBuilder: (_, i) => _ErrorLogTile(error: errors[i]),
+      itemCount: items.length,
+      itemBuilder: (_, i) {
+        final item = items[i];
+        if (item is _VisitHeaderData) {
+          final collapsedKey = 'visit_${item.visitIndex}';
+          return _VisitHeader(
+            screenRoute: item.screenRoute,
+            isCollapsed: item.isCollapsed,
+            totalApis: item.totalApis,
+            isReturn: item.isReturn,
+            stepNumber: item.stepNumber,
+            isCurrent: item.isCurrent,
+            onToggle: () {
+              setState(() {
+                if (_collapsedScreens.contains(collapsedKey)) {
+                  _collapsedScreens.remove(collapsedKey);
+                } else {
+                  _collapsedScreens.add(collapsedKey);
+                }
+              });
+            },
+          );
+        }
+        return _ErrorLogTile(error: item as ErrorLogItem);
+      },
     );
   }
 }
@@ -88,18 +166,7 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: MonitorColors.orderBadgeBg,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: MonoText('#${e.id}', 9,
-                            color: MonitorColors.orderBadgeText,
-                            weight: FontWeight.bold),
-                      ),
-                      const SizedBox(width: 6),
+
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 5, vertical: 2),
@@ -195,6 +262,167 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _VisitHeaderData {
+  final int visitIndex;
+  final String screenRoute;
+  final bool isCollapsed;
+  final int totalApis;
+  final bool isReturn;
+  final int stepNumber;
+  final bool isCurrent;
+  const _VisitHeaderData({
+    required this.visitIndex,
+    required this.screenRoute,
+    required this.isCollapsed,
+    required this.totalApis,
+    required this.isReturn,
+    required this.stepNumber,
+    required this.isCurrent,
+  });
+}
+
+class _VisitHeader extends StatelessWidget {
+  final String screenRoute;
+  final bool isCollapsed;
+  final int totalApis;
+  final bool isReturn;
+  final int stepNumber;
+  final bool isCurrent;
+  final VoidCallback onToggle;
+
+  const _VisitHeader({
+    required this.screenRoute,
+    required this.isCollapsed,
+    required this.totalApis,
+    required this.isReturn,
+    required this.stepNumber,
+    required this.isCurrent,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = MonitorController.formatRouteName(screenRoute);
+
+    return InkWell(
+      onTap: onToggle,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        margin: const EdgeInsets.only(top: 14, bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isCurrent
+              ? MonitorColors.metricTotal.withValues(alpha: 0.08)
+              : MonitorColors.divider.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isCurrent
+                ? MonitorColors.metricTotal.withValues(alpha: 0.40)
+                : MonitorColors.border.withValues(alpha: 0.5),
+            width: isCurrent ? 0.9 : 0.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isCollapsed
+                  ? Icons.keyboard_arrow_right_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: isCurrent
+                  ? MonitorColors.metricTotal
+                  : MonitorColors.secondaryText,
+            ),
+            const SizedBox(width: 4),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: MonitorColors.border.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: MonoText(
+                'Bước $stepNumber',
+                8,
+                color: MonitorColors.secondaryText,
+                weight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.layers_outlined,
+                size: 12, color: MonitorColors.secondaryText),
+            const SizedBox(width: 6),
+            BodyText(
+              title,
+              11,
+              color: MonitorColors.primaryText,
+              weight: FontWeight.w600,
+            ),
+            if (isReturn) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: MonitorColors.statusSlow.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: MonitorColors.statusSlow.withValues(alpha: 0.35),
+                    width: 0.5,
+                  ),
+                ),
+                child: LabelText(
+                  'QUAY LẠI',
+                  MonitorColors.statusSlow,
+                  size: 7,
+                  spacing: 0.3,
+                ),
+              ),
+            ],
+            const SizedBox(width: 6),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: (isCurrent
+                        ? MonitorColors.metricTotal
+                        : MonitorColors.divider)
+                    .withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: LabelText(
+                '$totalApis Error${totalApis != 1 ? 's' : ''}',
+                isCurrent
+                    ? MonitorColors.metricTotal
+                    : MonitorColors.secondaryText,
+                size: 7,
+                spacing: 0.3,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Container(
+                height: 0.5,
+                color: (isCurrent
+                        ? MonitorColors.metricTotal
+                        : MonitorColors.border)
+                    .withValues(alpha: 0.3),
+              ),
+            ),
+            const SizedBox(width: 6),
+            MonoText(
+              screenRoute,
+              9,
+              color: isCurrent
+                  ? MonitorColors.metricTotal.withValues(alpha: 0.7)
+                  : MonitorColors.secondaryText,
+            ),
+          ],
+        ),
       ),
     );
   }

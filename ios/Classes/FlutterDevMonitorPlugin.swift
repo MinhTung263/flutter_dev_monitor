@@ -2,6 +2,9 @@ import Flutter
 import UIKit
 
 public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
+    private var lastDiskUsedCheckTime: Double = 0
+    private var cachedAppDiskUsed: Double = 0.0
+
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
             name: "flutter_dev_monitor/system_monitor",
@@ -45,6 +48,14 @@ public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
                 UserDefaults.standard.set(isDark, forKey: "flutter_dev_monitor_dark_theme")
             }
             result(nil)
+        case "getOverlayConfig":
+            let saved = UserDefaults.standard.dictionary(forKey: "flutter_dev_monitor_overlay_config")
+            result(saved ?? [:])
+        case "saveOverlayConfig":
+            if let dict = call.arguments as? [String: Any] {
+                UserDefaults.standard.set(dict, forKey: "flutter_dev_monitor_overlay_config")
+            }
+            result(nil)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -64,8 +75,12 @@ public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
             ? Double(info.resident_size) / (1024.0 * 1024.0)
             : 0.0
 
-        let homePath = NSHomeDirectory()
-        let appDiskUsed = getDirectorySize(url: URL(fileURLWithPath: homePath))
+        let now = Date().timeIntervalSince1970
+        if now - lastDiskUsedCheckTime > 300 {
+            let homePath = NSHomeDirectory()
+            cachedAppDiskUsed = getDirectorySize(url: URL(fileURLWithPath: homePath))
+            lastDiskUsedCheckTime = now
+        }
 
         var diskTotal: Double = 0.0
         if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
@@ -76,7 +91,7 @@ public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
         return [
             "ramUsed": ramUsed,
             "ramTotal": ramTotal,
-            "appDiskUsed": appDiskUsed,
+            "appDiskUsed": cachedAppDiskUsed,
             "diskTotal": diskTotal
         ]
     }

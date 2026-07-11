@@ -14,6 +14,8 @@ import java.io.File
 class FlutterDevMonitorPlugin : FlutterPlugin, MethodCallHandler {
     private lateinit var channel: MethodChannel
     private lateinit var applicationContext: Context
+    private var lastDiskUsedCheckTime: Long = 0
+    private var cachedAppDiskUsed: Double = 0.0
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = binding.applicationContext
@@ -61,6 +63,35 @@ class FlutterDevMonitorPlugin : FlutterPlugin, MethodCallHandler {
                     .edit().putBoolean("dark_theme", isDark).apply()
                 result.success(null)
             }
+            "getOverlayConfig" -> {
+                val prefs = applicationContext.getSharedPreferences(
+                    "flutter_dev_monitor", android.content.Context.MODE_PRIVATE)
+                val jsonStr = prefs.getString("overlay_config", null)
+                if (jsonStr != null) {
+                    try {
+                        val map = org.json.JSONObject(jsonStr)
+                        val resultData = mutableMapOf<String, Any>()
+                        val keys = map.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            resultData[key] = map.get(key)
+                        }
+                        result.success(resultData)
+                        return
+                    } catch (e: Exception) {}
+                }
+                result.success(mapOf<String, Any>())
+            }
+            "saveOverlayConfig" -> {
+                val dict = call.arguments as? Map<String, Any>
+                if (dict != null) {
+                    val jsonStr = org.json.JSONObject(dict).toString()
+                    applicationContext.getSharedPreferences(
+                        "flutter_dev_monitor", android.content.Context.MODE_PRIVATE)
+                        .edit().putString("overlay_config", jsonStr).apply()
+                }
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -81,18 +112,23 @@ class FlutterDevMonitorPlugin : FlutterPlugin, MethodCallHandler {
         actManager.getMemoryInfo(sysMemInfo)
         val ramTotal = sysMemInfo.totalMem / (1024.0 * 1024.0)
 
-        // App disk usage (MB)
-        val dataDir = File(applicationContext.applicationInfo.dataDir)
-        val appDiskUsed = getDirBytes(dataDir) / (1024.0 * 1024.0)
+        // App disk usage (MB) - throttled to 5 minutes
+        val now = System.currentTimeMillis()
+        if (now - lastDiskUsedCheckTime > 300000) {
+            val dataDir = File(applicationContext.applicationInfo.dataDir)
+            cachedAppDiskUsed = getDirBytes(dataDir) / (1024.0 * 1024.0)
+            lastDiskUsedCheckTime = now
+        }
 
         // Total disk (GB)
+        val dataDir = File(applicationContext.applicationInfo.dataDir)
         val stat = StatFs(dataDir.path)
         val diskTotal = stat.totalBytes / (1024.0 * 1024.0 * 1024.0)
 
         return mapOf(
             "ramUsed" to ramUsed,
             "ramTotal" to ramTotal,
-            "appDiskUsed" to appDiskUsed,
+            "appDiskUsed" to cachedAppDiskUsed,
             "diskTotal" to diskTotal
         )
     }
