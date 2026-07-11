@@ -121,7 +121,7 @@ class MonitorInterceptor extends Interceptor {
             if (file.contentType != null) 'contentType': file.contentType.toString(),
           };
         }
-        return const JsonEncoder.withIndent('  ').convert({
+        return jsonEncode({
           '@type': 'FormData',
           '@fields': map,
         });
@@ -134,23 +134,41 @@ class MonitorInterceptor extends Interceptor {
       }
       if (data is String) {
         if (data.isEmpty) return null;
-        try {
-          return const JsonEncoder.withIndent('  ').convert(jsonDecode(data));
-        } catch (_) {
-          return data;
+        if (data.length > 50000) {
+          return '[Payload size is too large to display (${data.length} bytes)]';
         }
+        return data;
       }
       if (data is List || data is Map) {
-        return const JsonEncoder.withIndent('  ').convert(data);
+        if (_isTooLarge(data, 200)) {
+          return '[JSON payload is too large to display]';
+        }
+        return jsonEncode(data);
       }
-      return data.toString();
+      final str = data.toString();
+      if (str.length > 50000) {
+        return '[Payload size is too large to display (${str.length} bytes)]';
+      }
+      return str;
     } catch (_) {
       return null;
     }
   }
 
   String _extractCallerName(String trace) {
-    for (final line in trace.split('\n')) {
+    int newlineCount = 0;
+    int truncateIndex = trace.length;
+    for (int i = 0; i < trace.length; i++) {
+      if (trace.codeUnitAt(i) == 10) { // '\n'
+        newlineCount++;
+        if (newlineCount == 15) {
+          truncateIndex = i;
+          break;
+        }
+      }
+    }
+    final shortTrace = trace.substring(0, truncateIndex);
+    for (final line in shortTrace.split('\n')) {
       if (line.isEmpty || _isFrameworkFrame(line)) continue;
       final match = RegExp(r'#\d+\s+(.+?)\s+\(').firstMatch(line);
       if (match != null) {
@@ -175,5 +193,26 @@ class MonitorInterceptor extends Interceptor {
         lower.contains('_rootzone') ||
         lower.contains('_customzone') ||
         lower.contains('_timer');
+  }
+
+  bool _isTooLarge(dynamic data, [int maxCount = 200]) {
+    int count = 0;
+    bool traverse(dynamic obj) {
+      if (obj is List) {
+        count += obj.length;
+        if (count > maxCount) return true;
+        for (final item in obj) {
+          if (traverse(item)) return true;
+        }
+      } else if (obj is Map) {
+        count += obj.length;
+        if (count > maxCount) return true;
+        for (final val in obj.values) {
+          if (traverse(val)) return true;
+        }
+      }
+      return false;
+    }
+    return traverse(data);
   }
 }

@@ -3,6 +3,7 @@ import '../../domain/api_log_item.dart';
 
 class ApiLogController {
   static const int _maxTrackedScreens = 50;
+  static const int _maxLogsPerScreen = 100;
 
   final Map<String, List<ApiLogItem>> initLogsMap = {};
   final Map<String, List<ApiLogItem>> refreshLogsMap = {};
@@ -156,6 +157,9 @@ class ApiLogController {
           responseHeaders: item.responseHeaders,
           responseBody: item.responseBody,
         ));
+        if (refreshLogs.length > _maxLogsPerScreen) {
+          refreshLogs.removeAt(0);
+        }
       }
     } else {
       final initLogs = initLogsMap[screen] ??= [];
@@ -193,6 +197,9 @@ class ApiLogController {
           responseHeaders: item.responseHeaders,
           responseBody: item.responseBody,
         ));
+        if (initLogs.length > _maxLogsPerScreen) {
+          initLogs.removeAt(0);
+        }
       }
     }
 

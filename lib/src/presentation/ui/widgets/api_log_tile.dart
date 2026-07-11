@@ -1175,12 +1175,27 @@ class _BodyBlock extends StatelessWidget {
   final String text;
   const _BodyBlock({required this.text});
 
+  String _formatText(String input) {
+    final trimmed = input.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        return const JsonEncoder.withIndent('  ').convert(decoded);
+      } catch (_) {
+        return input;
+      }
+    }
+    return input;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = MonitorColors.isDark;
     final headerBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
     final bodyBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
     final borderCol = MonitorColors.border.withValues(alpha: 0.8);
+    final formattedText = _formatText(text);
 
     return Container(
       decoration: BoxDecoration(
@@ -1208,14 +1223,14 @@ class _BodyBlock extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 MonoText(
-                  text.trim().startsWith('{') || text.trim().startsWith('[')
+                  formattedText.trim().startsWith('{') || formattedText.trim().startsWith('[')
                       ? 'JSON'
                       : 'TEXT',
                   9,
                   color: MonitorColors.secondaryText,
                   weight: FontWeight.bold,
                 ),
-                _CopyButton(text: text),
+                _CopyButton(text: formattedText),
               ],
             ),
           ),
@@ -1224,7 +1239,7 @@ class _BodyBlock extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: SelectionArea(
               child: MonoText(
-                text,
+                formattedText,
                 10,
                 color: MonitorColors.primaryText,
                 height: 1.55,

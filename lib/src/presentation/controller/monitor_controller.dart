@@ -42,6 +42,7 @@ class MonitorController extends ChangeNotifier {
   int? _currentPingMs;
   bool _disposed = false;
   bool _isReportingError = false;
+  bool _isOverlayVisible = true;
 
   bool _isDashboardOpen = false;
   bool get isDashboardOpen => _isDashboardOpen;
@@ -50,6 +51,7 @@ class MonitorController extends ChangeNotifier {
       _isDashboardOpen = value;
       _apiLog.isDashboardOpen = value;
       _apiLog.updateView(_apiLog.currentViewedScreen);
+      updatePingMonitoring();
       notifyListeners();
     }
   }
@@ -201,7 +203,7 @@ class MonitorController extends ChangeNotifier {
   void _init() {
     _loadDeviceModel();
     _startHardwareMonitoring();
-    _startPingMonitoring();
+    updatePingMonitoring();
     _hookFlutterErrors();
     MonitorColors.load(); // fire-and-forget: restores persisted theme
   }
@@ -372,12 +374,34 @@ class MonitorController extends ChangeNotifier {
     });
   }
 
+  void updatePingMonitoring({bool? visible}) {
+    if (visible != null) {
+      _isOverlayVisible = visible;
+    }
+    final shouldPing = _isDashboardOpen || _isOverlayVisible;
+    if (shouldPing) {
+      _startPingMonitoring();
+    } else {
+      _stopPingMonitoring();
+    }
+  }
+
   void _startPingMonitoring() {
+    if (_pingTimer != null) return;
     Future.delayed(const Duration(seconds: 5), () {
       if (_disposed) return;
+      final shouldPing = _isDashboardOpen || _isOverlayVisible;
+      if (!shouldPing) return;
       _fetchPing();
-      _pingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchPing());
+      _pingTimer = Timer.periodic(const Duration(seconds: 10), (_) => _fetchPing());
     });
+  }
+
+  void _stopPingMonitoring() {
+    _pingTimer?.cancel();
+    _pingTimer = null;
+    _currentPingMs = null;
+    notifyListeners();
   }
 
   Future<void> _fetchPing() async {

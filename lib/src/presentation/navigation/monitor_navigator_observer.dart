@@ -20,31 +20,35 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
   /// The most recently pushed page route name (excludes popups and dashboard).
   static String _currentContentRoute = '/unknown';
+  static String _cachedCurrentContentRoute = '/unknown';
+
   static String get currentContentRoute {
     _scheduleTabRouteResolution();
-    try {
-      return _resolveNestedTabRoute(_currentContentRoute);
-    } catch (_) {
-      return _resolveTabRouteFor(_currentContentRoute);
-    }
+    return _cachedCurrentContentRoute;
   }
 
-  static set currentContentRoute(String value) => _currentContentRoute = value;
+  static set currentContentRoute(String value) {
+    _currentContentRoute = value;
+    _cachedCurrentContentRoute = _resolveTabRouteFor(value);
+  }
 
   /// The topmost active route (including popups).
   static String _currentRoute = '/unknown';
+  static String _cachedCurrentRoute = '/unknown';
   static String _lastResolvedRoute = '/unknown';
   static String? _lastResolvedTabName;
   static String? _lastTabTitle;
   static bool _tabResolutionScheduled = false;
+  static DateTime _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   static String get currentRoute {
     _scheduleTabRouteResolution();
-    try {
-      return _resolveNestedTabRoute(_currentRoute);
-    } catch (_) {
-      return _resolveTabRouteFor(_currentRoute);
-    }
+    return _cachedCurrentRoute;
+  }
+
+  static set currentRoute(String value) {
+    _currentRoute = value;
+    _cachedCurrentRoute = _resolveTabRouteFor(value);
   }
 
   /// Synchronously resolves the active tab route and title. Call only from user interaction handlers.
@@ -83,8 +87,11 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     } catch (_) {}
   }
 
-  static set currentRoute(String value) {
-    _currentRoute = value;
+  static void scheduleTabRouteResolutionForce() {
+    final now = DateTime.now();
+    if (now.difference(_lastResolveTime).inMilliseconds < 500) return;
+    _lastResolveTime = now;
+    _scheduleTabRouteResolution();
   }
 
   static void _scheduleTabRouteResolution() {
@@ -95,7 +102,24 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     _tabResolutionScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tabResolutionScheduled = false;
-      final resolved = _resolveNestedTabRoute(_currentContentRoute);
+      _lastResolveTime = DateTime.now();
+      
+      final resolvedContent = _resolveNestedTabRoute(_currentContentRoute);
+      final resolvedCurrent = _resolveNestedTabRoute(_currentRoute);
+
+      if (resolvedContent != '/unknown') {
+        _cachedCurrentContentRoute = resolvedContent;
+      } else {
+        _cachedCurrentContentRoute = _resolveTabRouteFor(_currentContentRoute);
+      }
+
+      if (resolvedCurrent != '/unknown') {
+        _cachedCurrentRoute = resolvedCurrent;
+      } else {
+        _cachedCurrentRoute = _resolveTabRouteFor(_currentRoute);
+      }
+
+      final resolved = _cachedCurrentContentRoute;
       if (resolved != '/unknown') {
         final oldRoute = _lastResolvedRoute;
         final isNewRoute = resolved != oldRoute;
