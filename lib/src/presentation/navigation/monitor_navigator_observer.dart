@@ -194,8 +194,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       currentRoute = tempStack.isNotEmpty ? tempStack.last : '/unknown';
     }
 
-    if (name == null || name.isEmpty || name == MonitorConstants.dashboardRoute)
+    if (name == null || name.isEmpty || name == MonitorConstants.dashboardRoute) {
       return;
+    }
 
     if (route is PageRoute) {
       pageStack.remove(name);
