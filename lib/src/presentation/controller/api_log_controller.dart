@@ -2,8 +2,8 @@ import '../../core/monitor_constants.dart';
 import '../../domain/api_log_item.dart';
 
 class ApiLogController {
-  static const int _maxTrackedScreens = 50;
-  static const int _maxLogsPerScreen = 100;
+  static const int _maxTrackedScreens = 20;
+  static const int _maxLogsPerScreen = 40;
 
   final Map<String, List<ApiLogItem>> initLogsMap = {};
   final Map<String, List<ApiLogItem>> refreshLogsMap = {};

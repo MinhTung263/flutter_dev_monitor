@@ -203,7 +203,13 @@ class _GitNode {
   /// The active navigator routes on the stack during this transition.
   final List<String> activeStack;
 
-  const _GitNode({
+  /// Number of APIs called during this route session.
+  int apiCount = 0;
+
+  /// Total duration (in ms) of APIs called during this route session.
+  int apiDurationMs = 0;
+
+  _GitNode({
     required this.item,
     required this.lane,
     required this.topLanes,
@@ -397,7 +403,12 @@ class _GitLanePainter extends CustomPainter {
 class _RouteTreeView extends StatelessWidget {
   final List<RouteLogItem> logs;
   final bool oldestFirst;
-  const _RouteTreeView({required this.logs, required this.oldestFirst});
+  final bool compact;
+  const _RouteTreeView({
+    required this.logs,
+    required this.oldestFirst,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -466,6 +477,7 @@ class _RouteTreeView extends StatelessWidget {
                   node: node,
                   isCurrent: isCurrent,
                   stepNum: stepNum,
+                  compact: compact,
                 ),
               ),
             ],
@@ -481,8 +493,15 @@ class _GitRouteInfo extends StatelessWidget {
   final _GitNode node;
   final bool isCurrent;
   final int stepNum; // chronological step number (newest = highest)
-  const _GitRouteInfo(
-      {required this.node, required this.isCurrent, required this.stepNum});
+  final bool compact;
+  final bool isErrorTrace;
+  const _GitRouteInfo({
+    required this.node,
+    required this.isCurrent,
+    required this.stepNum,
+    this.compact = false,
+    this.isErrorTrace = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -492,51 +511,70 @@ class _GitRouteInfo extends StatelessWidget {
         '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
 
     // ── Human-readable direction instead of PUSH/POP ──────────────────
-    final bool isEnter = item.event == RouteLogItem.eventPush;
+    final bool isReturn = item.event == 'RETURN';
+    final bool isEnter = item.event == RouteLogItem.eventPush || isReturn;
     final bool isBack  = item.event == RouteLogItem.eventPop;
     final Color color  = isEnter
         ? MonitorColors.statusSuccess
         : isBack
             ? MonitorColors.secondaryText
             : MonitorColors.statusSlow;
-    final IconData dirIcon = isEnter
-        ? Icons.arrow_forward_rounded
-        : isBack
-            ? Icons.arrow_back_rounded
-            : Icons.swap_horiz_rounded;
+    final IconData dirIcon = isReturn
+        ? Icons.keyboard_return_rounded
+        : isEnter
+            ? Icons.arrow_forward_rounded
+            : isBack
+                ? Icons.arrow_back_rounded
+                : Icons.swap_horiz_rounded;
     final durationStr = item.duration != null
         ? RouteLogController.fmtDuration(item.duration!)
         : null;
 
     final laneColor = _GitLanePainter._palette[node.lane % _GitLanePainter._palette.length];
+    final badgeColor = isErrorTrace ? MonitorColors.statusError : MonitorColors.overlayApi;
 
     return Container(
-      margin: const EdgeInsets.only(left: 8, top: 4, bottom: 4),
-      decoration: BoxDecoration(
-        color: isCurrent
-            ? color.withValues(alpha: 0.07)
-            : MonitorColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isCurrent
-              ? color.withValues(alpha: 0.40)
-              : MonitorColors.border.withValues(alpha: 0.35),
-          width: isCurrent ? 0.9 : 0.5,
-        ),
+      margin: EdgeInsets.only(
+        left: compact ? 0 : 8,
+        top: compact ? 2 : 4,
+        bottom: compact ? 2 : 4,
       ),
+      decoration: compact
+          ? (isCurrent
+              ? BoxDecoration(
+                  color: color.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(6),
+                )
+              : null)
+          : BoxDecoration(
+              color: isCurrent
+                  ? color.withValues(alpha: 0.07)
+                  : MonitorColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isCurrent
+                    ? color.withValues(alpha: 0.40)
+                    : MonitorColors.border.withValues(alpha: 0.35),
+                width: isCurrent ? 0.9 : 0.5,
+              ),
+            ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(7),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 4.5,
-                color: laneColor,
-              ),
+              if (!compact)
+                Container(
+                  width: 4.5,
+                  color: laneColor,
+                ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 6 : 10,
+                    vertical: compact ? 4 : 7,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -569,6 +607,41 @@ class _GitRouteInfo extends StatelessWidget {
                                     child: LabelText(
                                         'CURRENT', MonitorColors.metricTotal,
                                         size: 7, spacing: 0.3),
+                                  ),
+                                ],
+                                // API stats badge
+                                if (node.apiCount > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: badgeColor
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(3),
+                                      border: Border.all(
+                                        color: badgeColor
+                                            .withValues(alpha: 0.35),
+                                        width: 0.5,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          isErrorTrace ? Icons.bug_report_outlined : Icons.api_outlined,
+                                          size: 8,
+                                          color: badgeColor,
+                                        ),
+                                        const SizedBox(width: 2.5),
+                                        MonoText(
+                                          isErrorTrace ? '${node.apiCount}' : '${node.apiCount} • ${fmtDuration(node.apiDurationMs)}',
+                                          8,
+                                          color: badgeColor,
+                                          weight: FontWeight.bold,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ],

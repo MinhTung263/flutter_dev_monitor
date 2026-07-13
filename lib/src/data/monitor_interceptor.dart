@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../domain/api_log_item.dart';
 import '../presentation/controller/monitor_controller.dart';
@@ -13,12 +13,14 @@ class MonitorInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    options.extra['caller_name'] =
-        _extractCallerName(StackTrace.current.toString());
+    options.extra['caller_name'] = kDebugMode
+        ? _extractCallerName(StackTrace.current.toString())
+        : 'unknown';
     options.extra['request_time'] = DateTime.now().millisecondsSinceEpoch;
     options.extra['req_headers'] = _flattenHeaders(options.headers);
     options.extra['query_params'] = _flattenMap(options.queryParameters);
     options.extra['req_body'] = _encodeBody(options.data);
+    options.extra['request_screen'] = MonitorNavigatorObserver.currentRoute;
     super.onRequest(options, handler);
   }
 
@@ -58,6 +60,8 @@ class MonitorInterceptor extends Interceptor {
   }) {
     final startTime = options.extra['request_time'] as int? ??
         DateTime.now().millisecondsSinceEpoch;
+    final requestScreen = options.extra['request_screen'] as String? ??
+        MonitorNavigatorObserver.currentRoute;
 
     MonitorController.instance.addLog(ApiLogItem(
       orderNumber: 0,
@@ -66,8 +70,8 @@ class MonitorInterceptor extends Interceptor {
       statusCode: statusCode,
       duration: DateTime.now().millisecondsSinceEpoch - startTime,
       responseBytes: responseBytes,
-      screen: MonitorNavigatorObserver.currentRoute,
-      timestamp: DateTime.now(),
+      screen: requestScreen,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(startTime),
       callerName: options.extra['caller_name'] as String? ?? 'unknown',
       queryParams: options.extra['query_params'] as Map<String, String>? ?? {},
       requestHeaders:
@@ -134,22 +138,12 @@ class MonitorInterceptor extends Interceptor {
       }
       if (data is String) {
         if (data.isEmpty) return null;
-        if (data.length > 50000) {
-          return '[Payload size is too large to display (${data.length} bytes)]';
-        }
         return data;
       }
       if (data is List || data is Map) {
-        if (_isTooLarge(data, 200)) {
-          return '[JSON payload is too large to display]';
-        }
         return jsonEncode(data);
       }
-      final str = data.toString();
-      if (str.length > 50000) {
-        return '[Payload size is too large to display (${str.length} bytes)]';
-      }
-      return str;
+      return data.toString();
     } catch (_) {
       return null;
     }
@@ -193,26 +187,5 @@ class MonitorInterceptor extends Interceptor {
         lower.contains('_rootzone') ||
         lower.contains('_customzone') ||
         lower.contains('_timer');
-  }
-
-  bool _isTooLarge(dynamic data, [int maxCount = 200]) {
-    int count = 0;
-    bool traverse(dynamic obj) {
-      if (obj is List) {
-        count += obj.length;
-        if (count > maxCount) return true;
-        for (final item in obj) {
-          if (traverse(item)) return true;
-        }
-      } else if (obj is Map) {
-        count += obj.length;
-        if (count > maxCount) return true;
-        for (final val in obj.values) {
-          if (traverse(val)) return true;
-        }
-      }
-      return false;
-    }
-    return traverse(data);
   }
 }

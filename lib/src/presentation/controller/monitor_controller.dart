@@ -52,6 +52,7 @@ class MonitorController extends ChangeNotifier {
       _apiLog.isDashboardOpen = value;
       _apiLog.updateView(_apiLog.currentViewedScreen);
       updatePingMonitoring();
+      updateHardwareMonitoring();
       notifyListeners();
     }
   }
@@ -84,30 +85,11 @@ class MonitorController extends ChangeNotifier {
     if (route == '/unknown') return 'Unknown Screen';
     if (route.isEmpty) return '';
 
-    String path = route.startsWith('/') ? route.substring(1) : route;
-    final slashIdx = path.indexOf('/');
-    String mainPath = slashIdx == -1 ? path : path.substring(0, slashIdx);
-    String subPath = slashIdx == -1 ? '' : path.substring(slashIdx);
-
-    // camelCase to spaces
-    mainPath = mainPath.replaceAllMapped(
-      RegExp(r'([a-z])([A-Z])'),
-      (match) => '${match.group(1)} ${match.group(2)}',
-    );
-
-    // underscores/hyphens to spaces
-    mainPath = mainPath.replaceAll(RegExp(r'[_-]'), ' ');
-
-    // capitalize words
-    mainPath = mainPath.split(' ').map((word) {
-      if (word.isEmpty) return '';
-      return word[0].toUpperCase() + word.substring(1).toLowerCase();
-    }).join(' ');
-
-    if (subPath.isNotEmpty) {
-      return '$mainPath ($subPath)';
+    String path = route;
+    if (path.contains('/')) {
+      path = path.split('/').last;
     }
-    return mainPath;
+    return path;
   }
 
   // ── Expose API log state ──────────────────────────────────────────────
@@ -202,7 +184,7 @@ class MonitorController extends ChangeNotifier {
 
   void _init() {
     _loadDeviceModel();
-    _startHardwareMonitoring();
+    updateHardwareMonitoring();
     updatePingMonitoring();
     _hookFlutterErrors();
     MonitorColors.load(); // fire-and-forget: restores persisted theme
@@ -226,7 +208,13 @@ class MonitorController extends ChangeNotifier {
               ? '/unknown'
               : MonitorNavigatorObserver.currentRoute,
         );
-        notifyListeners();
+        if (!_disposed) {
+          scheduleMicrotask(() {
+            if (!_disposed) {
+              notifyListeners();
+            }
+          });
+        }
       } catch (_) {
       } finally {
         _isReportingError = false;
@@ -249,7 +237,13 @@ class MonitorController extends ChangeNotifier {
               ? '/unknown'
               : MonitorNavigatorObserver.currentRoute,
         );
-        notifyListeners();
+        if (!_disposed) {
+          scheduleMicrotask(() {
+            if (!_disposed) {
+              notifyListeners();
+            }
+          });
+        }
       } catch (_) {
       } finally {
         _isReportingError = false;
@@ -333,6 +327,17 @@ class MonitorController extends ChangeNotifier {
     _visitedScreens.remove(screenName);
   }
 
+  void clearErrors() {
+    _errorLog.clearAll();
+    notifyListeners();
+  }
+
+  void clearFlow() {
+    _apiLog.clearAll();
+    _routeLog.clearAll();
+    notifyListeners();
+  }
+
   void clearOverlayHistory() => _fps.clearOverlayHistory();
 
   // ── FPS ───────────────────────────────────────────────────────────────
@@ -363,15 +368,30 @@ class MonitorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateHardwareMonitoring({bool? visible}) {
+    if (visible != null) {
+      _isOverlayVisible = visible;
+    }
+    final shouldMonitor = _isDashboardOpen || _isOverlayVisible;
+    if (shouldMonitor) {
+      _startHardwareMonitoring();
+    } else {
+      _stopHardwareMonitoring();
+    }
+  }
+
   void _startHardwareMonitoring() {
-    Future.delayed(const Duration(seconds: 3), () {
-      if (_disposed) return;
-      _fetchHardware();
-      _hardwareTimer = Timer.periodic(
-        const Duration(seconds: 3),
-        (_) => _fetchHardware(),
-      );
-    });
+    if (_hardwareTimer != null) return;
+    _fetchHardware();
+    _hardwareTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _fetchHardware(),
+    );
+  }
+
+  void _stopHardwareMonitoring() {
+    _hardwareTimer?.cancel();
+    _hardwareTimer = null;
   }
 
   void updatePingMonitoring({bool? visible}) {
@@ -393,7 +413,7 @@ class MonitorController extends ChangeNotifier {
       final shouldPing = _isDashboardOpen || _isOverlayVisible;
       if (!shouldPing) return;
       _fetchPing();
-      _pingTimer = Timer.periodic(const Duration(seconds: 10), (_) => _fetchPing());
+      _pingTimer = Timer.periodic(const Duration(seconds: 20), (_) => _fetchPing());
     });
   }
 

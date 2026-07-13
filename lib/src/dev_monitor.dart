@@ -22,6 +22,7 @@ abstract final class DevMonitor {
 
   static void _onOverlayChanged() {
     MonitorController.instance.updatePingMonitoring(visible: _overlayEnabled.value);
+    MonitorController.instance.updateHardwareMonitoring(visible: _overlayEnabled.value);
   }
 
   /// Show the FpsOverlay.

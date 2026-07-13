@@ -16,6 +16,7 @@ import 'fps_overlay_grid_painter.dart';
 import 'fps_overlay_tucked_handle.dart';
 import 'fps_overlay_pill_badge.dart';
 import 'fps_overlay_details_panel.dart';
+import 'responsive_dialog_wrapper.dart';
 
 class FpsOverlay extends StatefulWidget {
   final Widget child;
@@ -43,6 +44,7 @@ class _FpsOverlayState extends State<FpsOverlay>
   double _gpuAccumMs = 0.0;
   int _timingBatchCount = 0;
   bool _isListening = false;
+  bool _isDragging = false;
 
   double _pendingFps = 0.0;
   double _pendingBuild = 0.0;
@@ -186,7 +188,7 @@ class _FpsOverlayState extends State<FpsOverlay>
       return;
     }
     final route = MonitorNavigatorObserver.currentRoute;
-    nav.push(MaterialPageRoute(
+    nav.push(MonitorResponsiveRoute(
       builder: (_) => MonitorDashboardPage(
           initialScreen: route.isEmpty ? '/unknown' : route),
       settings: const RouteSettings(name: '/MonitorDashboardPage'),
@@ -249,17 +251,18 @@ class _FpsOverlayState extends State<FpsOverlay>
         if (!isTucked) {
           final double safeMaxTop = maxTop < minTop ? minTop : maxTop;
           
-          if (isExpanded) {
-            final double safeMaxLeft = maxLeft < minLeft ? minLeft : maxLeft;
-            currentLeft = currentLeft.clamp(minLeft, safeMaxLeft);
-            currentTop = currentTop.clamp(minTop, safeMaxTop);
-          } else {
-            // During drag of the small pill, allow it to go slightly offscreen to trigger tucking.
+          if (_isDragging) {
+            // Allow the overlay (both pill and expanded) to go slightly offscreen to trigger tucking.
             final minLeftDrag = -w * 0.5;
             final maxLeftDragDrag = sw - w * 0.5;
             final double safeMaxLeftDrag = maxLeftDragDrag < minLeftDrag ? minLeftDrag : maxLeftDragDrag;
             
             currentLeft = currentLeft.clamp(minLeftDrag, safeMaxLeftDrag);
+            currentTop = currentTop.clamp(minTop, safeMaxTop);
+          } else {
+            // Clamp strictly within screen boundaries if not dragging (e.g. when expanded)
+            final double safeMaxLeft = maxLeft < minLeft ? minLeft : maxLeft;
+            currentLeft = currentLeft.clamp(minLeft, safeMaxLeft);
             currentTop = currentTop.clamp(minTop, safeMaxTop);
           }
         }
@@ -278,8 +281,10 @@ class _FpsOverlayState extends State<FpsOverlay>
                   return const SizedBox.shrink();
                 }
 
-                return Stack(
-                  children: [
+                return Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Stack(
+                    children: [
                     if (gridMode != GridMode.off)
                       Positioned.fill(
                         child: IgnorePointer(
@@ -301,6 +306,11 @@ class _FpsOverlayState extends State<FpsOverlay>
                       top: currentTop,
                       left: currentLeft,
                       child: GestureDetector(
+                        onPanStart: (_) {
+                          setState(() {
+                            _isDragging = true;
+                          });
+                        },
                         onPanUpdate: (d) {
                           if (isTucked) {
                             final double currentX = d.globalPosition.dx;
@@ -347,6 +357,9 @@ class _FpsOverlayState extends State<FpsOverlay>
                           _overlayCtrl.updatePosition(nextTop, nextLeft);
                         },
                         onPanEnd: (details) {
+                          setState(() {
+                            _isDragging = false;
+                          });
                           if (isTucked) {
                             _overlayCtrl.finalizePosition(currentTop, currentLeft);
                             return;
@@ -364,6 +377,11 @@ class _FpsOverlayState extends State<FpsOverlay>
                                 : sw - w - OverlayLayout.edgeMargin;
                             _overlayCtrl.finalizePosition(currentTop, snapLeft);
                           }
+                        },
+                        onPanCancel: () {
+                          setState(() {
+                            _isDragging = false;
+                          });
                         },
                         onTap: () {
                           if (isTucked) {
@@ -395,8 +413,9 @@ class _FpsOverlayState extends State<FpsOverlay>
                       ),
                     ),
                   ],
-                );
-              },
+                ),
+              );
+            },
             ),
           ],
         );

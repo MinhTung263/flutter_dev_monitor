@@ -7,6 +7,16 @@ import '../controller/monitor_controller.dart';
 class MonitorNavigatorObserver extends NavigatorObserver {
   static MonitorNavigatorObserver? _instance;
 
+  static bool isMonitorRoute(Route<dynamic>? route) {
+    if (route == null) return false;
+    final name = route.settings.name;
+    if (name == null) return false;
+    return name.contains('Monitor') ||
+        name.contains('MonitorDashboardPage') ||
+        name.contains('MonitorLogsPage') ||
+        name.contains('MonitorApiDetailPage');
+  }
+
   /// Creates a new [MonitorNavigatorObserver] instance.
   MonitorNavigatorObserver() {
     _instance = this;
@@ -99,6 +109,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     final nav = navigatorState;
     if (nav == null) return;
 
+    final now = DateTime.now();
+    if (now.difference(_lastResolveTime).inMilliseconds < 1500) return;
+
     _tabResolutionScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tabResolutionScheduled = false;
@@ -133,13 +146,21 @@ class MonitorNavigatorObserver extends NavigatorObserver {
               !resolved.startsWith('$oldRoute/')) {
             ctrl.logRouteReplace(oldRoute, resolved);
           }
+          // 1. Update instantly with static tab title if available to eliminate any latency
+          if (_lastResolvedTabName != null && _lastTabTitle != null) {
+            ctrl.updateCustomRouteName(resolved, _lastTabTitle!);
+          }
+          // 2. Schedule a delayed resolution to let the tab transition animation complete and refine with active AppBar title
+          Future.delayed(const Duration(milliseconds: 120), () {
+            _instance?._updateActiveRouteTitle();
+            _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
+            _scheduleTabRouteResolution();
+          });
         }
 
-        String? displayTitle;
-        if (_lastResolvedTabName != null) {
+        String? displayTitle = _findActiveAppBarTitle();
+        if (displayTitle == null && _lastResolvedTabName != null) {
           displayTitle = _lastTabTitle;
-        } else {
-          displayTitle = _findActiveAppBarTitle();
         }
 
         if (displayTitle != null) {
@@ -173,7 +194,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     super.didPush(route, previousRoute);
+    if (isMonitorRoute(route)) return;
     final name = route.settings.name;
     if (name == null || name.isEmpty) return;
 
@@ -202,7 +225,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     super.didPop(route, previousRoute);
+    if (isMonitorRoute(route)) return;
     final name = route.settings.name;
     final prevName = previousRoute?.settings.name;
 
@@ -250,7 +275,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     super.didRemove(route, previousRoute);
+    if (isMonitorRoute(route)) return;
     if (route is! PageRoute) return;
     final name = route.settings.name;
     if (name == null || name.isEmpty || name == '/MonitorDashboardPage') return;
@@ -267,7 +294,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    if (isMonitorRoute(newRoute)) return;
     final oldName = oldRoute is PageRoute ? oldRoute.settings.name : null;
     final newName = newRoute is PageRoute ? newRoute.settings.name : null;
 
@@ -291,6 +320,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
   /// Public static method to trigger a dynamic route title update.
   static void updateActiveRouteTitle() {
+    _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _instance?._updateActiveRouteTitle();
   }
 
@@ -305,9 +335,12 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
   static String? _findAppBarTitle() {
     final nav = navigatorState;
-    if (nav == null) return null;
+    if (nav == null) {
+      return null;
+    }
 
     String? foundTitle;
+    String? fallbackTitle;
 
     Element? findElementForWidget(Element root, Widget target) {
       if (root.widget == target) return root;
@@ -340,19 +373,45 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       return found;
     }
 
-    void visitor(Element element) {
+    void visitor(Element element, int depth) {
       if (foundTitle != null) return;
+      if (depth > 120) return;
 
       final widget = element.widget;
+      final typeStr = widget.runtimeType.toString();
+
+      final isCustomAppBar = typeStr.contains('AppBar') || typeStr.contains('Header');
+
+      // Support for custom app bars/headers with a String title property (e.g. BaseAppBar)
+      if (isCustomAppBar) {
+        try {
+          final dynamic w = widget;
+          final dynamic t = w.title;
+          if (t is String && t.isNotEmpty) {
+            final route = _findModalRouteOf(element);
+            if (route != null && isMonitorRoute(route)) {
+              return;
+            }
+            final isTargetRoute = route != null &&
+                (route.isCurrent || route.settings.name == currentRoute);
+            if (isTargetRoute && !_isElementOffstage(element)) {
+              fallbackTitle = t;
+            }
+          }
+        } catch (_) {}
+      }
+
       if (widget is AppBar) {
         final route = _findModalRouteOf(element);
-        if (route == null || route.isCurrent == false) {
-          // Skip AppBars that don't belong to the current active route
+        if (route != null && isMonitorRoute(route)) {
+          return;
+        }
+        final isTargetRoute = route != null &&
+            (route.isCurrent || route.settings.name == currentRoute);
+        if (!isTargetRoute || _isElementOffstage(element)) {
           return;
         }
         if (route.settings.name == MonitorConstants.dashboardRoute) {
-          // Skip the dashboard's own AppBar to avoid taking its title
-          // as the route name.
           return;
         }
         final titleWidget = widget.title;
@@ -364,6 +423,18 @@ class MonitorNavigatorObserver extends NavigatorObserver {
               foundTitle = text;
               return;
             }
+          }
+        }
+      }
+
+      // Optimize: If we hit a Scaffold, traverse ONLY its appBar widget and skip the rest (like body)
+      if (widget is Scaffold && !_isElementOffstage(element)) {
+        final appBar = widget.appBar;
+        if (appBar != null) {
+          final appBarElement = findElementForWidget(element, appBar);
+          if (appBarElement != null) {
+            visitor(appBarElement, depth + 1);
+            return;
           }
         }
       }
@@ -386,17 +457,17 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       final children = <Element>[];
       element.visitChildren((child) => children.add(child));
       for (final child in children.reversed) {
-        visitor(child);
+        visitor(child, depth + 1);
       }
     }
 
     try {
-      nav.context.visitChildElements((element) {
-        visitor(element);
+      nav.context.visitChildElements((child) {
+        visitor(child, 0);
       });
     } catch (_) {}
 
-    return foundTitle;
+    return foundTitle ?? fallbackTitle;
   }
 
   static String _resolveNestedTabRoute(String baseRoute) {
@@ -405,8 +476,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
     dynamic foundBottomBarWidget;
 
-    void visitor(Element element) {
+    void visitor(Element element, int depth) {
       if (foundBottomBarWidget != null) return;
+      if (depth > 80) return;
 
       final widget = element.widget;
       try {
@@ -457,13 +529,13 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       final children = <Element>[];
       element.visitChildren((child) => children.add(child));
       for (final child in children.reversed) {
-        visitor(child);
+        visitor(child, depth + 1);
       }
     }
 
     try {
       nav.context.visitChildElements((element) {
-        visitor(element);
+        visitor(element, 0);
       });
     } catch (_) {}
 
@@ -572,6 +644,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     if (nav == null) return null;
 
     String? foundTitle;
+    String? fallbackTitle;
 
     Element? findElementForWidget(Element root, Widget target) {
       if (root.widget == target) return root;
@@ -604,12 +677,38 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       return found;
     }
 
-    void visitor(Element element) {
+    void visitor(Element element, int depth) {
       if (foundTitle != null) return;
+      if (depth > 120) return;
 
       final widget = element.widget;
+
+      // Support for custom app bars/headers with a String title property (e.g. BaseAppBar)
+      final typeStr = widget.runtimeType.toString();
+      final isCustomAppBar = typeStr.contains('AppBar') || typeStr.contains('Header');
+      if (isCustomAppBar) {
+        try {
+          final dynamic w = widget;
+          final dynamic t = w.title;
+          if (t is String && t.isNotEmpty) {
+            final route = _findModalRouteOf(element);
+            if (route != null && isMonitorRoute(route)) {
+              return;
+            }
+            final isContentRoute =
+                route != null && route.settings.name == _currentContentRoute;
+            if (route != null && (route.isCurrent || isContentRoute) && !_isElementOffstage(element)) {
+              fallbackTitle = t;
+            }
+          }
+        } catch (_) {}
+      }
+
       if (widget is AppBar) {
         final route = _findModalRouteOf(element);
+        if (route != null && isMonitorRoute(route)) {
+          return;
+        }
         final isContentRoute =
             route != null && route.settings.name == _currentContentRoute;
         if (route != null &&
@@ -626,6 +725,18 @@ class MonitorNavigatorObserver extends NavigatorObserver {
                 return;
               }
             }
+          }
+        }
+      }
+
+      // Optimize: If we hit a Scaffold, traverse ONLY its appBar widget and skip the rest (like body)
+      if (widget is Scaffold && !_isElementOffstage(element)) {
+        final appBar = widget.appBar;
+        if (appBar != null) {
+          final appBarElement = findElementForWidget(element, appBar);
+          if (appBarElement != null) {
+            visitor(appBarElement, depth + 1);
+            return;
           }
         }
       }
@@ -648,17 +759,17 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       final children = <Element>[];
       element.visitChildren((child) => children.add(child));
       for (final child in children.reversed) {
-        visitor(child);
+        visitor(child, depth + 1);
       }
     }
 
     try {
       nav.context.visitChildElements((element) {
-        visitor(element);
+        visitor(element, 0);
       });
     } catch (_) {}
 
-    return foundTitle;
+    return foundTitle ?? fallbackTitle;
   }
 
   static ModalRoute? _findModalRouteOf(Element element) {

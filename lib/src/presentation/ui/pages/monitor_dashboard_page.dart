@@ -16,6 +16,7 @@ import '../widgets/hardware_grid.dart';
 import '../widgets/metrics_bar.dart';
 import '../widgets/monitor_text.dart';
 import '../widgets/ram_chart.dart';
+import '../widgets/responsive_dialog_wrapper.dart';
 
 part 'dashboard_header.dart';
 part 'log_tab_section.dart';
@@ -38,7 +39,6 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   late String _selectedScreen;
   bool _chartExpanded = false;
   bool _ramChartExpanded = false;
-  int _activeTab = 0; // 0=API  1=ERRORS  2=ROUTES
   String _filterMode = 'ALL';
   bool _showHeaders = true;
   String _searchQuery = '';
@@ -50,6 +50,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   void initState() {
     super.initState();
     _selectedScreen = widget.initialScreen;
+    MonitorColors.isDark = false; // Luôn khởi tạo giao diện sáng
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _ctrl.isDashboardOpen = true;
@@ -148,97 +149,68 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
           .toList();
     }
 
-    return GestureDetector(
-      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      behavior: HitTestBehavior.translucent,
-      child: Scaffold(
-        backgroundColor: MonitorColors.pageBackground,
-        appBar: _buildAppBar(context),
-        body: NestedScrollView(
-          // Header slides away when scrolling down
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            SliverToBoxAdapter(
-              child: _DashboardHeader(
-                screen: _selectedScreen,
-                chartData: _selectedScreen == 'ALL'
-                    ? List<double>.from(_ctrl.overlayFpsHistory)
-                    : List<double>.from(
-                        _ctrl.fpsHistoryMap[_selectedScreen] ?? []),
-                chartExpanded: _chartExpanded,
-                onChartToggle: () =>
-                    setState(() => _chartExpanded = !_chartExpanded),
-                ramChartData: _selectedScreen == 'ALL'
-                    ? List<double>.from(_ctrl.globalRamHistory)
-                    : List<double>.from(
-                        _ctrl.ramHistoryMap[_selectedScreen] ?? []),
-                ramChartExpanded: _ramChartExpanded,
-                onRamChartToggle: () =>
-                    setState(() => _ramChartExpanded = !_ramChartExpanded),
-                totalRam: _ctrl.totalRam,
-              ),
-            ),
-          ],
-          // Body stays pinned — MetricsBar + TabHeader + FilterBar always visible
-          body: Column(
-            children: [
-              MonitorMetricsBar(screen: _selectedScreen),
-              _LogTabHeader(
-                apiCount: allLogs.length,
-                routeCount: routeLogs.length,
-                errorCount: flutterErrors.length,
-                activeTab: _activeTab,
-                onTabChanged: (i) => setState(() {
-                  _activeTab = i;
-                  _filterMode = 'ALL';
-                  _searchQuery = '';
-                }),
-              ),
-              if (_activeTab == 0) ...[
-                _FilterBar(
-                  allLogs: allLogs,
-                  activeFilter: _filterMode,
-                  onChanged: (v) => setState(() => _filterMode = v),
-                  showHeaders: _showHeaders,
-                  onHeaderToggle: (v) => setState(() => _showHeaders = v),
-                  oldestFirst: _apiOldestFirst,
-                  onSortToggle: () =>
-                      setState(() => _apiOldestFirst = !_apiOldestFirst),
-                  showHeaderToggle: false,
-                ),
-                _SearchBar(
-                  query: _searchQuery,
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                ),
-              ],
-              Expanded(
-                child: switch (_activeTab) {
-                  1 => flutterErrors.isEmpty
-                      ? const _EmptyErrorState()
-                      : _ErrorList(
-                          errors: flutterErrors,
-                          selectedScreen: _selectedScreen,
-                        ),
-                  2 => routeLogs.isEmpty
-                      ? const _EmptyRouteState()
-                      : _RouteLogList(logs: routeLogs),
-                  3 => (_ctrl.globalApiLogs.isEmpty && _ctrl.routeLogs.isEmpty)
-                      ? const _EmptyState()
-                      : const _FlowLogList(),
-                  _ => filteredLogs.isEmpty
-                      ? const _EmptyState()
-                      : _GroupedLogList(
-                          logs: filteredLogs,
-                          showHeaders: _showHeaders,
-                          selectedScreen: _selectedScreen,
-                          oldestFirst: _apiOldestFirst,
-                          query: _searchQuery,
-                        ),
-                },
-              ),
-            ],
+    final errorCount = flutterErrors.length;
+    final flowCount = allLogs.length + routeLogs.length;
+
+    final Widget dashboardContent = NestedScrollView(
+      headerSliverBuilder: (context, innerBoxIsScrolled) => [
+        SliverToBoxAdapter(
+          child: _DashboardHeader(
+            screen: _selectedScreen,
+            chartData: _selectedScreen == 'ALL'
+                ? List<double>.from(_ctrl.overlayFpsHistory)
+                : List<double>.from(
+                    _ctrl.fpsHistoryMap[_selectedScreen] ?? []),
+            chartExpanded: _chartExpanded,
+            onChartToggle: () =>
+                setState(() => _chartExpanded = !_chartExpanded),
+            ramChartData: _selectedScreen == 'ALL'
+                ? List<double>.from(_ctrl.globalRamHistory)
+                : List<double>.from(
+                    _ctrl.ramHistoryMap[_selectedScreen] ?? []),
+            ramChartExpanded: _ramChartExpanded,
+            onRamChartToggle: () =>
+                setState(() => _ramChartExpanded = !_ramChartExpanded),
+            totalRam: _ctrl.totalRam,
           ),
         ),
+      ],
+      body: Column(
+        children: [
+          MonitorMetricsBar(screen: _selectedScreen),
+          _FilterBar(
+            allLogs: allLogs,
+            activeFilter: _filterMode,
+            onChanged: (v) => setState(() => _filterMode = v),
+            showHeaders: _showHeaders,
+            onHeaderToggle: (v) => setState(() => _showHeaders = v),
+            oldestFirst: _apiOldestFirst,
+            onSortToggle: () =>
+                setState(() => _apiOldestFirst = !_apiOldestFirst),
+            showHeaderToggle: false,
+          ),
+          _SearchBar(
+            query: _searchQuery,
+            onChanged: (v) => setState(() => _searchQuery = v),
+          ),
+          Expanded(
+            child: filteredLogs.isEmpty
+                ? const _EmptyState()
+                : _GroupedLogList(
+                    logs: filteredLogs,
+                    showHeaders: _showHeaders,
+                    selectedScreen: _selectedScreen,
+                    oldestFirst: _apiOldestFirst,
+                    query: _searchQuery,
+                  ),
+          ),
+        ],
       ),
+    );
+
+    return MonitorResponsiveDialogWrapper(
+      appBar: _buildAppBar(context, errorCount, flowCount),
+      child: dashboardContent,
     );
   }
 
@@ -253,6 +225,48 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         _selectedScreen != '/unknown') {
       screens.add(_selectedScreen);
     }
+
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = screenWidth > 640;
+
+    if (isLargeScreen) {
+      showDialog(
+        context: context,
+        barrierColor: Colors.black.withValues(alpha: 0.4),
+        builder: (_) => Center(
+          child: Container(
+            width: 480, // Constrain width of filter dialog on tablet
+            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Material(
+                color: Colors.transparent,
+                child: _ScreenPickerSheet(
+                  screens: screens,
+                  selected: _selectedScreen,
+                  onSelected: (s) {
+                    _onScreenChanged(s);
+                    Navigator.of(context).pop();
+                  },
+                  isDialog: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -268,11 +282,79 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     );
   }
 
-  AppBar _buildAppBar(BuildContext context) {
+  Widget _buildActionIcon({
+    required IconData icon,
+    required int count,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    final hasCount = count > 0;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        if (hasCount) _PulseGlowRing(color: color),
+        IconButton(
+          icon: Icon(
+            icon,
+            color: hasCount ? color : MonitorColors.secondaryText,
+            size: 20,
+          ),
+          onPressed: onPressed,
+        ),
+        if (hasCount)
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.3),
+                    blurRadius: 3,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+              child: Center(
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 7.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  AppBar _buildAppBar(BuildContext context, int errorCount, int flowCount) {
     final isAll = _selectedScreen == 'ALL';
     final accent = MonitorColors.metricTotal;
 
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = screenWidth > 640;
+
     return AppBar(
+      automaticallyImplyLeading: false,
+      leading: isLargeScreen
+          ? null
+          : IconButton(
+              icon: Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: MonitorColors.primaryText,
+                size: 18,
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+              tooltip: 'Quay lại',
+            ),
       title: InkWell(
         onTap: () => _openScreenPicker(context),
         borderRadius: BorderRadius.circular(20),
@@ -337,6 +419,17 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         child: Container(height: 1, color: MonitorColors.divider),
       ),
       actions: [
+        _buildActionIcon(
+          icon: Icons.alt_route_rounded,
+          count: errorCount + flowCount,
+          color: errorCount > 0 ? MonitorColors.statusError : const Color(0xFF57D888),
+          onPressed: () => Navigator.of(context).push(
+            MonitorResponsiveRoute(
+              builder: (_) => const MonitorLogsPage(),
+              settings: const RouteSettings(name: '/MonitorLogsPage'),
+            ),
+          ),
+        ),
         IconButton(
           icon: Icon(
             MonitorColors.isDark
@@ -357,6 +450,237 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
           },
         ),
       ],
+    );
+  }
+}
+
+class MonitorLogsPage extends StatefulWidget {
+  final int initialTab;
+
+  const MonitorLogsPage({super.key, this.initialTab = 0});
+
+  @override
+  State<MonitorLogsPage> createState() => _MonitorLogsPageState();
+}
+
+class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  MonitorController get _ctrl => MonitorController.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTab);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _ctrl.addListener(_onUpdate);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.removeListener(_onUpdate);
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _onUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildBadge(int count, Color activeColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+      decoration: BoxDecoration(
+        color: activeColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: MonoText(
+        '$count',
+        7.5,
+        color: activeColor,
+        weight: FontWeight.bold,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final flutterErrors = _ctrl.errorLogs;
+    final allLogs = _ctrl.apiLogs;
+    final routeLogs = _ctrl.routeLogs;
+
+    final errorCount = flutterErrors.length;
+    final flowCount = allLogs.length + routeLogs.length;
+
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = screenWidth > 640;
+
+    return MonitorResponsiveDialogWrapper(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading: isLargeScreen
+            ? null
+            : IconButton(
+                icon: Icon(Icons.arrow_back_ios_new_rounded, color: MonitorColors.primaryText, size: 18),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+        title: MonoText('LOG DETAILS', 13, color: MonitorColors.primaryText, weight: FontWeight.bold),
+        centerTitle: true,
+        backgroundColor: MonitorColors.surface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: IconThemeData(color: MonitorColors.secondaryText),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            padding: const EdgeInsets.all(3.5),
+            decoration: BoxDecoration(
+              color: MonitorColors.pageBackground,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: MonitorColors.divider, width: 0.8),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              dividerColor: Colors.transparent,
+              indicator: BoxDecoration(
+                color: MonitorColors.surface,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: MonitorColors.divider,
+                  width: 0.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: MonitorColors.isDark ? 0.25 : 0.05),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelColor: MonitorColors.primaryText,
+              unselectedLabelColor: MonitorColors.secondaryText,
+              labelStyle: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+              unselectedLabelStyle: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w500, letterSpacing: 0.3),
+              tabs: [
+                Tab(
+                  height: 30,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.alt_route_rounded, size: 12.5),
+                      const SizedBox(width: 5),
+                      const Text('FLOW'),
+                      if (flowCount > 0) ...[
+                        const SizedBox(width: 5),
+                        _buildBadge(flowCount, const Color(0xFF57D888)),
+                      ],
+                    ],
+                  ),
+                ),
+                Tab(
+                  height: 30,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.bug_report_outlined, size: 12.5),
+                      const SizedBox(width: 5),
+                      const Text('ERRORS'),
+                      if (errorCount > 0) ...[
+                        const SizedBox(width: 5),
+                        _buildBadge(errorCount, MonitorColors.statusError),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.restart_alt, color: MonitorColors.statusError, size: 22),
+            onPressed: () {
+              if (_tabController.index == 0) {
+                _ctrl.clearFlow();
+              } else {
+                _ctrl.clearErrors();
+              }
+            },
+          ),
+        ],
+      ),
+      child: TabBarView(
+        controller: _tabController,
+        children: [
+          (_ctrl.globalApiLogs.isEmpty && _ctrl.routeLogs.isEmpty)
+              ? const _EmptyState()
+              : const _FlowLogList(),
+          flutterErrors.isEmpty
+              ? const _EmptyErrorState()
+              : const _ErrorFlowLogList(),
+        ],
+      ),
+    );
+  }
+}
+
+class _PulseGlowRing extends StatefulWidget {
+  final Color color;
+  const _PulseGlowRing({required this.color});
+
+  @override
+  State<_PulseGlowRing> createState() => _PulseGlowRingState();
+}
+
+class _PulseGlowRingState extends State<_PulseGlowRing> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _opacityAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.4).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _opacityAnimation = Tween<double>(begin: 0.6, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacityAnimation,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.color.withValues(alpha: 0.25),
+            border: Border.all(
+              color: widget.color,
+              width: 1.5,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

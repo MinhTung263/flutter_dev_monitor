@@ -7,6 +7,7 @@ import '../../../domain/api_log_item.dart';
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 import 'monitor_text.dart';
+import 'responsive_dialog_wrapper.dart';
 
 class ApiLogTile extends StatefulWidget {
   final ApiLogItem log;
@@ -14,6 +15,7 @@ class ApiLogTile extends StatefulWidget {
   final bool showScreenBadge;
   final int? lane;
   final bool compact;
+  final bool showFullUrl;
   const ApiLogTile({
     super.key,
     required this.log,
@@ -21,6 +23,7 @@ class ApiLogTile extends StatefulWidget {
     this.showScreenBadge = false,
     this.lane,
     this.compact = false,
+    this.showFullUrl = false,
   });
 
   @override
@@ -46,26 +49,28 @@ class _ApiLogTileState extends State<ApiLogTile> {
     final laneColor = widget.lane != null ? _palette[widget.lane! % _palette.length] : null;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 5),
-      decoration: BoxDecoration(
-        color: MonitorColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: log.isSlow
-              ? MonitorColors.statusSlow.withValues(alpha: 0.4)
-              : (log.isSuccess
-                  ? MonitorColors.border
-                  : MonitorColors.statusError.withValues(alpha: 0.35)),
-          width: 1.0,
-        ),
-      ),
+      margin: widget.compact ? const EdgeInsets.only(bottom: 2) : const EdgeInsets.only(bottom: 5),
+      decoration: widget.compact
+          ? null
+          : BoxDecoration(
+              color: MonitorColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: log.isSlow
+                    ? MonitorColors.statusSlow.withValues(alpha: 0.4)
+                    : (log.isSuccess
+                        ? MonitorColors.border
+                        : MonitorColors.statusError.withValues(alpha: 0.35)),
+                width: 1.0,
+              ),
+            ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(7),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (laneColor != null)
+              if (laneColor != null && !widget.compact)
                 Container(
                   width: 4.5,
                   color: laneColor,
@@ -78,6 +83,7 @@ class _ApiLogTileState extends State<ApiLogTile> {
                             log: log,
                             statusColor: statusColor,
                             expanded: _expanded,
+                            showFullUrl: widget.showFullUrl,
                             onTap: () => setState(() => _expanded = !_expanded),
                           )
                         : _CollapsedRow(
@@ -87,6 +93,7 @@ class _ApiLogTileState extends State<ApiLogTile> {
                             showOrder: widget.showOrder,
                             showScreenBadge: widget.showScreenBadge,
                             lane: widget.lane,
+                            showFullUrl: widget.showFullUrl,
                             onTap: () => setState(() => _expanded = !_expanded),
                           ),
                     if (_expanded) _ExpandedDetail(log: log),
@@ -116,6 +123,7 @@ class _CollapsedRow extends StatelessWidget {
   final bool showOrder;
   final bool showScreenBadge;
   final int? lane;
+  final bool showFullUrl;
   final VoidCallback onTap;
 
   const _CollapsedRow({
@@ -125,11 +133,24 @@ class _CollapsedRow extends StatelessWidget {
     required this.showOrder,
     required this.showScreenBadge,
     this.lane,
+    required this.showFullUrl,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Shorten URL path
+    String displayUrl = log.url;
+    if (!showFullUrl) {
+      try {
+        final uri = Uri.parse(log.url);
+        displayUrl = uri.path;
+        if (uri.query.isNotEmpty) {
+          displayUrl += '?${uri.query}';
+        }
+      } catch (_) {}
+    }
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -151,7 +172,7 @@ class _CollapsedRow extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: MonoText(
-                      log.url,
+                      displayUrl,
                       11.5,
                       color: MonitorColors.primaryText,
                       weight: FontWeight.w500,
@@ -172,8 +193,9 @@ class _CollapsedRow extends StatelessWidget {
                   child: GestureDetector(
                     onTap: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(
+                        MonitorResponsiveRoute(
                           builder: (_) => MonitorApiDetailPage(log: log),
+                          settings: const RouteSettings(name: '/MonitorApiDetailPage'),
                         ),
                       );
                     },
@@ -233,12 +255,14 @@ class _CompactCollapsedRow extends StatelessWidget {
   final ApiLogItem log;
   final Color statusColor;
   final bool expanded;
+  final bool showFullUrl;
   final VoidCallback onTap;
 
   const _CompactCollapsedRow({
     required this.log,
     required this.statusColor,
     required this.expanded,
+    required this.showFullUrl,
     required this.onTap,
   });
 
@@ -250,13 +274,15 @@ class _CompactCollapsedRow extends StatelessWidget {
 
     // Shorten URL path
     String displayUrl = log.url;
-    try {
-      final uri = Uri.parse(log.url);
-      displayUrl = uri.path;
-      if (uri.query.isNotEmpty) {
-        displayUrl += '?${uri.query}';
-      }
-    } catch (_) {}
+    if (!showFullUrl) {
+      try {
+        final uri = Uri.parse(log.url);
+        displayUrl = uri.path;
+        if (uri.query.isNotEmpty) {
+          displayUrl += '?${uri.query}';
+        }
+      } catch (_) {}
+    }
 
     return InkWell(
       onTap: onTap,
@@ -288,8 +314,8 @@ class _CompactCollapsedRow extends StatelessWidget {
                 displayUrl,
                 10,
                 color: MonitorColors.primaryText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                maxLines: showFullUrl ? null : 1,
+                overflow: showFullUrl ? null : TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 6),
@@ -324,8 +350,9 @@ class _CompactCollapsedRow extends StatelessWidget {
             GestureDetector(
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
+                  MonitorResponsiveRoute(
                     builder: (_) => MonitorApiDetailPage(log: log),
+                    settings: const RouteSettings(name: '/MonitorApiDetailPage'),
                   ),
                 );
               },
@@ -1171,9 +1198,16 @@ class _KVTable extends StatelessWidget {
   }
 }
 
-class _BodyBlock extends StatelessWidget {
+class _BodyBlock extends StatefulWidget {
   final String text;
   const _BodyBlock({required this.text});
+
+  @override
+  State<_BodyBlock> createState() => _BodyBlockState();
+}
+
+class _BodyBlockState extends State<_BodyBlock> {
+  bool _showAll = false;
 
   String _formatText(String input) {
     final trimmed = input.trim();
@@ -1195,7 +1229,18 @@ class _BodyBlock extends StatelessWidget {
     final headerBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
     final bodyBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
     final borderCol = MonitorColors.border.withValues(alpha: 0.8);
-    final formattedText = _formatText(text);
+
+    final rawText = widget.text;
+    final bool isHuge = rawText.length > 15000;
+    
+    final String textToFormat = (isHuge && !_showAll) 
+        ? rawText.substring(0, 15000) 
+        : rawText;
+        
+    String formattedText = _formatText(textToFormat);
+    if (isHuge && !_showAll) {
+      formattedText += '\n\n... [TRUNCATED FOR PERFORMANCE. Total: ${rawText.length} characters]';
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -1230,7 +1275,31 @@ class _BodyBlock extends StatelessWidget {
                   color: MonitorColors.secondaryText,
                   weight: FontWeight.bold,
                 ),
-                _CopyButton(text: formattedText),
+                Row(
+                  children: [
+                    if (isHuge && !_showAll) ...[
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => setState(() => _showAll = true),
+                        child: Text(
+                          'SHOW ALL',
+                          style: TextStyle(
+                            fontFamily: 'Courier',
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: MonitorColors.metricTotal,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    _CopyButton(text: rawText),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1542,16 +1611,20 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
       valueListenable: MonitorColors.isDarkNotifier,
       builder: (context, _, __) {
         final statusColor = _ApiLogTileState._statusColor(log);
-        return Scaffold(
-          backgroundColor: MonitorColors.pageBackground,
+        final double screenWidth = MediaQuery.of(context).size.width;
+        final bool isLargeScreen = screenWidth > 640;
+        return MonitorResponsiveDialogWrapper(
           appBar: AppBar(
+            automaticallyImplyLeading: false,
             backgroundColor: MonitorColors.surface,
             elevation: 0,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new_rounded,
-                  color: MonitorColors.primaryText, size: 18),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+            leading: isLargeScreen
+                ? null
+                : IconButton(
+                    icon: Icon(Icons.arrow_back_ios_new_rounded,
+                        color: MonitorColors.primaryText, size: 18),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
             title: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               transitionBuilder: (child, animation) {
@@ -1614,7 +1687,7 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
               ),
             ),
           ),
-          body: SafeArea(
+          child: SafeArea(
             bottom: false,
             child: SingleChildScrollView(
               controller: _scrollController,
