@@ -1,9 +1,13 @@
 import 'dart:math' as math;
+import 'dart:ui' show PointMode;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../controller/monitor_controller.dart';
+import '../../../core/monitor_constants.dart';
+import '../../../core/monitor_strings.dart';
+import '../../../core/monitor_filter_keys.dart';
 import '../../navigation/monitor_navigator_observer.dart';
 import '../theme/monitor_theme.dart';
 import '../widgets/api_log_tile.dart';
@@ -23,6 +27,7 @@ part 'log_tab_section.dart';
 part 'api_log_section.dart';
 part 'error_log_section.dart';
 part 'route_log_section.dart';
+part 'flow_map_section.dart';
 
 class MonitorDashboardPage extends StatefulWidget {
   /// The route name of the initial screen to view in the dashboard.
@@ -39,7 +44,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   late String _selectedScreen;
   bool _chartExpanded = false;
   bool _ramChartExpanded = false;
-  String _filterMode = 'ALL';
+  String _filterMode = MonitorFilterKeys.all;
   bool _showHeaders = true;
   String _searchQuery = '';
   bool _apiOldestFirst = false;
@@ -77,7 +82,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   void _onScreenChanged(String screen) {
     setState(() {
       _selectedScreen = screen;
-      _filterMode = 'ALL';
+      _filterMode = MonitorFilterKeys.all;
       _searchQuery = '';
     });
     _ctrl.updateDashboardView(screen);
@@ -85,22 +90,16 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
 
   List<ApiLogItem> _applyFilter(List<ApiLogItem> logs) {
     List<ApiLogItem> filtered;
-    switch (_filterMode) {
-      case 'SLOW':
-        filtered = logs.where((l) => l.isSlow).toList();
-        break;
-      case 'ERR':
-        filtered = logs.where((l) => !l.isSuccess).toList();
-        break;
-      case 'GET':
-        filtered = logs.where((l) => l.method == 'GET').toList();
-        break;
-      case 'POST':
-        filtered = logs.where((l) => l.method == 'POST').toList();
-        break;
-      default:
-        filtered = logs.toList();
-        break;
+    if (_filterMode == MonitorFilterKeys.slow) {
+      filtered = logs.where((l) => l.isSlow).toList();
+    } else if (_filterMode == MonitorFilterKeys.error) {
+      filtered = logs.where((l) => !l.isSuccess).toList();
+    } else if (_filterMode == MonitorFilterKeys.get) {
+      filtered = logs.where((l) => l.method == MonitorFilterKeys.get).toList();
+    } else if (_filterMode == MonitorFilterKeys.post) {
+      filtered = logs.where((l) => l.method == MonitorFilterKeys.post).toList();
+    } else {
+      filtered = logs.toList();
     }
 
     if (_searchQuery.isNotEmpty) {
@@ -126,11 +125,11 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   Widget _buildPage(BuildContext context) {
     final allLogs = _ctrl.apiLogs;
     final filteredLogs = _applyFilter(allLogs);
-    final flutterErrors = _selectedScreen == 'ALL'
+    final flutterErrors = _selectedScreen == MonitorConstants.allScreensKey
         ? _ctrl.errorLogs
         : _ctrl.errorLogs.where((e) => e.screen == _selectedScreen).toList();
     final List<RouteLogItem> routeLogs;
-    if (_selectedScreen == 'ALL') {
+    if (_selectedScreen == MonitorConstants.allScreensKey) {
       routeLogs = _ctrl.routeLogs;
     } else {
       final baseRoute = _selectedScreen.contains('/')
@@ -157,14 +156,14 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         SliverToBoxAdapter(
           child: _DashboardHeader(
             screen: _selectedScreen,
-            chartData: _selectedScreen == 'ALL'
+            chartData: _selectedScreen == MonitorConstants.allScreensKey
                 ? List<double>.from(_ctrl.overlayFpsHistory)
                 : List<double>.from(
                     _ctrl.fpsHistoryMap[_selectedScreen] ?? []),
             chartExpanded: _chartExpanded,
             onChartToggle: () =>
                 setState(() => _chartExpanded = !_chartExpanded),
-            ramChartData: _selectedScreen == 'ALL'
+            ramChartData: _selectedScreen == MonitorConstants.allScreensKey
                 ? List<double>.from(_ctrl.globalRamHistory)
                 : List<double>.from(
                     _ctrl.ramHistoryMap[_selectedScreen] ?? []),
@@ -217,12 +216,12 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   void _openScreenPicker(BuildContext context) {
     // visitedScreens is already newest-first (most recently visited screen at top).
     final screens = <String>[
-      'ALL',
+      MonitorConstants.allScreensKey,
       ..._ctrl.visitedScreens,
     ];
     if (!screens.contains(_selectedScreen) &&
         _selectedScreen.isNotEmpty &&
-        _selectedScreen != '/unknown') {
+        _selectedScreen != MonitorConstants.unknownRoute) {
       screens.add(_selectedScreen);
     }
 
@@ -336,7 +335,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   }
 
   AppBar _buildAppBar(BuildContext context, int errorCount, int flowCount) {
-    final isAll = _selectedScreen == 'ALL';
+    final isAll = _selectedScreen == MonitorConstants.allScreensKey;
     final accent = MonitorColors.metricTotal;
 
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -446,7 +445,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
           onPressed: () {
             _ctrl.clearAll();
             _ctrl.clearOverlayHistory();
-            setState(() => _selectedScreen = 'ALL');
+            setState(() => _selectedScreen = MonitorConstants.allScreensKey);
           },
         ),
       ],
@@ -470,7 +469,7 @@ class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTab);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTab);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -571,6 +570,21 @@ class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProv
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      const Icon(Icons.map_outlined, size: 12.5),
+                      const SizedBox(width: 5),
+                      const Text('MAP'),
+                      if (flowCount > 0) ...[
+                        const SizedBox(width: 5),
+                        _buildBadge(flowCount, const Color(0xFF57D888)),
+                      ],
+                    ],
+                  ),
+                ),
+                Tab(
+                  height: 30,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
                       const Icon(Icons.alt_route_rounded, size: 12.5),
                       const SizedBox(width: 5),
                       const Text('FLOW'),
@@ -604,7 +618,7 @@ class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProv
           IconButton(
             icon: Icon(Icons.restart_alt, color: MonitorColors.statusError, size: 22),
             onPressed: () {
-              if (_tabController.index == 0) {
+              if (_tabController.index == 0 || _tabController.index == 1) {
                 _ctrl.clearFlow();
               } else {
                 _ctrl.clearErrors();
@@ -615,7 +629,11 @@ class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProv
       ),
       child: TabBarView(
         controller: _tabController,
+        physics: const NeverScrollableScrollPhysics(),
         children: [
+          (_ctrl.globalApiLogs.isEmpty && _ctrl.routeLogs.isEmpty)
+              ? const _EmptyState()
+              : const _FlowMapList(),
           (_ctrl.globalApiLogs.isEmpty && _ctrl.routeLogs.isEmpty)
               ? const _EmptyState()
               : const _FlowLogList(),

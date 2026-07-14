@@ -33,7 +33,7 @@ class _DashboardHeader extends StatelessWidget {
           MonitorHardwareGrid(currentScreen: screen),
           _HBorder(),
           _ChartHeader(
-            label: 'FPS HISTORY',
+            label: LocaleKeys.fpsHistory.tr,
             iconColor: MonitorColors.fpsLine,
             sampleCount: chartData.length,
             expanded: chartExpanded,
@@ -46,7 +46,7 @@ class _DashboardHeader extends StatelessWidget {
             ),
           _HBorder(),
           _ChartHeader(
-            label: 'RAM HISTORY',
+            label: LocaleKeys.ramHistory.tr,
             iconColor: const Color(0xFFF472B6),
             sampleCount: ramChartData.length,
             expanded: ramChartExpanded,
@@ -104,7 +104,7 @@ class _ChartHeader extends StatelessWidget {
             ),
             const Spacer(),
             MonoText(
-              '$sampleCount samples',
+              '$sampleCount ${LocaleKeys.samples.tr}',
               9,
             ),
             SizedBox(width: 6),
@@ -173,7 +173,7 @@ class _ScreenPickerSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: Row(
               children: [
-                BodyText('Screens', 14, weight: FontWeight.bold),
+                BodyText(LocaleKeys.screensTitle.tr, 14, weight: FontWeight.bold),
                 const Spacer(),
                 Container(
                   padding:
@@ -240,7 +240,7 @@ class _ScreenPickerSheet extends StatelessWidget {
                                   : MonitorColors.border.withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(5),
                             ),
-                            child: s == 'ALL'
+                            child: s == MonitorConstants.allScreensKey
                                 ? Icon(
                                     Icons.all_inclusive_rounded,
                                     size: 13,

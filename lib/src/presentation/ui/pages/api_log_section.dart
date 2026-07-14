@@ -32,7 +32,7 @@ class _GroupedLogList extends StatelessWidget {
         return ApiLogTile(
           log: item,
           showOrder: false,
-          showScreenBadge: selectedScreen == 'ALL',
+          showScreenBadge: selectedScreen == MonitorConstants.allScreensKey,
         );
       },
     );
@@ -66,8 +66,8 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final slowCount = allLogs.where((l) => l.isSlow).length;
     final errCount = allLogs.where((l) => !l.isSuccess).length;
-    final getCount = allLogs.where((l) => l.method == 'GET').length;
-    final postCount = allLogs.where((l) => l.method == 'POST').length;
+    final getCount = allLogs.where((l) => l.method == MonitorFilterKeys.get).length;
+    final postCount = allLogs.where((l) => l.method == MonitorFilterKeys.post).length;
 
     return Container(
       color: MonitorColors.pageBackground,
@@ -80,50 +80,50 @@ class _FilterBar extends StatelessWidget {
               child: Row(
                 children: [
                   _FilterChip(
-                    label: 'ALL',
+                    label: LocaleKeys.filterAll.tr,
                     count: allLogs.length,
-                    active: activeFilter == 'ALL',
+                    active: activeFilter == MonitorFilterKeys.all,
                     color: MonitorColors.metricTotal,
-                    onTap: () => onChanged('ALL'),
+                    onTap: () => onChanged(MonitorFilterKeys.all),
                   ),
                   if (slowCount > 0) ...[
                     const SizedBox(width: 6),
                     _FilterChip(
-                      label: 'SLOW',
+                      label: LocaleKeys.filterSlow.tr,
                       count: slowCount,
-                      active: activeFilter == 'SLOW',
+                      active: activeFilter == MonitorFilterKeys.slow,
                       color: MonitorColors.statusSlow,
-                      onTap: () => onChanged('SLOW'),
+                      onTap: () => onChanged(MonitorFilterKeys.slow),
                     ),
                   ],
                   if (errCount > 0) ...[
                     const SizedBox(width: 6),
                     _FilterChip(
-                      label: 'ERR',
+                      label: LocaleKeys.filterError.tr,
                       count: errCount,
-                      active: activeFilter == 'ERR',
+                      active: activeFilter == MonitorFilterKeys.error,
                       color: MonitorColors.statusError,
-                      onTap: () => onChanged('ERR'),
+                      onTap: () => onChanged(MonitorFilterKeys.error),
                     ),
                   ],
                   if (getCount > 0) ...[
                     const SizedBox(width: 6),
                     _FilterChip(
-                      label: 'GET',
+                      label: MonitorFilterKeys.get,
                       count: getCount,
-                      active: activeFilter == 'GET',
+                      active: activeFilter == MonitorFilterKeys.get,
                       color: MonitorColors.methodGet,
-                      onTap: () => onChanged('GET'),
+                      onTap: () => onChanged(MonitorFilterKeys.get),
                     ),
                   ],
                   if (postCount > 0) ...[
                     const SizedBox(width: 6),
                     _FilterChip(
-                      label: 'POST',
+                      label: MonitorFilterKeys.post,
                       count: postCount,
-                      active: activeFilter == 'POST',
+                      active: activeFilter == MonitorFilterKeys.post,
                       color: MonitorColors.methodPost,
-                      onTap: () => onChanged('POST'),
+                      onTap: () => onChanged(MonitorFilterKeys.post),
                     ),
                   ],
                 ],
@@ -233,8 +233,13 @@ class _FilterChip extends StatelessWidget {
 class _SearchBar extends StatefulWidget {
   final String query;
   final ValueChanged<String> onChanged;
+  final bool transparent;
 
-  const _SearchBar({required this.query, required this.onChanged});
+  const _SearchBar({
+    required this.query,
+    required this.onChanged,
+    this.transparent = false,
+  });
 
   @override
   State<_SearchBar> createState() => _SearchBarState();
@@ -266,15 +271,19 @@ class _SearchBarState extends State<_SearchBar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: MonitorColors.pageBackground,
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      color: widget.transparent ? Colors.transparent : MonitorColors.pageBackground,
+      padding: widget.transparent
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Container(
         height: 34,
         decoration: BoxDecoration(
-          color: MonitorColors.surface,
+          color: widget.transparent ? MonitorColors.dropdownBg : MonitorColors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: MonitorColors.border.withValues(alpha: 0.8),
+            color: widget.transparent
+                ? MonitorColors.divider
+                : MonitorColors.border.withValues(alpha: 0.8),
             width: 0.8,
           ),
         ),
@@ -294,7 +303,7 @@ class _SearchBarState extends State<_SearchBar> {
                 ),
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: 'Search by URL, Method, or Status...',
+                  hintText: LocaleKeys.searchPlaceholder.tr,
                   hintStyle: TextStyle(
                     color: MonitorColors.secondaryText,
                     fontSize: 12,
@@ -520,10 +529,10 @@ class _FlowLogListState extends State<_FlowLogList> {
     
     final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
         ? MonitorNavigatorObserver.pageStack.last
-        : '/unknown';
+        : MonitorConstants.unknownRoute;
         
     final newestRouteLog = routeLogsCopy.isNotEmpty ? routeLogsCopy.first : null;
-    final needVirtualCurrent = topRoute != '/unknown' &&
+    final needVirtualCurrent = topRoute != MonitorConstants.unknownRoute &&
         (newestRouteLog == null ||
             newestRouteLog.route != topRoute ||
             newestRouteLog.event == RouteLogItem.eventPop);
@@ -690,7 +699,7 @@ class _FlowLogListState extends State<_FlowLogList> {
 
     final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
         ? MonitorNavigatorObserver.pageStack.last
-        : '/unknown';
+        : MonitorConstants.unknownRoute;
 
     return Column(
       children: [

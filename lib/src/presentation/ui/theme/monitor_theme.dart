@@ -106,6 +106,8 @@ abstract class MonitorColors {
 }
 
 abstract class MonitorTextStyle {
+  static const String monoFontFamily = 'monospace';
+
   /// Monospace — values, timestamps, route names, JSON.
   /// [color] defaults to [MonitorColors.secondaryText].
   static TextStyle mono(
@@ -117,7 +119,7 @@ abstract class MonitorTextStyle {
       TextStyle(
         color: color ?? MonitorColors.secondaryText,
         fontSize: size,
-        fontFamily: 'monospace',
+        fontFamily: monoFontFamily,
         fontWeight: weight,
         height: height,
       );

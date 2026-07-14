@@ -142,7 +142,7 @@ class _FpsStatCard extends StatelessWidget {
                     color: color,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace')),
+                    fontFamily: MonitorTextStyle.monoFontFamily)),
           ],
         ),
       ),
@@ -180,7 +180,7 @@ class _FpsYAxis extends StatelessWidget {
                       color: MonitorColors.secondaryText,
                       fontSize: 8,
                       fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace')))
+                      fontFamily: MonitorTextStyle.monoFontFamily)))
               .toList(),
         ),
       ),

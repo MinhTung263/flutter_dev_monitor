@@ -22,11 +22,11 @@ class _EmptyErrorState extends StatelessWidget {
                 size: 26, color: MonitorColors.secondaryText),
           ),
           SizedBox(height: 12),
-          BodyText('No Flutter errors', 13,
+          BodyText(LocaleKeys.noErrors.tr, 13,
               color: MonitorColors.secondaryText,
               weight: FontWeight.w500),
           SizedBox(height: 4),
-          BodyText('caught yet', 11, color: MonitorColors.border),
+          BodyText(LocaleKeys.caughtYet.tr, 11, color: MonitorColors.border),
         ],
       ),
     );
@@ -193,10 +193,10 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                             ));
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Error copied to clipboard',
+                                content: Text(LocaleKeys.errorCopied.tr,
                                     style: TextStyle(
                                         color: MonitorColors.primaryText,
-                                        fontFamily: 'monospace',
+                                        fontFamily: MonitorTextStyle.monoFontFamily,
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold)),
                                 backgroundColor: MonitorColors.surface,
@@ -308,10 +308,10 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                           ));
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Error copied to clipboard',
+                              content: Text(LocaleKeys.errorCopied.tr,
                                   style: TextStyle(
                                       color: MonitorColors.primaryText,
-                                      fontFamily: 'monospace',
+                                      fontFamily: MonitorTextStyle.monoFontFamily,
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold)),
                               backgroundColor: MonitorColors.surface,
@@ -455,7 +455,7 @@ class _VisitHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: MonoText(
-                'Bước $stepNumber',
+                LocaleKeys.step.trWith({'number': stepNumber}),
                 8,
                 color: MonitorColors.secondaryText,
                 weight: FontWeight.bold,
@@ -484,7 +484,7 @@ class _VisitHeader extends StatelessWidget {
                   ),
                 ),
                 child: LabelText(
-                  'QUAY LẠI',
+                  LocaleKeys.goBack.tr,
                   MonitorColors.statusSlow,
                   size: 7,
                   spacing: 0.3,
@@ -503,7 +503,7 @@ class _VisitHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: LabelText(
-                '$totalApis Error${totalApis != 1 ? 's' : ''}',
+                LocaleKeys.errorsCount.trWith({'count': totalApis}),
                 isCurrent
                     ? MonitorColors.metricTotal
                     : MonitorColors.secondaryText,
@@ -693,10 +693,10 @@ class _ErrorFlowLogListState extends State<_ErrorFlowLogList> {
     
     final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
         ? MonitorNavigatorObserver.pageStack.last
-        : '/unknown';
+        : MonitorConstants.unknownRoute;
         
     final newestRouteLog = routeLogsCopy.isNotEmpty ? routeLogsCopy.first : null;
-    final needVirtualCurrent = topRoute != '/unknown' &&
+    final needVirtualCurrent = topRoute != MonitorConstants.unknownRoute &&
         (newestRouteLog == null ||
             newestRouteLog.route != topRoute ||
             newestRouteLog.event == RouteLogItem.eventPop);
@@ -809,7 +809,7 @@ class _ErrorFlowLogListState extends State<_ErrorFlowLogList> {
 
     final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
         ? MonitorNavigatorObserver.pageStack.last
-        : '/unknown';
+        : MonitorConstants.unknownRoute;
 
     return Column(
       children: [

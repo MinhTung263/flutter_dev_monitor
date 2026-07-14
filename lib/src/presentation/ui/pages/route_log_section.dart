@@ -22,10 +22,10 @@ class _EmptyRouteState extends StatelessWidget {
                 size: 26, color: MonitorColors.secondaryText),
           ),
           const SizedBox(height: 12),
-          BodyText('No route events yet', 13,
+          BodyText(LocaleKeys.noRouteEvents.tr, 13,
               color: MonitorColors.secondaryText, weight: FontWeight.w500),
           const SizedBox(height: 4),
-          BodyText('Navigate around the app to see the flow', 11,
+          BodyText(LocaleKeys.navigateAround.tr, 11,
               color: MonitorColors.border),
         ],
       ),
@@ -59,7 +59,7 @@ class _LiveNavigationStackView extends StatelessWidget {
             children: [
               Icon(Icons.layers_outlined, size: 12, color: MonitorColors.metricTotal),
               const SizedBox(width: 5),
-              BodyText('LIVE NAVIGATION STACK', 9,
+              BodyText(LocaleKeys.liveNavigationStack.tr, 9,
                   color: MonitorColors.secondaryText, weight: FontWeight.bold),
             ],
           ),
@@ -417,11 +417,11 @@ class _RouteTreeView extends StatelessWidget {
 
     final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
         ? MonitorNavigatorObserver.pageStack.last
-        : '/unknown';
+        : MonitorConstants.unknownRoute;
 
     final List<_GitNode> finalNodes = [];
     final newestNode = nodes.isNotEmpty ? nodes.first : null;
-    final needVirtualCurrent = topRoute != '/unknown' &&
+    final needVirtualCurrent = topRoute != MonitorConstants.unknownRoute &&
         (newestNode == null ||
             newestNode.routeItem.route != topRoute ||
             newestNode.routeItem.event == RouteLogItem.eventPop);
@@ -604,9 +604,9 @@ class _GitRouteInfo extends StatelessWidget {
                                           .withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(3),
                                     ),
-                                    child: LabelText(
-                                        'CURRENT', MonitorColors.metricTotal,
-                                        size: 7, spacing: 0.3),
+                                      child: LabelText(
+                                          LocaleKeys.current.tr, MonitorColors.metricTotal,
+                                          size: 7, spacing: 0.3),
                                   ),
                                 ],
                                 // API stats badge

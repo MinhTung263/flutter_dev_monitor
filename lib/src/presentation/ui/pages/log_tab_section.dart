@@ -22,11 +22,11 @@ class _EmptyState extends StatelessWidget {
                 size: 26, color: MonitorColors.secondaryText),
           ),
           SizedBox(height: 12),
-          BodyText('No API calls yet', 13,
+          BodyText(LocaleKeys.noApiCalls.tr, 13,
               color: MonitorColors.secondaryText,
               weight: FontWeight.w500),
           SizedBox(height: 4),
-          BodyText('on this screen', 11, color: MonitorColors.border),
+          BodyText(LocaleKeys.onThisScreen.tr, 11, color: MonitorColors.border),
         ],
       ),
     );

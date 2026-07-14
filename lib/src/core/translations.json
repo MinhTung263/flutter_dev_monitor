@@ -1,0 +1,183 @@
+{
+  "tabTimeline": {
+    "en": "TIMELINE",
+    "vi": "TIMELINE"
+  },
+  "tabRequest": {
+    "en": "REQUEST",
+    "vi": "REQUEST"
+  },
+  "tabResponse": {
+    "en": "RESPONSE",
+    "vi": "RESPONSE"
+  },
+  "tabHeaders": {
+    "en": "HEADERS",
+    "vi": "HEADERS"
+  },
+  "initLabel": {
+    "en": "LOAD",
+    "vi": "KHỞI TẠO"
+  },
+  "actionLabel": {
+    "en": "INTERACTION",
+    "vi": "TƯƠNG TÁC"
+  },
+  "screensTitle": {
+    "en": "Screens",
+    "vi": "Màn hình"
+  },
+  "allScreens": {
+    "en": "All Screens",
+    "vi": "Tất cả màn hình"
+  },
+  "unknownScreen": {
+    "en": "Unknown Screen",
+    "vi": "Màn hình không xác định"
+  },
+  "samples": {
+    "en": "samples",
+    "vi": "mẫu"
+  },
+  "fpsHistory": {
+    "en": "FPS HISTORY",
+    "vi": "LỊCH SỬ FPS"
+  },
+  "ramHistory": {
+    "en": "RAM HISTORY",
+    "vi": "LỊCH SỬ RAM"
+  },
+  "noApiCalls": {
+    "en": "No API calls yet",
+    "vi": "Chưa có cuộc gọi API nào"
+  },
+  "onThisScreen": {
+    "en": "on this screen",
+    "vi": "trên màn hình này"
+  },
+  "noErrors": {
+    "en": "No Flutter errors",
+    "vi": "Không có lỗi Flutter nào"
+  },
+  "caughtYet": {
+    "en": "caught yet",
+    "vi": "được ghi nhận"
+  },
+  "filterAll": {
+    "en": "ALL",
+    "vi": "TẤT CẢ"
+  },
+  "filterSlow": {
+    "en": "SLOW",
+    "vi": "CHẬM"
+  },
+  "filterError": {
+    "en": "ERR",
+    "vi": "LỖI"
+  },
+  "searchPlaceholder": {
+    "en": "Search by URL, Method, or Status...",
+    "vi": "Tìm kiếm theo URL, Phương thức hoặc Trạng thái..."
+  },
+  "searchResponsePlaceholder": {
+    "en": "Search response...",
+    "vi": "Tìm kiếm phản hồi..."
+  },
+  "previousMatch": {
+    "en": "Previous match",
+    "vi": "Khớp trước"
+  },
+  "nextMatch": {
+    "en": "Next match",
+    "vi": "Khớp sau"
+  },
+  "found": {
+    "en": "found",
+    "vi": "tìm thấy"
+  },
+  "errorCopied": {
+    "en": "Error copied to clipboard",
+    "vi": "Đã sao chép lỗi vào bộ nhớ tạm"
+  },
+  "goBack": {
+    "en": "GO BACK",
+    "vi": "QUAY LẠI"
+  },
+  "noRouteEvents": {
+    "en": "No route events yet",
+    "vi": "Chưa có sự kiện chuyển màn nào"
+  },
+  "navigateAround": {
+    "en": "Navigate around the app to see the flow",
+    "vi": "Di chuyển xung quanh ứng dụng để xem luồng chuyển màn"
+  },
+  "liveNavigationStack": {
+    "en": "LIVE NAVIGATION STACK",
+    "vi": "DANH SÁCH MÀN ĐANG MỞ (STACK)"
+  },
+  "current": {
+    "en": "CURRENT",
+    "vi": "HIỆN TẠI"
+  },
+  "step": {
+    "en": "Step {number}",
+    "vi": "Bước {number}",
+    "type": "parameterized",
+    "params": ["int number"],
+    "replace": ["{number}", "number"]
+  },
+  "errorsCount": {
+    "en": "{count} Errors",
+    "vi": "{count} Lỗi",
+    "type": "parameterized",
+    "params": ["int count"],
+    "replace": ["{count}", "count"],
+    "hasOne": true,
+    "enOne": "1 Error",
+    "viOne": "1 Lỗi"
+  },
+  "overlayHoldToOpen": {
+    "en": "hold to open",
+    "vi": "nhấn giữ để mở"
+  },
+  "overlayCollapse": {
+    "en": "Collapse",
+    "vi": "Thu nhỏ"
+  },
+  "overlayGrid": {
+    "en": "Grid",
+    "vi": "Lưới"
+  },
+  "overlayDash": {
+    "en": "Dash",
+    "vi": "Dash"
+  },
+  "overlayReset": {
+    "en": "Reset",
+    "vi": "Reset"
+  },
+  "overlayHide": {
+    "en": "Hide",
+    "vi": "Ẩn"
+  },
+  "overlayFpsLabel": {
+    "en": "fps",
+    "vi": "fps"
+  },
+  "overlayApiLabel": {
+    "en": "API ",
+    "vi": "API "
+  },
+  "overlayMemLabel": {
+    "en": "MEM ",
+    "vi": "MEM "
+  },
+  "overlayNetLabel": {
+    "en": "NET ",
+    "vi": "NET "
+  },
+  "logsForScreen": {
+    "en": "LOGS FOR SCREEN",
+    "vi": "LOG CỦA MÀN HÌNH"
+  }
+}

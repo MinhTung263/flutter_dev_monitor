@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../controller/monitor_controller.dart';
+import '../../../core/monitor_strings.dart';
 import '../theme/monitor_theme.dart';
 import 'monitor_text.dart';
 
@@ -18,11 +19,11 @@ class MonitorMetricsBar extends StatelessWidget {
         // Both pills show the LATEST occurrence only.
         // Sub-label shows which visit/action number so context is clear.
         final openLabel = stats.visitCount > 1
-            ? 'OPEN  #${stats.visitCount}'
-            : 'OPEN';
+            ? '${LocaleKeys.initLabel.tr}  #${stats.visitCount}'
+            : LocaleKeys.initLabel.tr;
         final actionLabel = stats.actionCycles > 0
-            ? 'ACTION  #${stats.actionCycles}'
-            : 'ACTION';
+            ? '${LocaleKeys.actionLabel.tr}  #${stats.actionCycles}'
+            : LocaleKeys.actionLabel.tr;
         return Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
           child: Row(

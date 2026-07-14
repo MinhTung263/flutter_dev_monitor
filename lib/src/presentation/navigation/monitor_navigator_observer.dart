@@ -29,8 +29,8 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   static final List<String> pageStack = [];
 
   /// The most recently pushed page route name (excludes popups and dashboard).
-  static String _currentContentRoute = '/unknown';
-  static String _cachedCurrentContentRoute = '/unknown';
+  static String _currentContentRoute = MonitorConstants.unknownRoute;
+  static String _cachedCurrentContentRoute = MonitorConstants.unknownRoute;
 
   static String get currentContentRoute {
     _scheduleTabRouteResolution();
@@ -43,9 +43,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   }
 
   /// The topmost active route (including popups).
-  static String _currentRoute = '/unknown';
-  static String _cachedCurrentRoute = '/unknown';
-  static String _lastResolvedRoute = '/unknown';
+  static String _currentRoute = MonitorConstants.unknownRoute;
+  static String _cachedCurrentRoute = MonitorConstants.unknownRoute;
+  static String _lastResolvedRoute = MonitorConstants.unknownRoute;
   static String? _lastResolvedTabName;
   static String? _lastTabTitle;
   static bool _tabResolutionScheduled = false;
@@ -67,14 +67,14 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     if (nav == null) return;
     try {
       final resolved = _resolveNestedTabRoute(_currentContentRoute);
-      if (resolved != '/unknown') {
+      if (resolved != MonitorConstants.unknownRoute) {
         final oldRoute = _lastResolvedRoute;
         final isNewRoute = resolved != oldRoute;
         if (isNewRoute) {
           _lastResolvedRoute = resolved;
           final ctrl = MonitorController.instance;
           ctrl.startSession(resolved);
-          if (oldRoute != '/unknown' &&
+          if (oldRoute != MonitorConstants.unknownRoute &&
               oldRoute != resolved &&
               !resolved.startsWith('$oldRoute/')) {
             ctrl.logRouteReplace(oldRoute, resolved);
@@ -120,20 +120,20 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       final resolvedContent = _resolveNestedTabRoute(_currentContentRoute);
       final resolvedCurrent = _resolveNestedTabRoute(_currentRoute);
 
-      if (resolvedContent != '/unknown') {
+      if (resolvedContent != MonitorConstants.unknownRoute) {
         _cachedCurrentContentRoute = resolvedContent;
       } else {
         _cachedCurrentContentRoute = _resolveTabRouteFor(_currentContentRoute);
       }
 
-      if (resolvedCurrent != '/unknown') {
+      if (resolvedCurrent != MonitorConstants.unknownRoute) {
         _cachedCurrentRoute = resolvedCurrent;
       } else {
         _cachedCurrentRoute = _resolveTabRouteFor(_currentRoute);
       }
 
       final resolved = _cachedCurrentContentRoute;
-      if (resolved != '/unknown') {
+      if (resolved != MonitorConstants.unknownRoute) {
         final oldRoute = _lastResolvedRoute;
         final isNewRoute = resolved != oldRoute;
 
@@ -141,7 +141,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
           _lastResolvedRoute = resolved;
           final ctrl = MonitorController.instance;
           ctrl.startSession(resolved);
-          if (oldRoute != '/unknown' &&
+          if (oldRoute != MonitorConstants.unknownRoute &&
               oldRoute != resolved &&
               !resolved.startsWith('$oldRoute/')) {
             ctrl.logRouteReplace(oldRoute, resolved);
@@ -177,7 +177,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     // Keep the dashboard route as is
     if (route == '/MonitorDashboardPage') return route;
 
-    if (_lastResolvedRoute != '/unknown' && _lastResolvedTabName != null) {
+    if (_lastResolvedRoute != MonitorConstants.unknownRoute && _lastResolvedTabName != null) {
       final suffix = '/$_lastResolvedTabName';
       if (_lastResolvedRoute.endsWith(suffix)) {
         final cleanBase = _lastResolvedRoute.substring(
@@ -240,7 +240,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       if (name != null) {
         tempStack.remove(name);
       }
-      currentRoute = tempStack.isNotEmpty ? tempStack.last : '/unknown';
+      currentRoute = tempStack.isNotEmpty ? tempStack.last : MonitorConstants.unknownRoute;
     }
 
     if (name == null || name.isEmpty || name == MonitorConstants.dashboardRoute) {
@@ -250,7 +250,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     if (route is PageRoute) {
       pageStack.remove(name);
       final prevContentName =
-          pageStack.isNotEmpty ? pageStack.last : '/unknown';
+          pageStack.isNotEmpty ? pageStack.last : MonitorConstants.unknownRoute;
       _currentContentRoute = prevContentName;
       _lastResolvedRoute = prevContentName;
       _lastResolvedTabName = null;

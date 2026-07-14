@@ -5,6 +5,7 @@ import 'dart:ui' show FramePhase;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../../core/monitor_constants.dart';
 import '../../controller/monitor_controller.dart';
 import '../../controller/overlay_controller.dart';
 import '../../../domain/overlay_state_entity.dart';
@@ -190,7 +191,7 @@ class _FpsOverlayState extends State<FpsOverlay>
     final route = MonitorNavigatorObserver.currentRoute;
     nav.push(MonitorResponsiveRoute(
       builder: (_) => MonitorDashboardPage(
-          initialScreen: route.isEmpty ? '/unknown' : route),
+          initialScreen: route.isEmpty ? MonitorConstants.unknownRoute : route),
       settings: const RouteSettings(name: '/MonitorDashboardPage'),
     ));
   }

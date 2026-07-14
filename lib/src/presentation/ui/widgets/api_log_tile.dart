@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../domain/api_log_item.dart';
+import '../../../core/monitor_strings.dart';
+import '../../../core/monitor_filter_keys.dart';
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 import 'monitor_text.dart';
@@ -190,7 +192,8 @@ class _CollapsedRow extends StatelessWidget {
                 const SizedBox(width: 6),
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: GestureDetector(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
                     onTap: () {
                       Navigator.of(context).push(
                         MonitorResponsiveRoute(
@@ -200,11 +203,20 @@ class _CollapsedRow extends StatelessWidget {
                       );
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 4),
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: MonitorColors.expandedDetailBg,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: MonitorColors.border,
+                          width: 0.5,
+                        ),
+                      ),
+                      alignment: Alignment.center,
                       child: Icon(
                         Icons.open_in_new_rounded,
-                        color: MonitorColors.secondaryText,
+                        color: MonitorColors.primaryText,
                         size: 14,
                       ),
                     ),
@@ -268,7 +280,7 @@ class _CompactCollapsedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isGet = log.method == 'GET';
+    final isGet = log.method == MonitorFilterKeys.get;
     final methodColor =
         isGet ? MonitorColors.methodGet : MonitorColors.methodPost;
 
@@ -347,7 +359,8 @@ class _CompactCollapsedRow extends StatelessWidget {
               _CallCountBadge(count: log.callCount),
             ],
             const SizedBox(width: 6),
-            GestureDetector(
+            InkWell(
+              borderRadius: BorderRadius.circular(13),
               onTap: () {
                 Navigator.of(context).push(
                   MonitorResponsiveRoute(
@@ -357,11 +370,20 @@ class _CompactCollapsedRow extends StatelessWidget {
                 );
               },
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: MonitorColors.expandedDetailBg,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: MonitorColors.border,
+                    width: 0.5,
+                  ),
+                ),
+                alignment: Alignment.center,
                 child: Icon(
                   Icons.open_in_new_rounded,
-                  color: MonitorColors.secondaryText,
+                  color: MonitorColors.primaryText,
                   size: 13,
                 ),
               ),
@@ -438,7 +460,7 @@ class _ExpandedDetail extends StatefulWidget {
 class _ExpandedDetailState extends State<_ExpandedDetail> {
   int _tab = 0;
 
-  static const _tabLabels = ['TIMELINE', 'REQUEST', 'RESPONSE', 'HEADERS'];
+  static const _tabLabels = ['REQUEST', 'RESPONSE', 'TIMELINE', 'HEADERS'];
 
   @override
   Widget build(BuildContext context) {
@@ -510,11 +532,11 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
   Widget _buildContent(ApiLogItem log) {
     switch (_tab) {
       case 0:
-        return _TimelineContent(log: log);
-      case 1:
         return _RequestContent(log: log);
-      case 2:
+      case 1:
         return _ResponseContent(log: log);
+      case 2:
+        return _TimelineContent(log: log);
       case 3:
         return _HeadersContent(log: log);
       default:
@@ -1208,6 +1230,23 @@ class _BodyBlock extends StatefulWidget {
 
 class _BodyBlockState extends State<_BodyBlock> {
   bool _showAll = false;
+  bool _searchMode = false;
+  String _searchQuery = '';
+  late final ScrollController _localScrollController;
+  final List<int> _matchIndices = [];
+  int _currentMatchIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _localScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _localScrollController.dispose();
+    super.dispose();
+  }
 
   String _formatText(String input) {
     final trimmed = input.trim();
@@ -1221,6 +1260,101 @@ class _BodyBlockState extends State<_BodyBlock> {
       }
     }
     return input;
+  }
+
+  void _findMatches(String text, String query) {
+    _matchIndices.clear();
+    _currentMatchIndex = 0;
+    if (query.isEmpty) return;
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    int start = 0;
+    while (true) {
+      final index = lowerText.indexOf(lowerQuery, start);
+      if (index == -1) break;
+      _matchIndices.add(index);
+      start = index + query.length;
+    }
+  }
+
+  void _scrollToCurrentMatch(String text) {
+    if (_matchIndices.isEmpty || _currentMatchIndex >= _matchIndices.length) return;
+    final activeIndex = _matchIndices[_currentMatchIndex];
+
+    final preText = text.substring(0, activeIndex);
+    final lineIndex = preText.split('\n').length - 1;
+
+    final double targetOffset = (lineIndex * 15.5) - 80.0;
+    if (_localScrollController.hasClients) {
+      final double clampedOffset = targetOffset.clamp(0.0, _localScrollController.position.maxScrollExtent);
+      _localScrollController.animateTo(
+        clampedOffset,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _goToNextMatch(String text) {
+    if (_matchIndices.isEmpty) return;
+    setState(() {
+      _currentMatchIndex = (_currentMatchIndex + 1) % _matchIndices.length;
+      _scrollToCurrentMatch(text);
+    });
+  }
+
+  void _goToPrevMatch(String text) {
+    if (_matchIndices.isEmpty) return;
+    setState(() {
+      _currentMatchIndex = (_currentMatchIndex - 1 + _matchIndices.length) % _matchIndices.length;
+      _scrollToCurrentMatch(text);
+    });
+  }
+
+  TextSpan _highlightSearch(String text, String query, TextStyle defaultStyle) {
+    if (query.isEmpty) {
+      return TextSpan(text: text, style: defaultStyle);
+    }
+
+    final List<InlineSpan> spans = [];
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    
+    int start = 0;
+    int matchCounter = 0;
+    
+    while (true) {
+      final index = lowerText.indexOf(lowerQuery, start);
+      if (index == -1) {
+        spans.add(TextSpan(text: text.substring(start)));
+        break;
+      }
+      
+      if (index > start) {
+        spans.add(TextSpan(text: text.substring(start, index)));
+      }
+      
+      final isActive = _matchIndices.isNotEmpty && 
+          matchCounter == _currentMatchIndex &&
+          index == _matchIndices[_currentMatchIndex];
+      
+      spans.add(TextSpan(
+        text: text.substring(index, index + query.length),
+        style: TextStyle(
+          backgroundColor: isActive 
+              ? Colors.orange.withValues(alpha: 0.9) 
+              : Colors.yellow.withValues(alpha: 0.85),
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
+      ));
+      
+      matchCounter++;
+      start = index + query.length;
+    }
+    
+    return TextSpan(style: defaultStyle, children: spans);
   }
 
   @override
@@ -1288,7 +1422,7 @@ class _BodyBlockState extends State<_BodyBlock> {
                         child: Text(
                           'SHOW ALL',
                           style: TextStyle(
-                            fontFamily: 'Courier',
+                            fontFamily: MonitorTextStyle.monoFontFamily,
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
                             color: MonitorColors.metricTotal,
@@ -1297,21 +1431,146 @@ class _BodyBlockState extends State<_BodyBlock> {
                       ),
                       const SizedBox(width: 8),
                     ],
+                    IconButton(
+                      icon: Icon(
+                        _searchMode ? Icons.close : Icons.search, 
+                        size: 13, 
+                        color: MonitorColors.secondaryText,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _searchMode = !_searchMode;
+                          if (!_searchMode) {
+                            _searchQuery = '';
+                            _matchIndices.clear();
+                          }
+                        });
+                      },
+                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      padding: EdgeInsets.zero,
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     _CopyButton(text: rawText),
                   ],
                 ),
               ],
             ),
           ),
-          // Code Content
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: SelectionArea(
-              child: MonoText(
-                formattedText,
-                10,
-                color: MonitorColors.primaryText,
-                height: 1.55,
+          if (_searchMode)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: headerBg,
+                border: Border(
+                  bottom: BorderSide(color: borderCol, width: 0.8),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      style: TextStyle(
+                        fontFamily: MonitorTextStyle.monoFontFamily,
+                        fontSize: 10,
+                        color: MonitorColors.primaryText,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        hintText: LocaleKeys.searchResponsePlaceholder.tr,
+                        hintStyle: TextStyle(
+                          fontFamily: MonitorTextStyle.monoFontFamily,
+                          fontSize: 10,
+                          color: MonitorColors.secondaryText.withValues(alpha: 0.5),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(color: borderCol, width: 0.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(color: borderCol, width: 0.5),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(color: MonitorColors.primaryText, width: 0.8),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val;
+                          _findMatches(formattedText, val);
+                          if (_matchIndices.isNotEmpty) {
+                            _scrollToCurrentMatch(formattedText);
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  if (_searchQuery.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    MonoText(
+                      _matchIndices.isEmpty 
+                          ? '0/0' 
+                          : '${_currentMatchIndex + 1}/${_matchIndices.length}',
+                      8,
+                      color: MonitorColors.secondaryText,
+                      weight: FontWeight.bold,
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: Icon(Icons.keyboard_arrow_up_rounded, size: 14, color: MonitorColors.primaryText),
+                      onPressed: () => _goToPrevMatch(formattedText),
+                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      padding: EdgeInsets.zero,
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      tooltip: LocaleKeys.previousMatch.tr,
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: MonitorColors.primaryText),
+                      onPressed: () => _goToNextMatch(formattedText),
+                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      padding: EdgeInsets.zero,
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      tooltip: LocaleKeys.nextMatch.tr,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          // Code Content with Local Scroll Controller
+          Container(
+            constraints: const BoxConstraints(maxHeight: 350),
+            decoration: BoxDecoration(
+              color: bodyBg,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(7.2),
+                bottomRight: Radius.circular(7.2),
+              ),
+            ),
+            child: SingleChildScrollView(
+              controller: _localScrollController,
+              padding: const EdgeInsets.all(12),
+              child: SelectionArea(
+                child: RichText(
+                  text: _highlightSearch(
+                    formattedText,
+                    _searchQuery,
+                    TextStyle(
+                      fontFamily: MonitorTextStyle.monoFontFamily,
+                      fontSize: 10,
+                      color: MonitorColors.primaryText,
+                      height: 1.55,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1389,7 +1648,7 @@ class _MethodBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isGet = method == 'GET';
+    final isGet = method == MonitorFilterKeys.get;
     final color = isGet ? MonitorColors.methodGet : MonitorColors.methodPost;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -1548,7 +1807,7 @@ class _LogFooter extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MonoText('${MonitorController.formatRouteName(log.screen)}  ·  ${log.phase}', 10, maxLines: 1, overflow: TextOverflow.ellipsis),
+        MonoText('${MonitorController.formatRouteName(log.screen)}  ·  ${log.phase == 'OPEN' ? LocaleKeys.initLabel.tr : LocaleKeys.actionLabel.tr}', 10, maxLines: 1, overflow: TextOverflow.ellipsis),
         if (log.hasCallerName) ...[
           const SizedBox(height: 3),
           Row(
@@ -1799,7 +2058,7 @@ class _DetailTabsSection extends StatefulWidget {
 
 class _DetailTabsSectionState extends State<_DetailTabsSection> {
   int _tab = 0;
-  static const _tabLabels = ['TIMELINE', 'REQUEST', 'RESPONSE', 'HEADERS'];
+  static const _tabLabels = ['REQUEST', 'RESPONSE', 'TIMELINE', 'HEADERS'];
 
   @override
   Widget build(BuildContext context) {
@@ -1866,11 +2125,11 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
   Widget _buildContent(ApiLogItem log) {
     switch (_tab) {
       case 0:
-        return _TimelineContent(log: log);
-      case 1:
         return _RequestContent(log: log);
-      case 2:
+      case 1:
         return _ResponseContent(log: log);
+      case 2:
+        return _TimelineContent(log: log);
       case 3:
         return _HeadersContent(log: log);
       default:

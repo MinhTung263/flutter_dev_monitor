@@ -16,7 +16,7 @@ class ApiLogController {
   final List<String> _screenOrder = [];
 
   String? activePopup;
-  String currentViewedScreen = 'ALL';
+  String currentViewedScreen = MonitorConstants.allScreensKey;
   bool isDashboardOpen = false;
 
   List<ApiLogItem> apiLogs = [];
@@ -228,7 +228,7 @@ class ApiLogController {
 
   void updateView(String screen) {
     currentViewedScreen = screen;
-    if (screen == 'ALL') {
+    if (screen == MonitorConstants.allScreensKey) {
       final List<ApiLogItem> allInit = [];
       for (final logs in initLogsMap.values) {
         allInit.addAll(logs);
@@ -350,7 +350,7 @@ class ApiLogController {
     _sessionStartTime.clear();
     _screenOrder.clear();
     activePopup = null;
-    currentViewedScreen = 'ALL';
+    currentViewedScreen = MonitorConstants.allScreensKey;
     initApiCount = 0;
     refreshApiCount = 0;
     initTotalDuration = 0;
@@ -369,7 +369,7 @@ class ApiLogController {
     int actionMs,
     int actionCycles,
   }) statsForScreen(String screen) {
-    if (screen == 'ALL') {
+    if (screen == MonitorConstants.allScreensKey) {
       int openCount = 0;
       int openMs = 0;
       int actionCount = 0;

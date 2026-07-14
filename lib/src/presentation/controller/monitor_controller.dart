@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../core/monitor_constants.dart';
+import '../../core/monitor_strings.dart';
 import '../ui/theme/monitor_theme.dart';
 import '../../data/hardware_datasource.dart';
 import '../../domain/api_log_item.dart';
@@ -81,8 +82,8 @@ class MonitorController extends ChangeNotifier {
     if (customRouteNames.containsKey(route)) {
       return customRouteNames[route]!;
     }
-    if (route == 'ALL') return 'All Screens';
-    if (route == '/unknown') return 'Unknown Screen';
+    if (route == MonitorConstants.allScreensKey) return LocaleKeys.allScreens.tr;
+    if (route == MonitorConstants.unknownRoute) return LocaleKeys.unknownScreen.tr;
     if (route.isEmpty) return '';
 
     String path = route;
@@ -205,7 +206,7 @@ class MonitorController extends ChangeNotifier {
           details.stack?.toString() ?? '',
           ErrorLogItem.typeFlutter,
           MonitorNavigatorObserver.currentRoute.isEmpty
-              ? '/unknown'
+              ? MonitorConstants.unknownRoute
               : MonitorNavigatorObserver.currentRoute,
         );
         if (!_disposed) {
@@ -234,7 +235,7 @@ class MonitorController extends ChangeNotifier {
           stack.toString(),
           ErrorLogItem.typeDart,
           MonitorNavigatorObserver.currentRoute.isEmpty
-              ? '/unknown'
+              ? MonitorConstants.unknownRoute
               : MonitorNavigatorObserver.currentRoute,
         );
         if (!_disposed) {

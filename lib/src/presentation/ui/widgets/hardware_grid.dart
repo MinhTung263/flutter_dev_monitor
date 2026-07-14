@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/monitor_constants.dart';
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 import 'monitor_text.dart';
@@ -14,7 +15,7 @@ class MonitorHardwareGrid extends StatelessWidget {
       listenable: MonitorController.instance,
       builder: (context, _) {
         final ctrl = MonitorController.instance;
-        final samples = currentScreen == 'ALL'
+        final samples = currentScreen == MonitorConstants.allScreensKey
             ? ctrl.globalRamHistory
             : ctrl.ramHistoryMap[currentScreen] ?? [];
         final ramUsed =
