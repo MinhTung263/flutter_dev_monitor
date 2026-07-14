@@ -33,7 +33,7 @@ class _DashboardHeader extends StatelessWidget {
           MonitorHardwareGrid(currentScreen: screen),
           _HBorder(),
           _ChartHeader(
-            label: 'FPS HISTORY',
+            label: LocaleKeys.fpsHistory.tr,
             iconColor: MonitorColors.fpsLine,
             sampleCount: chartData.length,
             expanded: chartExpanded,
@@ -46,7 +46,7 @@ class _DashboardHeader extends StatelessWidget {
             ),
           _HBorder(),
           _ChartHeader(
-            label: 'RAM HISTORY',
+            label: LocaleKeys.ramHistory.tr,
             iconColor: const Color(0xFFF472B6),
             sampleCount: ramChartData.length,
             expanded: ramChartExpanded,
@@ -104,7 +104,7 @@ class _ChartHeader extends StatelessWidget {
             ),
             const Spacer(),
             MonoText(
-              '$sampleCount samples',
+              '$sampleCount ${LocaleKeys.samples.tr}',
               9,
             ),
             SizedBox(width: 6),
@@ -131,43 +131,17 @@ class _ScreenPickerSheet extends StatelessWidget {
   final List<String> screens;
   final String selected;
   final ValueChanged<String> onSelected;
+  final bool isDialog;
 
   const _ScreenPickerSheet({
     required this.screens,
     required this.selected,
     required this.onSelected,
+    this.isDialog = false,
   });
 
   static (String title, String? sub) _parseRoute(String route) {
-    if (route == 'ALL') return ('All Screens', null);
-    if (route == '/unknown') return ('Unknown Screen', null);
-
-    if (MonitorController.customRouteNames.containsKey(route)) {
-      return (MonitorController.customRouteNames[route]!, null);
-    }
-
-    final clean = route.startsWith('/') ? route.substring(1) : route;
-    final idx = clean.indexOf('/');
-    final mainPath =
-        idx == -1 ? (clean.isEmpty ? route : clean) : clean.substring(0, idx);
-    final sub = idx == -1 ? null : clean.substring(idx);
-
-    // camelCase to spaces
-    var formattedTitle = mainPath.replaceAllMapped(
-      RegExp(r'([a-z])([A-Z])'),
-      (match) => '${match.group(1)} ${match.group(2)}',
-    );
-
-    // underscores/hyphens to spaces
-    formattedTitle = formattedTitle.replaceAll(RegExp(r'[_-]'), ' ');
-
-    // capitalize words
-    formattedTitle = formattedTitle.split(' ').map((word) {
-      if (word.isEmpty) return '';
-      return word[0].toUpperCase() + word.substring(1).toLowerCase();
-    }).join(' ');
-
-    return (formattedTitle, sub != null ? '($sub)' : null);
+    return (MonitorController.formatRouteName(route), null);
   }
 
   @override
@@ -175,27 +149,31 @@ class _ScreenPickerSheet extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: MonitorColors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: isDialog
+            ? BorderRadius.circular(16)
+            : const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(top: 12, bottom: 12),
-            decoration: BoxDecoration(
-              color: MonitorColors.border,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+          if (!isDialog)
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 12),
+              decoration: BoxDecoration(
+                color: MonitorColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            )
+          else
+            const SizedBox(height: 16),
           // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: Row(
               children: [
-                BodyText('Screens', 14, weight: FontWeight.bold),
+                BodyText(LocaleKeys.screensTitle.tr, 14, weight: FontWeight.bold),
                 const Spacer(),
                 Container(
                   padding:
@@ -262,7 +240,7 @@ class _ScreenPickerSheet extends StatelessWidget {
                                   : MonitorColors.border.withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(5),
                             ),
-                            child: s == 'ALL'
+                            child: s == MonitorConstants.allScreensKey
                                 ? Icon(
                                     Icons.all_inclusive_rounded,
                                     size: 13,

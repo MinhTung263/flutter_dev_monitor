@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 
 import '../../../core/monitor_constants.dart';
+import '../../../core/monitor_strings.dart';
 import '../../../domain/overlay_state_entity.dart';
 import '../../controller/monitor_controller.dart';
 import '../../navigation/monitor_navigator_observer.dart';
@@ -161,7 +162,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                           style: TextStyle(
                               color: infoTxt,
                               fontSize: 9,
-                              fontFamily: 'monospace',
+                              fontFamily: MonitorTextStyle.monoFontFamily,
                               fontWeight: FontWeight.w700,
                               height: 1.2),
                         ),
@@ -172,7 +173,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                         style: TextStyle(
                             color: subtleTxt,
                             fontSize: 8,
-                            fontFamily: 'monospace',
+                            fontFamily: MonitorTextStyle.monoFontFamily,
                             height: 1.2),
                       ),
                     ],
@@ -189,7 +190,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                             style: TextStyle(
                                 color: subtleTxt,
                                 fontSize: 8,
-                                fontFamily: 'monospace',
+                                fontFamily: MonitorTextStyle.monoFontFamily,
                                 height: 1.2),
                           ),
                         ),
@@ -199,7 +200,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                         style: TextStyle(
                             color: subtleTxt,
                             fontSize: 8,
-                            fontFamily: 'monospace',
+                            fontFamily: MonitorTextStyle.monoFontFamily,
                             height: 1.2),
                       ),
                     ],
@@ -262,13 +263,13 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                       _PanelActionChip(
                         onTap: onCollapse,
                         icon: Icons.unfold_less_rounded,
-                        label: 'Thu nhỏ',
+                        label: LocaleKeys.overlayCollapse.tr,
                         color: btnIconColor,
                       ),
                       _PanelActionChip(
                         onTap: onToggleGrid,
                         icon: gridIcon,
-                        label: 'Lưới',
+                        label: LocaleKeys.overlayGrid.tr,
                         color: gridIconColor,
                         borderColor: gridBorderColor,
                       ),
@@ -277,7 +278,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                         _PanelActionChip(
                           onTap: onOpenDashboard,
                           icon: Icons.dashboard_rounded,
-                          label: 'Dash',
+                          label: LocaleKeys.overlayDash.tr,
                           color: btnIconColor,
                         )
                       else
@@ -285,7 +286,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                       _PanelActionChip(
                         onTap: onClear,
                         icon: Icons.restart_alt,
-                        label: 'Reset',
+                        label: LocaleKeys.overlayReset.tr,
                         color: MonitorColors.statusError,
                         borderColor:
                             MonitorColors.statusError.withValues(alpha: 0.3),
@@ -293,7 +294,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                       _PanelActionChip(
                         onTap: onHide ?? () {},
                         icon: Icons.close,
-                        label: 'Ẩn',
+                        label: LocaleKeys.overlayHide.tr,
                         color: onHide == null
                             ? btnIconColor.withValues(alpha: 0.25)
                             : const Color(0xFFFF5555),
@@ -323,14 +324,14 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
               style: TextStyle(
                   color: color,
                   fontSize: 10,
-                  fontFamily: 'monospace',
+                  fontFamily: MonitorTextStyle.monoFontFamily,
                   fontWeight: FontWeight.w600,
                   height: 1.2)),
           Text(value,
               style: TextStyle(
                   color: color,
                   fontSize: 10,
-                  fontFamily: 'monospace',
+                  fontFamily: MonitorTextStyle.monoFontFamily,
                   fontWeight: FontWeight.w700,
                   height: 1.2)),
           if (range.isNotEmpty) ...[
@@ -339,7 +340,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                 style: TextStyle(
                     color: color.withValues(alpha: 0.65),
                     fontSize: 9,
-                    fontFamily: 'monospace',
+                    fontFamily: MonitorTextStyle.monoFontFamily,
                     height: 1.2)),
           ],
         ],
@@ -407,7 +408,7 @@ class _PanelActionChip extends StatelessWidget {
                 color: textCol,
                 fontSize: 6.5,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'monospace',
+                fontFamily: MonitorTextStyle.monoFontFamily,
                 height: 1.1,
               ),
             ),

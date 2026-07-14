@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../domain/api_log_item.dart';
+import '../../../core/monitor_strings.dart';
+import '../../../core/monitor_filter_keys.dart';
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 import 'monitor_text.dart';
+import 'responsive_dialog_wrapper.dart';
 
 class ApiLogTile extends StatefulWidget {
   final ApiLogItem log;
@@ -14,6 +17,7 @@ class ApiLogTile extends StatefulWidget {
   final bool showScreenBadge;
   final int? lane;
   final bool compact;
+  final bool showFullUrl;
   const ApiLogTile({
     super.key,
     required this.log,
@@ -21,6 +25,7 @@ class ApiLogTile extends StatefulWidget {
     this.showScreenBadge = false,
     this.lane,
     this.compact = false,
+    this.showFullUrl = false,
   });
 
   @override
@@ -46,26 +51,28 @@ class _ApiLogTileState extends State<ApiLogTile> {
     final laneColor = widget.lane != null ? _palette[widget.lane! % _palette.length] : null;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 5),
-      decoration: BoxDecoration(
-        color: MonitorColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: log.isSlow
-              ? MonitorColors.statusSlow.withValues(alpha: 0.4)
-              : (log.isSuccess
-                  ? MonitorColors.border
-                  : MonitorColors.statusError.withValues(alpha: 0.35)),
-          width: 1.0,
-        ),
-      ),
+      margin: widget.compact ? const EdgeInsets.only(bottom: 2) : const EdgeInsets.only(bottom: 5),
+      decoration: widget.compact
+          ? null
+          : BoxDecoration(
+              color: MonitorColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: log.isSlow
+                    ? MonitorColors.statusSlow.withValues(alpha: 0.4)
+                    : (log.isSuccess
+                        ? MonitorColors.border
+                        : MonitorColors.statusError.withValues(alpha: 0.35)),
+                width: 1.0,
+              ),
+            ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(7),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (laneColor != null)
+              if (laneColor != null && !widget.compact)
                 Container(
                   width: 4.5,
                   color: laneColor,
@@ -78,6 +85,7 @@ class _ApiLogTileState extends State<ApiLogTile> {
                             log: log,
                             statusColor: statusColor,
                             expanded: _expanded,
+                            showFullUrl: widget.showFullUrl,
                             onTap: () => setState(() => _expanded = !_expanded),
                           )
                         : _CollapsedRow(
@@ -87,6 +95,7 @@ class _ApiLogTileState extends State<ApiLogTile> {
                             showOrder: widget.showOrder,
                             showScreenBadge: widget.showScreenBadge,
                             lane: widget.lane,
+                            showFullUrl: widget.showFullUrl,
                             onTap: () => setState(() => _expanded = !_expanded),
                           ),
                     if (_expanded) _ExpandedDetail(log: log),
@@ -116,6 +125,7 @@ class _CollapsedRow extends StatelessWidget {
   final bool showOrder;
   final bool showScreenBadge;
   final int? lane;
+  final bool showFullUrl;
   final VoidCallback onTap;
 
   const _CollapsedRow({
@@ -125,11 +135,24 @@ class _CollapsedRow extends StatelessWidget {
     required this.showOrder,
     required this.showScreenBadge,
     this.lane,
+    required this.showFullUrl,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Shorten URL path
+    String displayUrl = log.url;
+    if (!showFullUrl) {
+      try {
+        final uri = Uri.parse(log.url);
+        displayUrl = uri.path;
+        if (uri.query.isNotEmpty) {
+          displayUrl += '?${uri.query}';
+        }
+      } catch (_) {}
+    }
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -151,7 +174,7 @@ class _CollapsedRow extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: MonoText(
-                      log.url,
+                      displayUrl,
                       11.5,
                       color: MonitorColors.primaryText,
                       weight: FontWeight.w500,
@@ -169,20 +192,31 @@ class _CollapsedRow extends StatelessWidget {
                 const SizedBox(width: 6),
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: GestureDetector(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
                     onTap: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(
+                        MonitorResponsiveRoute(
                           builder: (_) => MonitorApiDetailPage(log: log),
+                          settings: const RouteSettings(name: '/MonitorApiDetailPage'),
                         ),
                       );
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 4),
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: MonitorColors.expandedDetailBg,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: MonitorColors.border,
+                          width: 0.5,
+                        ),
+                      ),
+                      alignment: Alignment.center,
                       child: Icon(
                         Icons.open_in_new_rounded,
-                        color: MonitorColors.secondaryText,
+                        color: MonitorColors.primaryText,
                         size: 14,
                       ),
                     ),
@@ -233,30 +267,34 @@ class _CompactCollapsedRow extends StatelessWidget {
   final ApiLogItem log;
   final Color statusColor;
   final bool expanded;
+  final bool showFullUrl;
   final VoidCallback onTap;
 
   const _CompactCollapsedRow({
     required this.log,
     required this.statusColor,
     required this.expanded,
+    required this.showFullUrl,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isGet = log.method == 'GET';
+    final isGet = log.method == MonitorFilterKeys.get;
     final methodColor =
         isGet ? MonitorColors.methodGet : MonitorColors.methodPost;
 
     // Shorten URL path
     String displayUrl = log.url;
-    try {
-      final uri = Uri.parse(log.url);
-      displayUrl = uri.path;
-      if (uri.query.isNotEmpty) {
-        displayUrl += '?${uri.query}';
-      }
-    } catch (_) {}
+    if (!showFullUrl) {
+      try {
+        final uri = Uri.parse(log.url);
+        displayUrl = uri.path;
+        if (uri.query.isNotEmpty) {
+          displayUrl += '?${uri.query}';
+        }
+      } catch (_) {}
+    }
 
     return InkWell(
       onTap: onTap,
@@ -288,8 +326,8 @@ class _CompactCollapsedRow extends StatelessWidget {
                 displayUrl,
                 10,
                 color: MonitorColors.primaryText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                maxLines: showFullUrl ? null : 1,
+                overflow: showFullUrl ? null : TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 6),
@@ -321,20 +359,31 @@ class _CompactCollapsedRow extends StatelessWidget {
               _CallCountBadge(count: log.callCount),
             ],
             const SizedBox(width: 6),
-            GestureDetector(
+            InkWell(
+              borderRadius: BorderRadius.circular(13),
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
+                  MonitorResponsiveRoute(
                     builder: (_) => MonitorApiDetailPage(log: log),
+                    settings: const RouteSettings(name: '/MonitorApiDetailPage'),
                   ),
                 );
               },
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: MonitorColors.expandedDetailBg,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: MonitorColors.border,
+                    width: 0.5,
+                  ),
+                ),
+                alignment: Alignment.center,
                 child: Icon(
                   Icons.open_in_new_rounded,
-                  color: MonitorColors.secondaryText,
+                  color: MonitorColors.primaryText,
                   size: 13,
                 ),
               ),
@@ -411,7 +460,7 @@ class _ExpandedDetail extends StatefulWidget {
 class _ExpandedDetailState extends State<_ExpandedDetail> {
   int _tab = 0;
 
-  static const _tabLabels = ['TIMELINE', 'REQUEST', 'RESPONSE', 'HEADERS'];
+  static const _tabLabels = ['REQUEST', 'RESPONSE', 'TIMELINE', 'HEADERS'];
 
   @override
   Widget build(BuildContext context) {
@@ -483,11 +532,11 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
   Widget _buildContent(ApiLogItem log) {
     switch (_tab) {
       case 0:
-        return _TimelineContent(log: log);
-      case 1:
         return _RequestContent(log: log);
-      case 2:
+      case 1:
         return _ResponseContent(log: log);
+      case 2:
+        return _TimelineContent(log: log);
       case 3:
         return _HeadersContent(log: log);
       default:
@@ -1171,9 +1220,142 @@ class _KVTable extends StatelessWidget {
   }
 }
 
-class _BodyBlock extends StatelessWidget {
+class _BodyBlock extends StatefulWidget {
   final String text;
   const _BodyBlock({required this.text});
+
+  @override
+  State<_BodyBlock> createState() => _BodyBlockState();
+}
+
+class _BodyBlockState extends State<_BodyBlock> {
+  bool _showAll = false;
+  bool _searchMode = false;
+  String _searchQuery = '';
+  late final ScrollController _localScrollController;
+  final List<int> _matchIndices = [];
+  int _currentMatchIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _localScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _localScrollController.dispose();
+    super.dispose();
+  }
+
+  String _formatText(String input) {
+    final trimmed = input.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        return const JsonEncoder.withIndent('  ').convert(decoded);
+      } catch (_) {
+        return input;
+      }
+    }
+    return input;
+  }
+
+  void _findMatches(String text, String query) {
+    _matchIndices.clear();
+    _currentMatchIndex = 0;
+    if (query.isEmpty) return;
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    int start = 0;
+    while (true) {
+      final index = lowerText.indexOf(lowerQuery, start);
+      if (index == -1) break;
+      _matchIndices.add(index);
+      start = index + query.length;
+    }
+  }
+
+  void _scrollToCurrentMatch(String text) {
+    if (_matchIndices.isEmpty || _currentMatchIndex >= _matchIndices.length) return;
+    final activeIndex = _matchIndices[_currentMatchIndex];
+
+    final preText = text.substring(0, activeIndex);
+    final lineIndex = preText.split('\n').length - 1;
+
+    final double targetOffset = (lineIndex * 15.5) - 80.0;
+    if (_localScrollController.hasClients) {
+      final double clampedOffset = targetOffset.clamp(0.0, _localScrollController.position.maxScrollExtent);
+      _localScrollController.animateTo(
+        clampedOffset,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _goToNextMatch(String text) {
+    if (_matchIndices.isEmpty) return;
+    setState(() {
+      _currentMatchIndex = (_currentMatchIndex + 1) % _matchIndices.length;
+      _scrollToCurrentMatch(text);
+    });
+  }
+
+  void _goToPrevMatch(String text) {
+    if (_matchIndices.isEmpty) return;
+    setState(() {
+      _currentMatchIndex = (_currentMatchIndex - 1 + _matchIndices.length) % _matchIndices.length;
+      _scrollToCurrentMatch(text);
+    });
+  }
+
+  TextSpan _highlightSearch(String text, String query, TextStyle defaultStyle) {
+    if (query.isEmpty) {
+      return TextSpan(text: text, style: defaultStyle);
+    }
+
+    final List<InlineSpan> spans = [];
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    
+    int start = 0;
+    int matchCounter = 0;
+    
+    while (true) {
+      final index = lowerText.indexOf(lowerQuery, start);
+      if (index == -1) {
+        spans.add(TextSpan(text: text.substring(start)));
+        break;
+      }
+      
+      if (index > start) {
+        spans.add(TextSpan(text: text.substring(start, index)));
+      }
+      
+      final isActive = _matchIndices.isNotEmpty && 
+          matchCounter == _currentMatchIndex &&
+          index == _matchIndices[_currentMatchIndex];
+      
+      spans.add(TextSpan(
+        text: text.substring(index, index + query.length),
+        style: TextStyle(
+          backgroundColor: isActive 
+              ? Colors.orange.withValues(alpha: 0.9) 
+              : Colors.yellow.withValues(alpha: 0.85),
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
+      ));
+      
+      matchCounter++;
+      start = index + query.length;
+    }
+    
+    return TextSpan(style: defaultStyle, children: spans);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1181,6 +1363,18 @@ class _BodyBlock extends StatelessWidget {
     final headerBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
     final bodyBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
     final borderCol = MonitorColors.border.withValues(alpha: 0.8);
+
+    final rawText = widget.text;
+    final bool isHuge = rawText.length > 15000;
+    
+    final String textToFormat = (isHuge && !_showAll) 
+        ? rawText.substring(0, 15000) 
+        : rawText;
+        
+    String formattedText = _formatText(textToFormat);
+    if (isHuge && !_showAll) {
+      formattedText += '\n\n... [TRUNCATED FOR PERFORMANCE. Total: ${rawText.length} characters]';
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -1208,26 +1402,175 @@ class _BodyBlock extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 MonoText(
-                  text.trim().startsWith('{') || text.trim().startsWith('[')
+                  formattedText.trim().startsWith('{') || formattedText.trim().startsWith('[')
                       ? 'JSON'
                       : 'TEXT',
                   9,
                   color: MonitorColors.secondaryText,
                   weight: FontWeight.bold,
                 ),
-                _CopyButton(text: text),
+                Row(
+                  children: [
+                    if (isHuge && !_showAll) ...[
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => setState(() => _showAll = true),
+                        child: Text(
+                          'SHOW ALL',
+                          style: TextStyle(
+                            fontFamily: MonitorTextStyle.monoFontFamily,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: MonitorColors.metricTotal,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    IconButton(
+                      icon: Icon(
+                        _searchMode ? Icons.close : Icons.search, 
+                        size: 13, 
+                        color: MonitorColors.secondaryText,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _searchMode = !_searchMode;
+                          if (!_searchMode) {
+                            _searchQuery = '';
+                            _matchIndices.clear();
+                          }
+                        });
+                      },
+                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      padding: EdgeInsets.zero,
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _CopyButton(text: rawText),
+                  ],
+                ),
               ],
             ),
           ),
-          // Code Content
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: SelectionArea(
-              child: MonoText(
-                text,
-                10,
-                color: MonitorColors.primaryText,
-                height: 1.55,
+          if (_searchMode)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: headerBg,
+                border: Border(
+                  bottom: BorderSide(color: borderCol, width: 0.8),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      style: TextStyle(
+                        fontFamily: MonitorTextStyle.monoFontFamily,
+                        fontSize: 10,
+                        color: MonitorColors.primaryText,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        hintText: LocaleKeys.searchResponsePlaceholder.tr,
+                        hintStyle: TextStyle(
+                          fontFamily: MonitorTextStyle.monoFontFamily,
+                          fontSize: 10,
+                          color: MonitorColors.secondaryText.withValues(alpha: 0.5),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(color: borderCol, width: 0.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(color: borderCol, width: 0.5),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: BorderSide(color: MonitorColors.primaryText, width: 0.8),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val;
+                          _findMatches(formattedText, val);
+                          if (_matchIndices.isNotEmpty) {
+                            _scrollToCurrentMatch(formattedText);
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  if (_searchQuery.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    MonoText(
+                      _matchIndices.isEmpty 
+                          ? '0/0' 
+                          : '${_currentMatchIndex + 1}/${_matchIndices.length}',
+                      8,
+                      color: MonitorColors.secondaryText,
+                      weight: FontWeight.bold,
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: Icon(Icons.keyboard_arrow_up_rounded, size: 14, color: MonitorColors.primaryText),
+                      onPressed: () => _goToPrevMatch(formattedText),
+                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      padding: EdgeInsets.zero,
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      tooltip: LocaleKeys.previousMatch.tr,
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: MonitorColors.primaryText),
+                      onPressed: () => _goToNextMatch(formattedText),
+                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      padding: EdgeInsets.zero,
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      tooltip: LocaleKeys.nextMatch.tr,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          // Code Content with Local Scroll Controller
+          Container(
+            constraints: const BoxConstraints(maxHeight: 350),
+            decoration: BoxDecoration(
+              color: bodyBg,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(7.2),
+                bottomRight: Radius.circular(7.2),
+              ),
+            ),
+            child: SingleChildScrollView(
+              controller: _localScrollController,
+              padding: const EdgeInsets.all(12),
+              child: SelectionArea(
+                child: RichText(
+                  text: _highlightSearch(
+                    formattedText,
+                    _searchQuery,
+                    TextStyle(
+                      fontFamily: MonitorTextStyle.monoFontFamily,
+                      fontSize: 10,
+                      color: MonitorColors.primaryText,
+                      height: 1.55,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1305,7 +1648,7 @@ class _MethodBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isGet = method == 'GET';
+    final isGet = method == MonitorFilterKeys.get;
     final color = isGet ? MonitorColors.methodGet : MonitorColors.methodPost;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -1464,7 +1807,7 @@ class _LogFooter extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MonoText('${MonitorController.formatRouteName(log.screen)}  ·  ${log.phase}', 10, maxLines: 1, overflow: TextOverflow.ellipsis),
+        MonoText('${MonitorController.formatRouteName(log.screen)}  ·  ${log.phase == 'OPEN' ? LocaleKeys.initLabel.tr : LocaleKeys.actionLabel.tr}', 10, maxLines: 1, overflow: TextOverflow.ellipsis),
         if (log.hasCallerName) ...[
           const SizedBox(height: 3),
           Row(
@@ -1527,16 +1870,20 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
       valueListenable: MonitorColors.isDarkNotifier,
       builder: (context, _, __) {
         final statusColor = _ApiLogTileState._statusColor(log);
-        return Scaffold(
-          backgroundColor: MonitorColors.pageBackground,
+        final double screenWidth = MediaQuery.of(context).size.width;
+        final bool isLargeScreen = screenWidth > 640;
+        return MonitorResponsiveDialogWrapper(
           appBar: AppBar(
+            automaticallyImplyLeading: false,
             backgroundColor: MonitorColors.surface,
             elevation: 0,
-            leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new_rounded,
-                  color: MonitorColors.primaryText, size: 18),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+            leading: isLargeScreen
+                ? null
+                : IconButton(
+                    icon: Icon(Icons.arrow_back_ios_new_rounded,
+                        color: MonitorColors.primaryText, size: 18),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
             title: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               transitionBuilder: (child, animation) {
@@ -1599,7 +1946,7 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
               ),
             ),
           ),
-          body: SafeArea(
+          child: SafeArea(
             bottom: false,
             child: SingleChildScrollView(
               controller: _scrollController,
@@ -1711,7 +2058,7 @@ class _DetailTabsSection extends StatefulWidget {
 
 class _DetailTabsSectionState extends State<_DetailTabsSection> {
   int _tab = 0;
-  static const _tabLabels = ['TIMELINE', 'REQUEST', 'RESPONSE', 'HEADERS'];
+  static const _tabLabels = ['REQUEST', 'RESPONSE', 'TIMELINE', 'HEADERS'];
 
   @override
   Widget build(BuildContext context) {
@@ -1778,11 +2125,11 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
   Widget _buildContent(ApiLogItem log) {
     switch (_tab) {
       case 0:
-        return _TimelineContent(log: log);
-      case 1:
         return _RequestContent(log: log);
-      case 2:
+      case 1:
         return _ResponseContent(log: log);
+      case 2:
+        return _TimelineContent(log: log);
       case 3:
         return _HeadersContent(log: log);
       default:

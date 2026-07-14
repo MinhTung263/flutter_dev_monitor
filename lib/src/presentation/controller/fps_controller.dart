@@ -1,3 +1,5 @@
+import '../../core/monitor_constants.dart';
+
 class FpsController {
   double currentFps = 0.0;
   double currentBuildMs = 0.0;
@@ -13,7 +15,7 @@ class FpsController {
   static const int _maxOverlay = 60;
 
   void addSample(String screenName, double fps) {
-    if (screenName.isEmpty || screenName == '/unknown') return;
+    if (screenName.isEmpty || screenName == MonitorConstants.unknownRoute) return;
     fpsHistoryMap[screenName] ??= [];
     fpsHistoryMap[screenName]!.add(fps);
     if (fpsHistoryMap[screenName]!.length > _maxHistory) {

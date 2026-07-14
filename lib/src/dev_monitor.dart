@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'data/monitor_interceptor.dart';
+import 'presentation/controller/monitor_controller.dart';
 import 'presentation/navigation/monitor_navigator_observer.dart';
 import 'presentation/ui/widgets/fps_overlay.dart';
 
@@ -15,8 +16,14 @@ abstract final class DevMonitor {
   /// The HTTP interceptor for capturing Dio requests.
   static final MonitorInterceptor interceptor = MonitorInterceptor();
 
-  static final ValueNotifier<bool> _overlayEnabled = ValueNotifier(true);
+  static final ValueNotifier<bool> _overlayEnabled = ValueNotifier(true)
+    ..addListener(_onOverlayChanged);
   static bool? _configuredShowOverlay;
+
+  static void _onOverlayChanged() {
+    MonitorController.instance.updatePingMonitoring(visible: _overlayEnabled.value);
+    MonitorController.instance.updateHardwareMonitoring(visible: _overlayEnabled.value);
+  }
 
   /// Show the FpsOverlay.
   static void showOverlay() => _overlayEnabled.value = true;

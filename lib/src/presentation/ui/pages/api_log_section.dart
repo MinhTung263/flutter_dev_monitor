@@ -32,7 +32,7 @@ class _GroupedLogList extends StatelessWidget {
         return ApiLogTile(
           log: item,
           showOrder: false,
-          showScreenBadge: selectedScreen == 'ALL',
+          showScreenBadge: selectedScreen == MonitorConstants.allScreensKey,
         );
       },
     );
@@ -66,8 +66,8 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final slowCount = allLogs.where((l) => l.isSlow).length;
     final errCount = allLogs.where((l) => !l.isSuccess).length;
-    final getCount = allLogs.where((l) => l.method == 'GET').length;
-    final postCount = allLogs.where((l) => l.method == 'POST').length;
+    final getCount = allLogs.where((l) => l.method == MonitorFilterKeys.get).length;
+    final postCount = allLogs.where((l) => l.method == MonitorFilterKeys.post).length;
 
     return Container(
       color: MonitorColors.pageBackground,
@@ -80,50 +80,50 @@ class _FilterBar extends StatelessWidget {
               child: Row(
                 children: [
                   _FilterChip(
-                    label: 'ALL',
+                    label: LocaleKeys.filterAll.tr,
                     count: allLogs.length,
-                    active: activeFilter == 'ALL',
+                    active: activeFilter == MonitorFilterKeys.all,
                     color: MonitorColors.metricTotal,
-                    onTap: () => onChanged('ALL'),
+                    onTap: () => onChanged(MonitorFilterKeys.all),
                   ),
                   if (slowCount > 0) ...[
                     const SizedBox(width: 6),
                     _FilterChip(
-                      label: 'SLOW',
+                      label: LocaleKeys.filterSlow.tr,
                       count: slowCount,
-                      active: activeFilter == 'SLOW',
+                      active: activeFilter == MonitorFilterKeys.slow,
                       color: MonitorColors.statusSlow,
-                      onTap: () => onChanged('SLOW'),
+                      onTap: () => onChanged(MonitorFilterKeys.slow),
                     ),
                   ],
                   if (errCount > 0) ...[
                     const SizedBox(width: 6),
                     _FilterChip(
-                      label: 'ERR',
+                      label: LocaleKeys.filterError.tr,
                       count: errCount,
-                      active: activeFilter == 'ERR',
+                      active: activeFilter == MonitorFilterKeys.error,
                       color: MonitorColors.statusError,
-                      onTap: () => onChanged('ERR'),
+                      onTap: () => onChanged(MonitorFilterKeys.error),
                     ),
                   ],
                   if (getCount > 0) ...[
                     const SizedBox(width: 6),
                     _FilterChip(
-                      label: 'GET',
+                      label: MonitorFilterKeys.get,
                       count: getCount,
-                      active: activeFilter == 'GET',
+                      active: activeFilter == MonitorFilterKeys.get,
                       color: MonitorColors.methodGet,
-                      onTap: () => onChanged('GET'),
+                      onTap: () => onChanged(MonitorFilterKeys.get),
                     ),
                   ],
                   if (postCount > 0) ...[
                     const SizedBox(width: 6),
                     _FilterChip(
-                      label: 'POST',
+                      label: MonitorFilterKeys.post,
                       count: postCount,
-                      active: activeFilter == 'POST',
+                      active: activeFilter == MonitorFilterKeys.post,
                       color: MonitorColors.methodPost,
-                      onTap: () => onChanged('POST'),
+                      onTap: () => onChanged(MonitorFilterKeys.post),
                     ),
                   ],
                 ],
@@ -233,8 +233,13 @@ class _FilterChip extends StatelessWidget {
 class _SearchBar extends StatefulWidget {
   final String query;
   final ValueChanged<String> onChanged;
+  final bool transparent;
 
-  const _SearchBar({required this.query, required this.onChanged});
+  const _SearchBar({
+    required this.query,
+    required this.onChanged,
+    this.transparent = false,
+  });
 
   @override
   State<_SearchBar> createState() => _SearchBarState();
@@ -266,15 +271,19 @@ class _SearchBarState extends State<_SearchBar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: MonitorColors.pageBackground,
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      color: widget.transparent ? Colors.transparent : MonitorColors.pageBackground,
+      padding: widget.transparent
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Container(
         height: 34,
         decoration: BoxDecoration(
-          color: MonitorColors.surface,
+          color: widget.transparent ? MonitorColors.dropdownBg : MonitorColors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: MonitorColors.border.withValues(alpha: 0.8),
+            color: widget.transparent
+                ? MonitorColors.divider
+                : MonitorColors.border.withValues(alpha: 0.8),
             width: 0.8,
           ),
         ),
@@ -294,7 +303,7 @@ class _SearchBarState extends State<_SearchBar> {
                 ),
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: 'Search by URL, Method, or Status...',
+                  hintText: LocaleKeys.searchPlaceholder.tr,
                   hintStyle: TextStyle(
                     color: MonitorColors.secondaryText,
                     fontSize: 12,
@@ -368,6 +377,7 @@ List<_GitNode> _buildCombinedGitNodes(List<ApiLogItem> apiLogs, List<RouteLogIte
 
   final List<_GitNode> nodes = [];
   final Map<String, int> currentVisitApis = {};
+  int? lastRouteNodeIndex;
 
   for (final ev in events) {
     final beforeLanes = screenLanes.values.toSet();
@@ -411,6 +421,12 @@ List<_GitNode> _buildCombinedGitNodes(List<ApiLogItem> apiLogs, List<RouteLogIte
         ));
         currentVisitApis[key] = nodes.length - 1;
       }
+
+      if (lastRouteNodeIndex != null) {
+        final rNode = nodes[lastRouteNodeIndex];
+        rNode.apiCount += api.callCount;
+        rNode.apiDurationMs += api.duration;
+      }
     } else {
       currentVisitApis.clear();
       final route = ev.item as RouteLogItem;
@@ -430,6 +446,7 @@ List<_GitNode> _buildCombinedGitNodes(List<ApiLogItem> apiLogs, List<RouteLogIte
           isBranch: true,
           activeStack: List.from(stack),
         ));
+        lastRouteNodeIndex = nodes.length - 1;
       } else if (isPop) {
         if (stack.isNotEmpty && stack.last == route.route) {
           stack.removeLast();
@@ -446,6 +463,26 @@ List<_GitNode> _buildCombinedGitNodes(List<ApiLogItem> apiLogs, List<RouteLogIte
           isMerge: true,
           activeStack: List.from(stack),
         ));
+        lastRouteNodeIndex = nodes.length - 1;
+
+        if (stack.isNotEmpty) {
+          final parentRouteName = stack.last;
+          final parentLane = getOrCreateLane(parentRouteName);
+          final parentLanes = screenLanes.values.toSet();
+          nodes.add(_GitNode(
+            item: RouteLogItem(
+              id: -route.id - 1, // negative id to avoid conflicts
+              event: 'RETURN',
+              route: parentRouteName,
+              timestamp: route.timestamp.add(const Duration(milliseconds: 1)),
+            ),
+            lane: parentLane,
+            topLanes: parentLanes,
+            bottomLanes: parentLanes,
+            activeStack: List.from(stack),
+          ));
+          lastRouteNodeIndex = nodes.length - 1;
+        }
       } else {
         if (stack.isNotEmpty) {
           final old = stack.removeLast();
@@ -462,11 +499,17 @@ List<_GitNode> _buildCombinedGitNodes(List<ApiLogItem> apiLogs, List<RouteLogIte
           bottomLanes: afterLanes,
           activeStack: List.from(stack),
         ));
+        lastRouteNodeIndex = nodes.length - 1;
       }
     }
   }
 
   return nodes;
+}
+
+enum FlowDisplayMode {
+  all,
+  routesOnly,
 }
 
 class _FlowLogList extends StatefulWidget {
@@ -478,17 +521,18 @@ class _FlowLogList extends StatefulWidget {
 
 class _FlowLogListState extends State<_FlowLogList> {
   bool _oldestFirst = false;
+  FlowDisplayMode _displayMode = FlowDisplayMode.all;
 
-  List<_GitNode> _buildItems() {
+  List<_FlowTreeNode> _buildItems() {
     final globalLogs = MonitorController.instance.globalApiLogs;
     final List<RouteLogItem> routeLogsCopy = List.from(MonitorController.instance.routeLogs);
     
     final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
         ? MonitorNavigatorObserver.pageStack.last
-        : '/unknown';
+        : MonitorConstants.unknownRoute;
         
     final newestRouteLog = routeLogsCopy.isNotEmpty ? routeLogsCopy.first : null;
-    final needVirtualCurrent = topRoute != '/unknown' &&
+    final needVirtualCurrent = topRoute != MonitorConstants.unknownRoute &&
         (newestRouteLog == null ||
             newestRouteLog.route != topRoute ||
             newestRouteLog.event == RouteLogItem.eventPop);
@@ -504,40 +548,146 @@ class _FlowLogListState extends State<_FlowLogList> {
     }
 
     final allCombinedNodes = _buildCombinedGitNodes(globalLogs, routeLogsCopy);
+    
+    final List<_GitNode> filteredCombinedNodes;
+    if (_displayMode == FlowDisplayMode.routesOnly) {
+      filteredCombinedNodes = allCombinedNodes.where((node) => node.item is RouteLogItem).toList();
+    } else {
+      filteredCombinedNodes = allCombinedNodes;
+    }
+
+    final List<_GitNode> sortedNodes;
     if (_oldestFirst) {
-      return allCombinedNodes;
-    }
+      sortedNodes = filteredCombinedNodes;
+    } else {
+      // Newest First: Group by screen visits and reverse the groups
+      final List<List<_GitNode>> groups = [];
+      List<_GitNode>? currentGroup;
 
-    // Newest First: Group by screen visits and reverse the groups
-    final List<List<_GitNode>> groups = [];
-    List<_GitNode>? currentGroup;
-
-    for (final node in allCombinedNodes) {
-      if (node.item is RouteLogItem) {
-        currentGroup = [node];
-        groups.add(currentGroup);
-      } else {
-        if (currentGroup == null) {
-          currentGroup = [];
+      for (final node in filteredCombinedNodes) {
+        if (node.item is RouteLogItem) {
+          currentGroup = [node];
           groups.add(currentGroup);
+        } else {
+          if (currentGroup == null) {
+            currentGroup = [];
+            groups.add(currentGroup);
+          }
+          currentGroup.add(node);
         }
-        currentGroup.add(node);
       }
+
+      final List<_GitNode> result = [];
+      for (final group in groups.reversed) {
+        if (group.isEmpty) continue;
+        final hasHeader = group[0].item is RouteLogItem;
+        if (hasHeader) {
+          result.add(group[0]); // Header stays at the top of the group!
+          result.addAll(group.sublist(1).reversed); // APIs are reversed underneath
+        } else {
+          result.addAll(group.reversed);
+        }
+      }
+      sortedNodes = result;
     }
 
-    final List<_GitNode> result = [];
-    for (final group in groups.reversed) {
-      if (group.isEmpty) continue;
-      final hasHeader = group[0].item is RouteLogItem;
-      if (hasHeader) {
-        result.add(group[0]); // Header stays at the top of the group!
-        result.addAll(group.sublist(1).reversed); // APIs are reversed underneath
+    final n = sortedNodes.length;
+    final List<int> depths = sortedNodes.map((node) {
+      if (node.item is RouteLogItem) {
+        final route = node.item as RouteLogItem;
+        if (route.event == RouteLogItem.eventPop) {
+          return node.activeStack.length;
+        }
+        final d = node.activeStack.length - 1;
+        return d < 0 ? 0 : d;
       } else {
-        result.addAll(group.reversed);
+        return node.activeStack.length;
       }
+    }).toList();
+
+    final List<_FlowTreeNode> treeNodes = [];
+    for (int i = 0; i < n; i++) {
+      final depth = depths[i];
+      
+      // Determine showVerticalLines
+      final List<bool> showVerticalLines = List.filled(depth, false);
+      for (int col = 0; col < depth; col++) {
+        for (int j = i + 1; j < n; j++) {
+          if (depths[j] < col) {
+            break;
+          }
+          if (depths[j] == col) {
+            showVerticalLines[col] = true;
+            break;
+          }
+        }
+      }
+
+      // Determine isLastSibling
+      bool isLastSibling = true;
+      if (depth > 0) {
+        for (int j = i + 1; j < n; j++) {
+          if (depths[j] < depth) {
+            break;
+          }
+          if (depths[j] == depth) {
+            isLastSibling = false;
+            break;
+          }
+        }
+      }
+
+      treeNodes.add(_FlowTreeNode(
+        originalNode: sortedNodes[i],
+        depth: depth,
+        showVerticalLines: showVerticalLines,
+        isLastSibling: isLastSibling,
+      ));
     }
 
-    return result;
+    return treeNodes;
+  }
+
+  Widget _buildModeOption({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final activeColor = const Color(0xFF57D888);
+    final color = selected ? activeColor : MonitorColors.secondaryText;
+    
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected 
+              ? activeColor.withValues(alpha: 0.08)
+              : MonitorColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected 
+                ? activeColor.withValues(alpha: 0.35)
+                : MonitorColors.divider,
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 11, color: color),
+            const SizedBox(width: 4.5),
+            LabelText(
+              label,
+              color,
+              size: 8,
+              spacing: 0.2,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -545,29 +695,37 @@ class _FlowLogListState extends State<_FlowLogList> {
     final items = _buildItems();
     if (items.isEmpty) return const _EmptyState();
 
-    final maxLane = items.fold(0, (m, n) => math.max(m, n.maxLane));
-    final graphW = (maxLane + 1) * _GitLanePainter.laneW + 10.0;
     final totalSteps = items.length;
 
     final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
         ? MonitorNavigatorObserver.pageStack.last
-        : '/unknown';
+        : MonitorConstants.unknownRoute;
 
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          color: MonitorColors.pageBackground,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: MonitorColors.surface,
+            border: Border(bottom: BorderSide(color: MonitorColors.divider, width: 0.5)),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
-                  Icon(Icons.alt_route_rounded, size: 13, color: const Color(0xFF57D888)),
-                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.all(4.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF57D888).withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.alt_route_rounded, size: 12, color: const Color(0xFF57D888)),
+                  ),
+                  const SizedBox(width: 8),
                   BodyText(
-                    'FLOW TRACE (ALL)',
-                    10.5,
+                    'FLOW TRACE TIMELINE',
+                    10,
                     color: MonitorColors.primaryText,
                     weight: FontWeight.bold,
                   ),
@@ -576,26 +734,26 @@ class _FlowLogListState extends State<_FlowLogList> {
               GestureDetector(
                 onTap: () => setState(() => _oldestFirst = !_oldestFirst),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                   decoration: BoxDecoration(
-                    color: MonitorColors.surface,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: MonitorColors.border),
+                    color: MonitorColors.pageBackground,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: MonitorColors.divider, width: 0.8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         _oldestFirst ? Icons.south_rounded : Icons.north_rounded,
-                        size: 11,
-                        color: MonitorColors.primaryText,
+                        size: 10,
+                        color: MonitorColors.secondaryText,
                       ),
                       const SizedBox(width: 4),
                       LabelText(
                         _oldestFirst ? 'CŨ NHẤT TRƯỚC' : 'MỚI NHẤT TRƯỚC',
-                        MonitorColors.primaryText,
-                        size: 8.5,
-                        spacing: 0.3,
+                        MonitorColors.secondaryText,
+                        size: 7.5,
+                        spacing: 0.2,
                       ),
                     ],
                   ),
@@ -604,48 +762,169 @@ class _FlowLogListState extends State<_FlowLogList> {
             ],
           ),
         ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          color: MonitorColors.pageBackground,
+          child: Row(
+            children: [
+              _buildModeOption(
+                label: 'ROUTE & API',
+                icon: Icons.list_alt_rounded,
+                selected: _displayMode == FlowDisplayMode.all,
+                onTap: () => setState(() => _displayMode = FlowDisplayMode.all),
+              ),
+              const SizedBox(width: 8),
+              _buildModeOption(
+                label: 'CHỈ ROUTE',
+                icon: Icons.route_outlined,
+                selected: _displayMode == FlowDisplayMode.routesOnly,
+                onTap: () => setState(() => _displayMode = FlowDisplayMode.routesOnly),
+              ),
+            ],
+          ),
+        ),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-            itemCount: items.length,
-            itemBuilder: (_, i) {
-              final node = items[i];
-              final stepNum = _oldestFirst ? i + 1 : totalSteps - i;
+          child: _displayMode == FlowDisplayMode.routesOnly
+              ? _RouteTreeView(
+                  logs: MonitorController.instance.routeLogs,
+                  oldestFirst: _oldestFirst,
+                  compact: true,
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                  itemCount: items.length,
+                  itemBuilder: (_, i) {
+                    final node = items[i];
+                    final stepNum = _oldestFirst ? i + 1 : totalSteps - i;
 
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      width: graphW,
-                      child: CustomPaint(painter: _GitLanePainter(node)),
-                    ),
-                    Expanded(
-                      child: node.item is RouteLogItem
-                          ? _GitRouteInfo(
-                              node: node,
-                              isCurrent: (node.item as RouteLogItem).route == topRoute &&
-                                  (node.item as RouteLogItem).event != RouteLogItem.eventPop,
-                              stepNum: stepNum,
-                            )
-                          : Padding(
-                              padding: const EdgeInsets.only(left: 14, top: 4, bottom: 4),
-                              child: ApiLogTile(
-                                log: node.item as ApiLogItem,
-                                showOrder: false,
-                                showScreenBadge: false,
-                                lane: node.lane,
-                                compact: true,
+                    final treeWidth = node.depth * _FlowTreePainter.indentW;
+
+                    return IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (treeWidth > 0)
+                            SizedBox(
+                              width: treeWidth,
+                              child: CustomPaint(
+                                painter: _FlowTreePainter(
+                                  depth: node.depth,
+                                  showVerticalLines: node.showVerticalLines,
+                                  isLastSibling: node.isLastSibling,
+                                  isDark: MonitorColors.isDark,
+                                ),
                               ),
                             ),
-                    ),
-                  ],
+                          Expanded(
+                            child: node.item is RouteLogItem
+                                ? _GitRouteInfo(
+                                    node: node.originalNode,
+                                    isCurrent: (node.item as RouteLogItem).route == topRoute &&
+                                        (node.item as RouteLogItem).event != RouteLogItem.eventPop,
+                                    stepNum: stepNum,
+                                    compact: true,
+                                  )
+                                : Padding(
+                                    padding: const EdgeInsets.only(left: 14, top: 4, bottom: 4),
+                                    child: ApiLogTile(
+                                      log: node.item as ApiLogItem,
+                                      showOrder: false,
+                                      showScreenBadge: false,
+                                      lane: node.originalNode.lane,
+                                      compact: true,
+                                      showFullUrl: true,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         ),
       ],
     );
+  }
+}
+
+class _FlowTreeNode {
+  final _GitNode originalNode;
+  final int depth;
+  final List<bool> showVerticalLines;
+  final bool isLastSibling;
+
+  _FlowTreeNode({
+    required this.originalNode,
+    required this.depth,
+    required this.showVerticalLines,
+    required this.isLastSibling,
+  });
+
+  Object get item => originalNode.item;
+}
+
+class _FlowTreePainter extends CustomPainter {
+  final int depth;
+  final List<bool> showVerticalLines;
+  final bool isLastSibling;
+  final bool isDark;
+
+  static const double indentW = 16.0;
+
+  const _FlowTreePainter({
+    required this.depth,
+    required this.showVerticalLines,
+    required this.isLastSibling,
+    required this.isDark,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (depth <= 0) return;
+
+    final paint = Paint()
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final midY = size.height / 2;
+
+    for (int col = 0; col < depth; col++) {
+      final x = col * indentW + indentW / 2;
+      paint.color = _GitLanePainter._palette[col % _GitLanePainter._palette.length]
+          .withValues(alpha: isDark ? 0.65 : 0.55);
+
+      if (col < depth - 1) {
+        // Continuous line
+        if (showVerticalLines[col]) {
+          canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+        }
+      } else {
+        // Connector branch
+        if (isLastSibling) {
+          // Rounded corner (L-shape)
+          final path = Path()
+            ..moveTo(x, 0)
+            ..quadraticBezierTo(x, midY, (col + 1) * indentW, midY);
+          canvas.drawPath(path, paint);
+        } else {
+          // T-shape
+          final path = Path()
+            ..moveTo(x, 0)
+            ..lineTo(x, size.height)
+            ..moveTo(x, midY)
+            ..lineTo((col + 1) * indentW, midY);
+          canvas.drawPath(path, paint);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FlowTreePainter oldDelegate) {
+    return oldDelegate.depth != depth ||
+        oldDelegate.isLastSibling != isLastSibling ||
+        oldDelegate.isDark != isDark ||
+        oldDelegate.showVerticalLines.length != showVerticalLines.length;
   }
 }

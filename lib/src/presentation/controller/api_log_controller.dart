@@ -2,7 +2,8 @@ import '../../core/monitor_constants.dart';
 import '../../domain/api_log_item.dart';
 
 class ApiLogController {
-  static const int _maxTrackedScreens = 50;
+  static const int _maxTrackedScreens = 20;
+  static const int _maxLogsPerScreen = 40;
 
   final Map<String, List<ApiLogItem>> initLogsMap = {};
   final Map<String, List<ApiLogItem>> refreshLogsMap = {};
@@ -15,7 +16,7 @@ class ApiLogController {
   final List<String> _screenOrder = [];
 
   String? activePopup;
-  String currentViewedScreen = 'ALL';
+  String currentViewedScreen = MonitorConstants.allScreensKey;
   bool isDashboardOpen = false;
 
   List<ApiLogItem> apiLogs = [];
@@ -156,6 +157,9 @@ class ApiLogController {
           responseHeaders: item.responseHeaders,
           responseBody: item.responseBody,
         ));
+        if (refreshLogs.length > _maxLogsPerScreen) {
+          refreshLogs.removeAt(0);
+        }
       }
     } else {
       final initLogs = initLogsMap[screen] ??= [];
@@ -193,6 +197,9 @@ class ApiLogController {
           responseHeaders: item.responseHeaders,
           responseBody: item.responseBody,
         ));
+        if (initLogs.length > _maxLogsPerScreen) {
+          initLogs.removeAt(0);
+        }
       }
     }
 
@@ -221,7 +228,7 @@ class ApiLogController {
 
   void updateView(String screen) {
     currentViewedScreen = screen;
-    if (screen == 'ALL') {
+    if (screen == MonitorConstants.allScreensKey) {
       final List<ApiLogItem> allInit = [];
       for (final logs in initLogsMap.values) {
         allInit.addAll(logs);
@@ -343,7 +350,7 @@ class ApiLogController {
     _sessionStartTime.clear();
     _screenOrder.clear();
     activePopup = null;
-    currentViewedScreen = 'ALL';
+    currentViewedScreen = MonitorConstants.allScreensKey;
     initApiCount = 0;
     refreshApiCount = 0;
     initTotalDuration = 0;
@@ -362,7 +369,7 @@ class ApiLogController {
     int actionMs,
     int actionCycles,
   }) statsForScreen(String screen) {
-    if (screen == 'ALL') {
+    if (screen == MonitorConstants.allScreensKey) {
       int openCount = 0;
       int openMs = 0;
       int actionCount = 0;

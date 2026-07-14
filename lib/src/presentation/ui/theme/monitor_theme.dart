@@ -106,6 +106,8 @@ abstract class MonitorColors {
 }
 
 abstract class MonitorTextStyle {
+  static const String monoFontFamily = 'monospace';
+
   /// Monospace — values, timestamps, route names, JSON.
   /// [color] defaults to [MonitorColors.secondaryText].
   static TextStyle mono(
@@ -117,7 +119,7 @@ abstract class MonitorTextStyle {
       TextStyle(
         color: color ?? MonitorColors.secondaryText,
         fontSize: size,
-        fontFamily: 'monospace',
+        fontFamily: monoFontFamily,
         fontWeight: weight,
         height: height,
       );
@@ -153,8 +155,8 @@ abstract class MonitorTextStyle {
 abstract class OverlayLayout {
   static const double expandedW = 210.0;
   static const double expandedH = 210.0;
-  static const double pillW = 110.0;
-  static const double pillH = 62.0;
+  static const double pillW = 108.0;
+  static const double pillH = 54.0;
   static const double edgeMargin = 8.0;
 }
 
