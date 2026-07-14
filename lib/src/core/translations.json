@@ -179,5 +179,9 @@
   "logsForScreen": {
     "en": "LOGS FOR SCREEN",
     "vi": "LOG CỦA MÀN HÌNH"
+  },
+  "diffRequestsLabel": {
+    "en": "diff",
+    "vi": "khác"
   }
 }

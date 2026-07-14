@@ -46,4 +46,5 @@ const Map<String, String> viTranslations = {
   'overlayMemLabel': 'MEM ',
   'overlayNetLabel': 'NET ',
   'logsForScreen': 'LOG CỦA MÀN HÌNH',
+  'diffRequestsLabel': 'khác',
 };

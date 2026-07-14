@@ -116,6 +116,7 @@ class ApiLogItem {
     String? phase,
     int? refreshCycle,
     DateTime? timestamp,
+    String? screen,
   }) {
     return ApiLogItem(
       orderNumber: orderNumber ?? this.orderNumber,
@@ -124,7 +125,7 @@ class ApiLogItem {
       statusCode: statusCode ?? this.statusCode,
       duration: duration ?? this.duration,
       responseBytes: responseBytes ?? this.responseBytes,
-      screen: screen,
+      screen: screen ?? this.screen,
       timestamp: timestamp ?? this.timestamp,
       callerName: callerName,
       phase: phase ?? this.phase,

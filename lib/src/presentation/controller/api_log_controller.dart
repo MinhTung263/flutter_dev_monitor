@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../../core/monitor_constants.dart';
 import '../../domain/api_log_item.dart';
 
@@ -128,15 +129,18 @@ class ApiLogController {
       final idx = refreshLogs.indexWhere((l) =>
           l.url == item.url &&
           l.method == item.method &&
-          l.refreshCycle == cycle);
+          l.refreshCycle == cycle &&
+          l.requestBody == item.requestBody &&
+          mapEquals(l.queryParams, item.queryParams));
 
       if (idx >= 0) {
         final existing = refreshLogs[idx];
-        refreshLogs[idx] = existing.copyWith(
+        refreshLogs[idx] = item.copyWith(
           callCount: existing.callCount + 1,
-          duration: item.duration,
-          statusCode: item.statusCode,
           orderNumber: order,
+          screen: screenLabel,
+          phase: newPhase,
+          refreshCycle: cycle,
         );
       } else {
         refreshLogs.add(ApiLogItem(
@@ -168,15 +172,18 @@ class ApiLogController {
       final idx = initLogs.indexWhere((l) =>
           l.url == item.url &&
           l.method == item.method &&
-          l.refreshCycle == initCycle);
+          l.refreshCycle == initCycle &&
+          l.requestBody == item.requestBody &&
+          mapEquals(l.queryParams, item.queryParams));
 
       if (idx >= 0) {
         final existing = initLogs[idx];
-        initLogs[idx] = existing.copyWith(
+        initLogs[idx] = item.copyWith(
           callCount: existing.callCount + 1,
-          duration: item.duration,
-          statusCode: item.statusCode,
           orderNumber: order,
+          screen: screenLabel,
+          phase: newPhase,
+          refreshCycle: initCycle,
         );
       } else {
         initLogs.add(ApiLogItem(
@@ -209,18 +216,21 @@ class ApiLogController {
   List<ApiLogItem> _groupDuplicateApis(List<ApiLogItem> rawLogs) {
     final Map<String, ApiLogItem> grouped = {};
     for (final log in rawLogs) {
-      final key = '${log.method}_${log.url}';
+      final key = '${log.method}_${log.url}_${log.requestBody ?? ""}_${log.queryParams.toString()}';
       final existing = grouped[key];
       if (existing == null) {
         grouped[key] = log;
       } else {
         final isLatest = log.timestamp.isAfter(existing.timestamp);
-        grouped[key] = existing.copyWith(
-          callCount: existing.callCount + log.callCount,
-          duration: isLatest ? log.duration : existing.duration,
-          statusCode: isLatest ? log.statusCode : existing.statusCode,
-          timestamp: isLatest ? log.timestamp : existing.timestamp,
-        );
+        if (isLatest) {
+          grouped[key] = log.copyWith(
+            callCount: existing.callCount + log.callCount,
+          );
+        } else {
+          grouped[key] = existing.copyWith(
+            callCount: existing.callCount + log.callCount,
+          );
+        }
       }
     }
     return grouped.values.toList();

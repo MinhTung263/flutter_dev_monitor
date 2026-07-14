@@ -11,6 +11,265 @@ import '../theme/monitor_theme.dart';
 import 'monitor_text.dart';
 import 'responsive_dialog_wrapper.dart';
 
+Widget? _buildPayloadRow(BuildContext context, ApiLogItem log) {
+  final requestBody = log.requestBody;
+  if (requestBody != null && requestBody.isNotEmpty) {
+    String clean;
+    try {
+      clean = requestBody.trim().replaceAll('\n', '').replaceAll(' ', '');
+      if (clean.length > 60) {
+        clean = '${clean.substring(0, 60)}...';
+      }
+    } catch (_) {
+      clean = requestBody;
+    }
+    return Row(
+      children: [
+        Icon(Icons.subdirectory_arrow_right_rounded,
+            size: 11, color: MonitorColors.secondaryText.withValues(alpha: 0.6)),
+        const SizedBox(width: 3),
+        Expanded(
+          child: MonoText(
+            'Body: $clean',
+            9.5,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  if (log.queryParams.isNotEmpty) {
+    String path = log.url;
+    try {
+      final uri = Uri.parse(log.url);
+      path = uri.path;
+    } catch (_) {
+      final idx = log.url.indexOf('?');
+      if (idx >= 0) path = log.url.substring(0, idx);
+    }
+
+    final allLogs = MonitorController.instance.globalApiLogs;
+    final pathToCheck = path;
+    final siblingLogs = allLogs.where((l) {
+      String subPath = l.url;
+      try {
+        final uri = Uri.parse(l.url);
+        subPath = uri.path;
+      } catch (_) {
+        final idx = l.url.indexOf('?');
+        if (idx >= 0) subPath = l.url.substring(0, idx);
+      }
+      return l.method == log.method && subPath == pathToCheck;
+    }).toList();
+
+    final Set<String> diffKeys = {};
+    if (siblingLogs.length > 1) {
+      final Map<String, Set<String>> keyToValues = {};
+      for (final sib in siblingLogs) {
+        for (final entry in sib.queryParams.entries) {
+          keyToValues.putIfAbsent(entry.key, () => {}).add(entry.value.toString());
+        }
+      }
+      keyToValues.forEach((key, values) {
+        if (values.length > 1) {
+          diffKeys.add(key);
+        }
+      });
+    }
+
+    final List<InlineSpan> spans = [];
+    spans.add(TextSpan(
+      text: 'Params: ',
+      style: TextStyle(
+        fontFamily: 'monospace',
+        fontSize: 9.5,
+        color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+        fontWeight: FontWeight.bold,
+      ),
+    ));
+
+    final entries = log.queryParams.entries.toList();
+    for (int i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      final isDiff = diffKeys.contains(entry.key);
+      
+      final paramColor = isDiff
+          ? (MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706))
+          : MonitorColors.secondaryText.withValues(alpha: 0.8);
+      final paramWeight = isDiff ? FontWeight.bold : FontWeight.normal;
+
+      spans.add(TextSpan(
+        text: '${entry.key}=',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 9.5,
+          color: paramColor,
+          fontWeight: paramWeight,
+        ),
+      ));
+      spans.add(TextSpan(
+        text: entry.value.toString(),
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 9.5,
+          color: paramColor,
+          fontWeight: isDiff ? FontWeight.bold : FontWeight.w500,
+        ),
+      ));
+
+      if (i < entries.length - 1) {
+        spans.add(TextSpan(
+          text: ', ',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 9.5,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.6),
+          ),
+        ));
+      }
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.subdirectory_arrow_right_rounded,
+            size: 11, color: MonitorColors.secondaryText.withValues(alpha: 0.6)),
+        const SizedBox(width: 3),
+        Expanded(
+          child: RichText(
+            text: TextSpan(children: spans),
+          ),
+        ),
+      ],
+    );
+  }
+
+  return null;
+}
+
+Widget? _buildCompactPayloadRow(ApiLogItem log) {
+  final requestBody = log.requestBody;
+  if (requestBody != null && requestBody.isNotEmpty) {
+    String clean;
+    try {
+      clean = requestBody.trim().replaceAll('\n', '').replaceAll(' ', '');
+      if (clean.length > 50) {
+        clean = '${clean.substring(0, 50)}...';
+      }
+    } catch (_) {
+      clean = requestBody;
+    }
+    return MonoText(
+      'Body: $clean',
+      8.5,
+      color: MonitorColors.secondaryText.withValues(alpha: 0.7),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  if (log.queryParams.isNotEmpty) {
+    String path = log.url;
+    try {
+      final uri = Uri.parse(log.url);
+      path = uri.path;
+    } catch (_) {
+      final idx = log.url.indexOf('?');
+      if (idx >= 0) path = log.url.substring(0, idx);
+    }
+
+    final allLogs = MonitorController.instance.globalApiLogs;
+    final pathToCheck = path;
+    final siblingLogs = allLogs.where((l) {
+      String subPath = l.url;
+      try {
+        final uri = Uri.parse(l.url);
+        subPath = uri.path;
+      } catch (_) {
+        final idx = l.url.indexOf('?');
+        if (idx >= 0) subPath = l.url.substring(0, idx);
+      }
+      return l.method == log.method && subPath == pathToCheck;
+    }).toList();
+
+    final Set<String> diffKeys = {};
+    if (siblingLogs.length > 1) {
+      final Map<String, Set<String>> keyToValues = {};
+      for (final sib in siblingLogs) {
+        for (final entry in sib.queryParams.entries) {
+          keyToValues.putIfAbsent(entry.key, () => {}).add(entry.value.toString());
+        }
+      }
+      keyToValues.forEach((key, values) {
+        if (values.length > 1) {
+          diffKeys.add(key);
+        }
+      });
+    }
+
+    final List<InlineSpan> spans = [];
+    spans.add(TextSpan(
+      text: 'Params: ',
+      style: TextStyle(
+        fontFamily: 'monospace',
+        fontSize: 8.5,
+        color: MonitorColors.secondaryText.withValues(alpha: 0.7),
+        fontWeight: FontWeight.bold,
+      ),
+    ));
+
+    final entries = log.queryParams.entries.toList();
+    for (int i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      final isDiff = diffKeys.contains(entry.key);
+      
+      final paramColor = isDiff
+          ? (MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706))
+          : MonitorColors.secondaryText.withValues(alpha: 0.7);
+      final paramWeight = isDiff ? FontWeight.bold : FontWeight.normal;
+
+      spans.add(TextSpan(
+        text: '${entry.key}=',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 8.5,
+          color: paramColor,
+          fontWeight: paramWeight,
+        ),
+      ));
+      spans.add(TextSpan(
+        text: entry.value.toString(),
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 8.5,
+          color: paramColor,
+          fontWeight: isDiff ? FontWeight.bold : FontWeight.w500,
+        ),
+      ));
+
+      if (i < entries.length - 1) {
+        spans.add(TextSpan(
+          text: ', ',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 8.5,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.5),
+          ),
+        ));
+      }
+    }
+
+    return RichText(
+      text: TextSpan(children: spans),
+    );
+  }
+
+  return null;
+}
+
 class ApiLogTile extends StatefulWidget {
   final ApiLogItem log;
   final bool showOrder;
@@ -141,6 +400,7 @@ class _CollapsedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final payloadRow = _buildPayloadRow(context, log);
     // Shorten URL path
     String displayUrl = log.url;
     if (!showFullUrl) {
@@ -233,6 +493,10 @@ class _CollapsedRow extends StatelessWidget {
                 ),
               ],
             ),
+            if (payloadRow != null) ...[
+              const SizedBox(height: 4),
+              payloadRow,
+            ],
             // Row 2: Screen, Caller, and Call Count Metadata
             if (showScreenBadge || log.hasCallerName || log.hasMultipleCalls) ...[
               const SizedBox(height: 5),
@@ -280,6 +544,7 @@ class _CompactCollapsedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compactPayloadRow = _buildCompactPayloadRow(log);
     final isGet = log.method == MonitorFilterKeys.get;
     final methodColor =
         isGet ? MonitorColors.methodGet : MonitorColors.methodPost;
@@ -322,12 +587,22 @@ class _CompactCollapsedRow extends StatelessWidget {
             const SizedBox(width: 6),
             // URL Path
             Expanded(
-              child: MonoText(
-                displayUrl,
-                10,
-                color: MonitorColors.primaryText,
-                maxLines: showFullUrl ? null : 1,
-                overflow: showFullUrl ? null : TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  MonoText(
+                    displayUrl,
+                    10,
+                    color: MonitorColors.primaryText,
+                    maxLines: showFullUrl ? null : 1,
+                    overflow: showFullUrl ? null : TextOverflow.ellipsis,
+                  ),
+                  if (compactPayloadRow != null) ...[
+                    const SizedBox(height: 2),
+                    compactPayloadRow,
+                  ],
+                ],
               ),
             ),
             const SizedBox(width: 6),
@@ -525,6 +800,7 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      routeSettings: const RouteSettings(name: '/MonitorCopyActions'),
       builder: (_) => _CopyActionsSheet(log: log),
     );
   }
@@ -2118,6 +2394,7 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      routeSettings: const RouteSettings(name: '/MonitorCopyActions'),
       builder: (_) => _CopyActionsSheet(log: log),
     );
   }

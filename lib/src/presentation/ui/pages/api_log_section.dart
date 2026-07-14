@@ -389,7 +389,7 @@ List<_GitNode> _buildCombinedGitNodes(List<ApiLogItem> apiLogs, List<RouteLogIte
         screenKey = stack.isNotEmpty ? stack.last : api.screen;
       }
       final l = getOrCreateLane(screenKey);
-      final key = '${api.method}_${api.url}';
+      final key = '${api.method}_${api.url}_${api.requestBody ?? ""}_${api.queryParams.toString()}';
 
       if (currentVisitApis.containsKey(key)) {
         final nodeIndex = currentVisitApis[key]!;
@@ -397,12 +397,13 @@ List<_GitNode> _buildCombinedGitNodes(List<ApiLogItem> apiLogs, List<RouteLogIte
         final existingApi = existingNode.item as ApiLogItem;
 
         final isLatest = api.timestamp.isAfter(existingApi.timestamp);
-        final mergedApi = existingApi.copyWith(
-          callCount: existingApi.callCount + api.callCount,
-          duration: isLatest ? api.duration : existingApi.duration,
-          statusCode: isLatest ? api.statusCode : existingApi.statusCode,
-          timestamp: isLatest ? api.timestamp : existingApi.timestamp,
-        );
+        final mergedApi = isLatest
+            ? api.copyWith(
+                callCount: existingApi.callCount + api.callCount,
+              )
+            : existingApi.copyWith(
+                callCount: existingApi.callCount + api.callCount,
+              );
 
         nodes[nodeIndex] = _GitNode(
           item: mergedApi,

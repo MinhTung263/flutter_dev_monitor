@@ -295,6 +295,7 @@ class _FlowMapListState extends State<_FlowMapList>
       context: context,
       backgroundColor: MonitorColors.surface,
       isScrollControlled: true,
+      routeSettings: const RouteSettings(name: '/MonitorScreenApiDetail'),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -532,9 +533,12 @@ class _FlowMapListState extends State<_FlowMapList>
 
     final matrix = _transformationController.value.clone();
     final double currentScale = matrix.getMaxScaleOnAxis();
+    if (currentScale.isNaN || currentScale.isInfinite || currentScale <= 0.05) {
+      return;
+    }
 
     double targetScale = currentScale * factor;
-    targetScale = targetScale.clamp(0.1, 2.0);
+    targetScale = targetScale.clamp(0.15, 2.0);
 
     double minX = double.infinity;
     double maxX = -double.infinity;
@@ -579,6 +583,9 @@ class _FlowMapListState extends State<_FlowMapList>
     final localPos = _doubleTapDetails!.localPosition;
     final matrix = _transformationController.value.clone();
     final currentScale = matrix.getMaxScaleOnAxis();
+    if (currentScale.isNaN || currentScale.isInfinite || currentScale <= 0.05) {
+      return;
+    }
 
     if (currentScale >= 2.0) {
       _resetZoom();
@@ -592,6 +599,10 @@ class _FlowMapListState extends State<_FlowMapList>
     matrix.multiply(Matrix4.translationValues(x, y, 0.0));
     matrix.multiply(Matrix4.diagonal3Values(zoomFactor, zoomFactor, 1.0));
     matrix.multiply(Matrix4.translationValues(-x, -y, 0.0));
+
+    // Clamp resulting scale to valid range
+    final resultScale = matrix.getMaxScaleOnAxis();
+    if (resultScale < 0.15 || resultScale > 2.0) return;
 
     _animateToMatrix(matrix);
   }
@@ -836,7 +847,11 @@ class _FlowMapListState extends State<_FlowMapList>
             final double scaleY = viewportSize.height / graphHeight;
 
             double fitScale = math.min(scaleX, scaleY);
-            fitScale = fitScale.clamp(0.7, 1.0);
+            if (fitScale.isNaN || fitScale.isInfinite || fitScale <= 0.0) {
+              fitScale = 1.0;
+            } else {
+              fitScale = fitScale.clamp(0.7, 1.0);
+            }
 
             final double tx =
                 (viewportSize.width / 2) - (graphCenterX * fitScale);
@@ -862,6 +877,7 @@ class _FlowMapListState extends State<_FlowMapList>
         final Map<String, int> routeVisits = {};
         final Map<String, Set<int>> seenApiOrders = {};
         final Map<String, Set<String>> seenErrorKeys = {};
+        final Map<String, String> routeTypes = {};
 
         for (final r in uniqueRoutes) {
           routeApis[r] = [];
@@ -869,10 +885,12 @@ class _FlowMapListState extends State<_FlowMapList>
           routeVisits[r] = 0;
           seenApiOrders[r] = {};
           seenErrorKeys[r] = {};
+          routeTypes[r] = 'page';
         }
 
         for (final visit in visits) {
           if (!routeApis.containsKey(visit.route)) continue;
+          routeTypes[visit.route] = visit.routeItem.routeType;
           for (final api in visit.apiLogs) {
             final seen = seenApiOrders[visit.route]!;
             if (seen.add(api.orderNumber)) {
@@ -902,7 +920,7 @@ class _FlowMapListState extends State<_FlowMapList>
                 child: InteractiveViewer(
                   transformationController: _transformationController,
                   constrained: false,
-                  minScale: 0.1,
+                  minScale: 0.15,
                   maxScale: 2.0,
                   boundaryMargin: const EdgeInsets.all(500.0),
                   child: SizedBox(
@@ -942,25 +960,33 @@ class _FlowMapListState extends State<_FlowMapList>
                                     final double currentScale =
                                         _transformationController.value
                                             .getMaxScaleOnAxis();
-                                    _activePositions[route] =
-                                        _activePositions[route]! +
-                                            details.delta / currentScale;
-                                    _draggedRoutes.add(route);
+                                    if (currentScale > 0.05 && currentScale.isFinite) {
+                                      _activePositions[route] =
+                                          _activePositions[route]! +
+                                              details.delta / currentScale;
+                                      _draggedRoutes.add(route);
+                                    }
                                   });
                                 },
                                 child: _FlowMapStateCard(
                                   route: route,
+                                  routeType: routeTypes[route] ?? 'page',
                                   visitCount: routeVisits[route] ?? 0,
                                   apiLogs: routeApis[route] ?? [],
                                   flutterErrors: routeErrors[route] ?? [],
                                   isCurrent: route == activeRoute,
                                   width: cardWidth,
                                   height: cardHeight,
-                                  onTap: () => _showScreenApisBottomSheet(
-                                    route,
-                                    routeApis[route] ?? [],
-                                    routeErrors[route] ?? [],
-                                  ),
+                                  onTap: () {
+                                    final apis = routeApis[route] ?? [];
+                                    final errors = routeErrors[route] ?? [];
+                                    if (apis.isEmpty && errors.isEmpty) return;
+                                    _showScreenApisBottomSheet(
+                                      route,
+                                      apis,
+                                      errors,
+                                    );
+                                  },
                                 ),
                               ),
                             ),
@@ -1170,6 +1196,7 @@ class _RouteTransition {
 
 class _FlowMapStateCard extends StatelessWidget {
   final String route;
+  final String routeType;
   final int visitCount;
   final List<ApiLogItem> apiLogs;
   final List<ErrorLogItem> flutterErrors;
@@ -1180,6 +1207,7 @@ class _FlowMapStateCard extends StatelessWidget {
 
   const _FlowMapStateCard({
     required this.route,
+    required this.routeType,
     required this.visitCount,
     required this.apiLogs,
     required this.flutterErrors,
@@ -1188,6 +1216,52 @@ class _FlowMapStateCard extends StatelessWidget {
     required this.height,
     required this.onTap,
   });
+
+  Widget _buildTypeBadge(String type) {
+    Color bg;
+    Color text;
+    String label;
+
+    switch (type) {
+      case 'bottomSheet':
+        label = 'SHEET';
+        bg = const Color(0xFF7B61FF).withValues(alpha: 0.12);
+        text = const Color(0xFF7B61FF);
+        break;
+      case 'dialog':
+        label = 'DIALOG';
+        bg = const Color(0xFFFF9800).withValues(alpha: 0.12);
+        text = const Color(0xFFFF9800);
+        break;
+      case 'popup':
+        label = 'POPUP';
+        bg = const Color(0xFFE91E63).withValues(alpha: 0.12);
+        text = const Color(0xFFE91E63);
+        break;
+      case 'page':
+      default:
+        label = 'PAGE';
+        bg = const Color(0xFF2196F3).withValues(alpha: 0.12);
+        text = const Color(0xFF2196F3);
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      margin: const EdgeInsets.only(right: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: text.withValues(alpha: 0.25), width: 0.5),
+      ),
+      child: MonoText(
+        label,
+        6.5,
+        color: text,
+        weight: FontWeight.bold,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1253,6 +1327,7 @@ class _FlowMapStateCard extends StatelessWidget {
                         ),
                       ),
                     ],
+                    _buildTypeBadge(routeType),
                     Expanded(
                       child: MonoText(
                         MonitorController.formatRouteName(route),
@@ -1693,7 +1768,8 @@ class _MiniMapPainter extends CustomPainter {
     }
 
     // 3. Draw viewport indicator
-    final double viewportScale = matrix.getMaxScaleOnAxis();
+    final double rawScale = matrix.getMaxScaleOnAxis();
+    final double viewportScale = (rawScale.isNaN || rawScale.isInfinite || rawScale <= 0.01) ? 1.0 : rawScale;
     final double tx = matrix.entry(0, 3);
     final double ty = matrix.entry(1, 3);
 

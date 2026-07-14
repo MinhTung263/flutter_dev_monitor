@@ -231,6 +231,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     if (isLargeScreen) {
       showDialog(
         context: context,
+        routeSettings: const RouteSettings(name: '/MonitorFilterDialog'),
         barrierColor: Colors.black.withValues(alpha: 0.4),
         builder: (_) => Center(
           child: Container(
@@ -270,6 +271,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      routeSettings: const RouteSettings(name: '/MonitorScreenPicker'),
       builder: (_) => _ScreenPickerSheet(
         screens: screens,
         selected: _selectedScreen,

@@ -152,18 +152,18 @@ class MonitorController extends ChangeNotifier {
   List<RouteLogItem> get routeLogs => _routeLog.logs;
   int get routeLogCount => _routeLog.count;
 
-  void logRoutePush(String route, String? from) {
-    _routeLog.logPush(route, from);
+  void logRoutePush(String route, String? from, {String routeType = 'page'}) {
+    _routeLog.logPush(route, from, routeType: routeType);
     notifyListeners();
   }
 
-  void logRoutePop(String route, String? to) {
-    _routeLog.logPop(route, to);
+  void logRoutePop(String route, String? to, {String routeType = 'page'}) {
+    _routeLog.logPop(route, to, routeType: routeType);
     notifyListeners();
   }
 
-  void logRouteReplace(String oldRoute, String newRoute) {
-    _routeLog.logReplace(oldRoute, newRoute);
+  void logRouteReplace(String oldRoute, String newRoute, {String routeType = 'page'}) {
+    _routeLog.logReplace(oldRoute, newRoute, routeType: routeType);
     notifyListeners();
   }
 
@@ -191,6 +191,24 @@ class MonitorController extends ChangeNotifier {
     MonitorColors.load(); // fire-and-forget: restores persisted theme
   }
 
+  bool _shouldIgnoreError(String exception, String stack) {
+    final excLower = exception.toLowerCase();
+    final stackLower = stack.toLowerCase();
+
+    if (stackLower.contains('flutter_dev_monitor') ||
+        excLower.contains('flutter_dev_monitor')) {
+      return true;
+    }
+
+    final currentRoute = MonitorNavigatorObserver.currentRoute;
+    if (currentRoute.contains('Monitor') ||
+        currentRoute.contains('monitor')) {
+      return true;
+    }
+
+    return false;
+  }
+
   void _hookFlutterErrors() {
     final originalOnError = FlutterError.onError;
     FlutterError.onError = (FlutterErrorDetails details) {
@@ -200,21 +218,25 @@ class MonitorController extends ChangeNotifier {
       }
       _isReportingError = true;
       try {
-        _alertsDismissed = false;
-        _errorLog.addError(
-          details.exceptionAsString(),
-          details.stack?.toString() ?? '',
-          ErrorLogItem.typeFlutter,
-          MonitorNavigatorObserver.currentRoute.isEmpty
-              ? MonitorConstants.unknownRoute
-              : MonitorNavigatorObserver.currentRoute,
-        );
-        if (!_disposed) {
-          scheduleMicrotask(() {
-            if (!_disposed) {
-              notifyListeners();
-            }
-          });
+        final exceptionStr = details.exceptionAsString();
+        final stackStr = details.stack?.toString() ?? '';
+        if (!_shouldIgnoreError(exceptionStr, stackStr)) {
+          _alertsDismissed = false;
+          _errorLog.addError(
+            exceptionStr,
+            stackStr,
+            ErrorLogItem.typeFlutter,
+            MonitorNavigatorObserver.currentRoute.isEmpty
+                ? MonitorConstants.unknownRoute
+                : MonitorNavigatorObserver.currentRoute,
+          );
+          if (!_disposed) {
+            scheduleMicrotask(() {
+              if (!_disposed) {
+                notifyListeners();
+              }
+            });
+          }
         }
       } catch (_) {
       } finally {
@@ -229,21 +251,25 @@ class MonitorController extends ChangeNotifier {
       }
       _isReportingError = true;
       try {
-        _alertsDismissed = false;
-        _errorLog.addError(
-          error.toString(),
-          stack.toString(),
-          ErrorLogItem.typeDart,
-          MonitorNavigatorObserver.currentRoute.isEmpty
-              ? MonitorConstants.unknownRoute
-              : MonitorNavigatorObserver.currentRoute,
-        );
-        if (!_disposed) {
-          scheduleMicrotask(() {
-            if (!_disposed) {
-              notifyListeners();
-            }
-          });
+        final exceptionStr = error.toString();
+        final stackStr = stack.toString();
+        if (!_shouldIgnoreError(exceptionStr, stackStr)) {
+          _alertsDismissed = false;
+          _errorLog.addError(
+            exceptionStr,
+            stackStr,
+            ErrorLogItem.typeDart,
+            MonitorNavigatorObserver.currentRoute.isEmpty
+                ? MonitorConstants.unknownRoute
+                : MonitorNavigatorObserver.currentRoute,
+          );
+          if (!_disposed) {
+            scheduleMicrotask(() {
+              if (!_disposed) {
+                notifyListeners();
+              }
+            });
+          }
         }
       } catch (_) {
       } finally {

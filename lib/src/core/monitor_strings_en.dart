@@ -46,4 +46,5 @@ const Map<String, String> enTranslations = {
   'overlayMemLabel': 'MEM ',
   'overlayNetLabel': 'NET ',
   'logsForScreen': 'LOGS FOR SCREEN',
+  'diffRequestsLabel': 'diff',
 };

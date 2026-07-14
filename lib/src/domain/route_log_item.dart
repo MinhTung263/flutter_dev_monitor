@@ -27,6 +27,9 @@ class RouteLogItem {
   /// The duration the user spent on the route (set on POP/REPLACE).
   final Duration? duration;
 
+  /// The type of route ('page', 'bottomSheet', 'dialog', 'popup').
+  final String routeType;
+
   /// Creates a new [RouteLogItem] entry.
   const RouteLogItem({
     required this.id,
@@ -35,5 +38,6 @@ class RouteLogItem {
     this.from,
     required this.timestamp,
     this.duration,
+    this.routeType = 'page',
   });
 }

@@ -90,4 +90,5 @@ class LocaleKeys {
   static const overlayMemLabel = MonitorLocaleKey('overlayMemLabel');
   static const overlayNetLabel = MonitorLocaleKey('overlayNetLabel');
   static const logsForScreen = MonitorLocaleKey('logsForScreen');
+  static const diffRequestsLabel = MonitorLocaleKey('diffRequestsLabel');
 }

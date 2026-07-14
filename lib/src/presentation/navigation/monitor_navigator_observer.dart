@@ -28,6 +28,26 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   /// The history stack of visited page route names.
   static final List<String> pageStack = [];
 
+  /// Tracks generated names for PopupRoutes that have no settings.name.
+  final Map<Route<dynamic>, String> _popupNameCache = {};
+
+  /// Generates a fallback route name from a popup route's runtime type.
+  static String _popupFallbackName(Route<dynamic> route) {
+    final typeName = route.runtimeType.toString();
+    // e.g. '_ModalBottomSheetRoute' → 'bottomSheet', 'DialogRoute' → 'dialog'
+    if (typeName.toLowerCase().contains('bottomsheet')) return 'bottomSheet';
+    if (typeName.toLowerCase().contains('dialog')) return 'dialog';
+    return typeName;
+  }
+
+  static String _getRouteType(Route<dynamic> route) {
+    if (route is PageRoute) return 'page';
+    final typeName = route.runtimeType.toString().toLowerCase();
+    if (typeName.contains('bottomsheet')) return 'bottomSheet';
+    if (typeName.contains('dialog')) return 'dialog';
+    return 'popup';
+  }
+
   /// The most recently pushed page route name (excludes popups and dashboard).
   static String _currentContentRoute = MonitorConstants.unknownRoute;
   static String _cachedCurrentContentRoute = MonitorConstants.unknownRoute;
@@ -197,9 +217,27 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     super.didPush(route, previousRoute);
     if (isMonitorRoute(route)) return;
+
+    // Handle PopupRoute (BottomSheet, Dialog) before the name guard
+    // because they often have no settings.name.
+    if (route is PopupRoute) {
+      final rawName = route.settings.name;
+      final name = (rawName != null && rawName.isNotEmpty)
+          ? rawName
+          : _popupFallbackName(route);
+      _popupNameCache[route] = name;
+      MonitorController.instance.setActivePopup(name);
+      MonitorController.instance.logRoutePush(
+        name,
+        previousRoute?.settings.name,
+        routeType: _getRouteType(route),
+      );
+      _updateActiveRouteTitle();
+      return;
+    }
+
     final name = route.settings.name;
     if (name == null || name.isEmpty) return;
-
     if (name == MonitorConstants.dashboardRoute) return;
 
     currentRoute = name;
@@ -211,13 +249,10 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       pageStack.add(name);
       final ctrl = MonitorController.instance;
       ctrl.startSession(name);
-      ctrl.logRoutePush(name, previousRoute?.settings.name);
-      _updateActiveRouteTitle();
-    } else if (route is PopupRoute) {
-      MonitorController.instance.setActivePopup(name);
-      MonitorController.instance.logRoutePush(
+      ctrl.logRoutePush(
         name,
         previousRoute?.settings.name,
+        routeType: 'page',
       );
       _updateActiveRouteTitle();
     }
@@ -228,6 +263,19 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     super.didPop(route, previousRoute);
     if (isMonitorRoute(route)) return;
+
+    // Handle PopupRoute before the name guard (BottomSheet may have no name).
+    if (route is PopupRoute) {
+      final name = _popupNameCache.remove(route) ?? _popupFallbackName(route);
+      final prevName = previousRoute?.settings.name;
+      MonitorController.instance
+        ..clearActivePopup(name)
+        ..logRoutePop(name, prevName, routeType: _getRouteType(route));
+      MonitorController.instance.updateDashboardView(currentContentRoute);
+      _updateActiveRouteTitle();
+      return;
+    }
+
     final name = route.settings.name;
     final prevName = previousRoute?.settings.name;
 
@@ -256,19 +304,13 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       _lastResolvedTabName = null;
 
       if (!pageStack.contains(name)) {
-        MonitorController.instance.logRoutePop(name, prevName);
+        MonitorController.instance.logRoutePop(name, prevName, routeType: 'page');
       }
       if (prevName != null &&
           prevName.isNotEmpty &&
           prevName != '/MonitorDashboardPage') {
         MonitorController.instance.updateDashboardView(prevName);
       }
-      _updateActiveRouteTitle();
-    } else if (route is PopupRoute) {
-      MonitorController.instance
-        ..clearActivePopup(name)
-        ..logRoutePop(name, prevName);
-      MonitorController.instance.updateDashboardView(currentContentRoute);
       _updateActiveRouteTitle();
     }
   }
