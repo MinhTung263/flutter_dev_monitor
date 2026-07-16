@@ -24,6 +24,23 @@ class ErrorLogController {
     if (_errors.length > _maxErrors) _errors.removeLast();
   }
 
+  void renameSession(String oldScreen, String newScreen) {
+    if (oldScreen == newScreen) return;
+    for (int i = 0; i < _errors.length; i++) {
+      final err = _errors[i];
+      if (err.screen == oldScreen) {
+        _errors[i] = ErrorLogItem(
+          id: err.id,
+          message: err.message,
+          stackTrace: err.stackTrace,
+          type: err.type,
+          timestamp: err.timestamp,
+          screen: newScreen,
+        );
+      }
+    }
+  }
+
   void clearAll() {
     _errors.clear();
   }

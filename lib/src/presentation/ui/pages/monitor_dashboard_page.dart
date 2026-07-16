@@ -1,8 +1,14 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show PointMode;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+import 'flow_map_html_builder.dart';
 
 import '../../controller/monitor_controller.dart';
 import '../../../core/monitor_constants.dart';
@@ -158,15 +164,13 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
             screen: _selectedScreen,
             chartData: _selectedScreen == MonitorConstants.allScreensKey
                 ? List<double>.from(_ctrl.overlayFpsHistory)
-                : List<double>.from(
-                    _ctrl.fpsHistoryMap[_selectedScreen] ?? []),
+                : List<double>.from(_ctrl.fpsHistoryMap[_selectedScreen] ?? []),
             chartExpanded: _chartExpanded,
             onChartToggle: () =>
                 setState(() => _chartExpanded = !_chartExpanded),
             ramChartData: _selectedScreen == MonitorConstants.allScreensKey
                 ? List<double>.from(_ctrl.globalRamHistory)
-                : List<double>.from(
-                    _ctrl.ramHistoryMap[_selectedScreen] ?? []),
+                : List<double>.from(_ctrl.ramHistoryMap[_selectedScreen] ?? []),
             ramChartExpanded: _ramChartExpanded,
             onRamChartToggle: () =>
                 setState(() => _ramChartExpanded = !_ramChartExpanded),
@@ -423,7 +427,9 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         _buildActionIcon(
           icon: Icons.alt_route_rounded,
           count: errorCount + flowCount,
-          color: errorCount > 0 ? MonitorColors.statusError : const Color(0xFF57D888),
+          color: errorCount > 0
+              ? MonitorColors.statusError
+              : const Color(0xFF57D888),
           onPressed: () => Navigator.of(context).push(
             MonitorResponsiveRoute(
               builder: (_) => const MonitorLogsPage(),
@@ -464,14 +470,16 @@ class MonitorLogsPage extends StatefulWidget {
   State<MonitorLogsPage> createState() => _MonitorLogsPageState();
 }
 
-class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProviderStateMixin {
+class _MonitorLogsPageState extends State<MonitorLogsPage>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   MonitorController get _ctrl => MonitorController.instance;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTab);
+    _tabController =
+        TabController(length: 3, vsync: this, initialIndex: widget.initialTab);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -523,10 +531,12 @@ class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProv
         leading: isLargeScreen
             ? null
             : IconButton(
-                icon: Icon(Icons.arrow_back_ios_new_rounded, color: MonitorColors.primaryText, size: 18),
+                icon: Icon(Icons.arrow_back_ios_new_rounded,
+                    color: MonitorColors.primaryText, size: 18),
                 onPressed: () => Navigator.of(context).pop(),
               ),
-        title: MonoText('LOG DETAILS', 13, color: MonitorColors.primaryText, weight: FontWeight.bold),
+        title: MonoText('LOG DETAILS', 13,
+            color: MonitorColors.primaryText, weight: FontWeight.bold),
         centerTitle: true,
         backgroundColor: MonitorColors.surface,
         elevation: 0,
@@ -555,7 +565,8 @@ class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProv
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: MonitorColors.isDark ? 0.25 : 0.05),
+                    color: Colors.black
+                        .withValues(alpha: MonitorColors.isDark ? 0.25 : 0.05),
                     blurRadius: 3,
                     offset: const Offset(0, 1),
                   ),
@@ -564,8 +575,14 @@ class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProv
               indicatorSize: TabBarIndicatorSize.tab,
               labelColor: MonitorColors.primaryText,
               unselectedLabelColor: MonitorColors.secondaryText,
-              labelStyle: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.3),
-              unselectedLabelStyle: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w500, letterSpacing: 0.3),
+              labelStyle: const TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.3),
+              unselectedLabelStyle: const TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.3),
               tabs: [
                 Tab(
                   height: 30,
@@ -618,7 +635,8 @@ class _MonitorLogsPageState extends State<MonitorLogsPage> with SingleTickerProv
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.restart_alt, color: MonitorColors.statusError, size: 22),
+            icon: Icon(Icons.restart_alt,
+                color: MonitorColors.statusError, size: 22),
             onPressed: () {
               if (_tabController.index == 0 || _tabController.index == 1) {
                 _ctrl.clearFlow();
@@ -656,7 +674,8 @@ class _PulseGlowRing extends StatefulWidget {
   State<_PulseGlowRing> createState() => _PulseGlowRingState();
 }
 
-class _PulseGlowRingState extends State<_PulseGlowRing> with SingleTickerProviderStateMixin {
+class _PulseGlowRingState extends State<_PulseGlowRing>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _opacityAnimation;

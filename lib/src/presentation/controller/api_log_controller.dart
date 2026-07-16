@@ -3,12 +3,12 @@ import '../../core/monitor_constants.dart';
 import '../../domain/api_log_item.dart';
 
 class ApiLogController {
-  static const int _maxTrackedScreens = 20;
-  static const int _maxLogsPerScreen = 40;
+  static const int _maxTrackedScreens = 100;
+  static const int _maxLogsPerScreen = 100;
 
   final Map<String, List<ApiLogItem>> initLogsMap = {};
   final Map<String, List<ApiLogItem>> refreshLogsMap = {};
-  final Map<String, int> _orderCounters = {};
+
   final Map<String, DateTime> _lastApiTime = {};
   final Map<String, bool> _screenInRefreshMode = {};
   final Map<String, int> _refreshCycleCounters = {};
@@ -68,7 +68,6 @@ class ApiLogController {
     _lastApiTime.remove(screenName);
     _sessionStartTime[screenName] = DateTime.now();
     _screenInRefreshMode[screenName] = false;
-    _orderCounters[screenName] = 0;
     _initCycleCounters[screenName] = (_initCycleCounters[screenName] ?? 0) + 1;
     _refreshCycleCounters.putIfAbsent(screenName, () => 0);
     initLogsMap.putIfAbsent(screenName, () => []);
@@ -79,7 +78,6 @@ class ApiLogController {
   void _evict(String screenName) {
     initLogsMap.remove(screenName);
     refreshLogsMap.remove(screenName);
-    _orderCounters.remove(screenName);
     _lastApiTime.remove(screenName);
     _screenInRefreshMode.remove(screenName);
     _refreshCycleCounters.remove(screenName);
@@ -87,14 +85,65 @@ class ApiLogController {
     _sessionStartTime.remove(screenName);
   }
 
+  void renameSession(String oldScreen, String newScreen) {
+    if (oldScreen == newScreen) return;
+
+    if (initLogsMap.containsKey(oldScreen)) {
+      final logs = initLogsMap.remove(oldScreen) ?? [];
+      final updatedLogs = logs.map((l) => l.copyWith(screen: newScreen)).toList();
+      initLogsMap[newScreen] = updatedLogs;
+    }
+    if (refreshLogsMap.containsKey(oldScreen)) {
+      final logs = refreshLogsMap.remove(oldScreen) ?? [];
+      final updatedLogs = logs.map((l) => l.copyWith(screen: newScreen)).toList();
+      refreshLogsMap[newScreen] = updatedLogs;
+    }
+    if (_lastApiTime.containsKey(oldScreen)) {
+      _lastApiTime[newScreen] = _lastApiTime.remove(oldScreen)!;
+    }
+    if (_screenInRefreshMode.containsKey(oldScreen)) {
+      _screenInRefreshMode[newScreen] = _screenInRefreshMode.remove(oldScreen)!;
+    }
+    if (_refreshCycleCounters.containsKey(oldScreen)) {
+      _refreshCycleCounters[newScreen] = _refreshCycleCounters.remove(oldScreen)!;
+    }
+    if (_initCycleCounters.containsKey(oldScreen)) {
+      _initCycleCounters[newScreen] = _initCycleCounters.remove(oldScreen)!;
+    }
+    if (_sessionStartTime.containsKey(oldScreen)) {
+      _sessionStartTime[newScreen] = _sessionStartTime.remove(oldScreen)!;
+    }
+
+    final idx = _screenOrder.indexOf(oldScreen);
+    if (idx >= 0) {
+      _screenOrder[idx] = newScreen;
+    }
+
+    if (currentViewedScreen == oldScreen) {
+      currentViewedScreen = newScreen;
+    }
+
+    updateView(currentViewedScreen);
+  }
+
+  /// Returns the canonical session key for [screen].
+  ///
+  /// Upstream (MonitorController.addLog) already reconciles [screen] with the
+  /// current active session name. This method is kept as a safety net.
+  String _resolveCanonicalScreen(String screen) => screen;
+
   void addLog(ApiLogItem item, String screen, String popupSuffix) {
+    // Resolve the canonical session name in case the session was renamed
+    // (e.g. /PRODDETAIL → /PRODDETAIL#Tạo sản phẩm) after the API request
+    // was created but before the response arrived.
+    screen = _resolveCanonicalScreen(screen);
     final reqStart = item.timestamp.subtract(Duration(milliseconds: item.duration));
+
     final lastStart = _lastApiTime[screen];
     final gapExceeded = lastStart != null &&
         reqStart.difference(lastStart).inMilliseconds > MonitorConstants.refreshGapMs;
 
     if (gapExceeded) {
-      _orderCounters[screen] = 0;
       _refreshCycleCounters[screen] = (_refreshCycleCounters[screen] ?? 0) + 1;
       _screenInRefreshMode[screen] = true;
     } else if (lastStart == null) {
@@ -106,7 +155,6 @@ class ApiLogController {
           reqStart.difference(sessionStart).inMilliseconds >
               MonitorConstants.refreshGapMs;
       if (delayedAction) {
-        _orderCounters[screen] = 0;
         _refreshCycleCounters[screen] =
             (_refreshCycleCounters[screen] ?? 0) + 1;
         _screenInRefreshMode[screen] = true;
@@ -116,8 +164,6 @@ class ApiLogController {
     }
 
     _lastApiTime[screen] = reqStart;
-    final order = (_orderCounters[screen] ?? 0) + 1;
-    _orderCounters[screen] = order;
 
     final inRefresh = _screenInRefreshMode[screen] == true;
     final newPhase = inRefresh ? ApiLogItem.phaseRefresh : ApiLogItem.phaseInit;
@@ -137,7 +183,6 @@ class ApiLogController {
         final existing = refreshLogs[idx];
         refreshLogs[idx] = item.copyWith(
           callCount: existing.callCount + 1,
-          orderNumber: order,
           screen: screenLabel,
           phase: newPhase,
           refreshCycle: cycle,
@@ -148,7 +193,6 @@ class ApiLogController {
           method: item.method,
           duration: item.duration,
           statusCode: item.statusCode,
-          orderNumber: order,
           timestamp: item.timestamp,
           screen: screenLabel,
           callerName: item.callerName,
@@ -180,7 +224,6 @@ class ApiLogController {
         final existing = initLogs[idx];
         initLogs[idx] = item.copyWith(
           callCount: existing.callCount + 1,
-          orderNumber: order,
           screen: screenLabel,
           phase: newPhase,
           refreshCycle: initCycle,
@@ -191,7 +234,6 @@ class ApiLogController {
           method: item.method,
           duration: item.duration,
           statusCode: item.statusCode,
-          orderNumber: order,
           timestamp: item.timestamp,
           screen: screenLabel,
           callerName: item.callerName,
@@ -204,6 +246,7 @@ class ApiLogController {
           responseHeaders: item.responseHeaders,
           responseBody: item.responseBody,
         ));
+
         if (initLogs.length > _maxLogsPerScreen) {
           initLogs.removeAt(0);
         }
@@ -352,7 +395,6 @@ class ApiLogController {
     initLogsMap.clear();
     refreshLogsMap.clear();
     apiLogs = [];
-    _orderCounters.clear();
     _lastApiTime.clear();
     _screenInRefreshMode.clear();
     _refreshCycleCounters.clear();
@@ -442,10 +484,12 @@ class ApiLogController {
     );
   }
 
-  bool isPopupRoute(String route) =>
-      route.contains('dialog') ||
-      route.contains('bottomSheet') ||
-      activePopup != null;
+  bool isPopupRoute(String route) {
+    final lower = route.toLowerCase();
+    return lower.contains('dialog') ||
+        lower.contains('bottomsheet') ||
+        lower.contains('popup');
+  }
 
   List<ApiLogItem> get globalApiLogs {
     final List<ApiLogItem> allInit = [];

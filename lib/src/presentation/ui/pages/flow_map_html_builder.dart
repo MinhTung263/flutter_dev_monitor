@@ -1,14 +1,216 @@
-// ignore_for_file: lines_longer_than_80_chars
-//
-// flow_map_html_builder.dart
-//
-// Generates the standalone interactive HTML page for DevMonitor Flow Map.
-// Usage: final html = buildFlowMapHtml(jsonData: encodedJson);
+import 'dart:convert';
 
 /// Generates a complete, self-contained interactive HTML page for the
 /// DevMonitor Flow Map. Pass the JSON-encoded map data as [jsonData].
 String buildFlowMapHtml({required String jsonData}) {
-  return _kHtmlPrefix + jsonData + _kHtmlSuffix;
+  String staticPaths = '';
+  String staticCards = '';
+  String staticDetails = '';
+  String workspaceTransform =
+      'transform: translate3d(100px, 100px, 0px) scale(0.8);';
+
+  try {
+    final Map<String, dynamic> data = jsonDecode(jsonData);
+    final List<dynamic> nodes = data['nodes'] ?? [];
+    final List<dynamic> transitions = data['transitions'] ?? [];
+
+    if (nodes.isNotEmpty) {
+      double minX = double.infinity;
+      double maxX = -double.infinity;
+      double minY = double.infinity;
+      double maxY = -double.infinity;
+
+      String staticDetailsList = '';
+
+      for (final n in nodes) {
+        final x = (n['x'] as num).toDouble();
+        final y = (n['y'] as num).toDouble();
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+
+        final isPopup = (n['route'] as String).contains('dialog') ||
+            (n['route'] as String).contains('bottomSheet');
+        final typeText = isPopup ? 'popup' : 'page';
+        final typeClass = isPopup ? 'dialog' : 'page';
+        final isCurrent = n['isCurrent'] == true;
+        final id = 'node-${(n['route'] as String).replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+
+        final apis = n['apis'] as List<dynamic>? ?? [];
+        final errors = n['errors'] as List<dynamic>? ?? [];
+
+        int apiErrorCount = 0;
+        for (final api in apis) {
+          final sc = api['statusCode'] ?? 200;
+          if (sc < 200 || sc >= 300) {
+            apiErrorCount++;
+          }
+        }
+
+        final bool hasSlow = apis.any((api) => api['isSlow'] == true);
+        final bool hasIssue = hasSlow || errors.isNotEmpty || apiErrorCount > 0;
+
+        final errClass = hasIssue ? ' error' : '';
+        final cardClass = 'card${isCurrent ? ' active' : ''}$errClass';
+
+        final apiErrBadge = apiErrorCount > 0
+            ? '<span class="stat-badge error" title="API Errors">$apiErrorCount api err</span>'
+            : '';
+        final errBadge = errors.isNotEmpty
+            ? '<span class="stat-badge error" title="Flutter Errors">${errors.length} err</span>'
+            : '';
+
+        // Make fallback cards clickable anchors to jump to details below
+        staticCards += '''
+      <a href="#details-$id" class="$cardClass" style="position: absolute; left: ${x}px; top: ${y}px; width: 180px; height: 65px; text-decoration: none; color: inherit;" id="$id">
+        <div class="card-header-row">
+          <span class="badge $typeClass">$typeText</span>
+          <span class="card-title" title="${n['title']}">${n['title']}</span>
+        </div>
+        <div class="card-stats">
+          <span class="stat-badge" title="Visits">${n['visitCount']} visits</span>
+          <span class="stat-badge" title="API Requests">${apis.length} requests</span>
+          $apiErrBadge
+          $errBadge
+        </div>
+      </a>
+''';
+
+        // Pre-build details for this node
+        String apisListHtml = '';
+        if (apis.isEmpty) {
+          apisListHtml =
+              '<p style="font-size: 13px; color: #94a3b8; font-style: italic; margin: 4px 0;">Không có cuộc gọi API nào.</p>';
+        } else {
+          apisListHtml =
+              '<div style="display: flex; flex-direction: column; gap: 8px;">';
+          for (final api in apis) {
+            final method = api['method'] ?? 'GET';
+            final url = api['url'] ?? '';
+            final statusCode = api['statusCode'] ?? 200;
+            final duration = api['duration'] ?? 0;
+            final methodColor = method == 'GET' ? '#10b981' : '#3b82f6';
+            final statusColor = statusCode == 200 ? '#10b981' : '#ef4444';
+
+            apisListHtml += '''
+            <div style="font-size: 13px; padding: 8px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px;">
+              <span style="font-weight: bold; color: $methodColor;">$method</span>
+              <code style="word-break: break-all; margin-left: 6px;">$url</code>
+              <div style="margin-top: 4px; font-size: 11px; color: #64748b;">
+                Status: <strong style="color: $statusColor;">$statusCode</strong> | Duration: ${duration}ms
+              </div>
+            </div>
+''';
+          }
+          apisListHtml += '</div>';
+        }
+
+        String errorsListHtml = '';
+        if (errors.isEmpty) {
+          errorsListHtml =
+              '<p style="font-size: 13px; color: #94a3b8; font-style: italic; margin: 4px 0;">Không ghi nhận lỗi nào.</p>';
+        } else {
+          errorsListHtml =
+              '<div style="display: flex; flex-direction: column; gap: 8px;">';
+          for (final err in errors) {
+            final msg = err['message'] ?? '';
+            final trace = err['stackTrace'] ?? '';
+            errorsListHtml += '''
+            <div style="font-size: 13px; padding: 8px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #991b1b;">
+              <strong>$msg</strong>
+              <pre style="margin: 6px 0 0 0; font-family: monospace; font-size: 11px; overflow-x: auto; background: #ffffff; padding: 6px; border-radius: 4px; border: 1px solid #fecaca;">$trace</pre>
+            </div>
+''';
+          }
+          errorsListHtml += '</div>';
+        }
+
+        staticDetailsList += '''
+<div id="details-$id" style="margin-bottom: 32px; padding: 16px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0;">
+  <h3 style="margin-top: 0; color: #0f172a; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+    <span style="background: #3b82f6; color: #ffffff; padding: 2px 8px; border-radius: 4px; font-size: 12px; text-transform: uppercase;">$typeText</span>
+    ${n['title'].isEmpty ? n['route'] : n['title']}
+  </h3>
+  <p style="font-size: 13px; color: #64748b; margin: 4px 0 12px 0;">Đường dẫn: <code>${n['route']}</code> | Lượt truy cập: <strong>${n['visitCount']}</strong></p>
+  
+  <h4 style="font-size: 14px; color: #334155; margin: 12px 0 6px 0; border-bottom: 1px dashed #cbd5e1; padding-bottom: 4px;">API Requests (${apis.length})</h4>
+  $apisListHtml
+  
+  <h4 style="font-size: 14px; color: #334155; margin: 16px 0 6px 0; border-bottom: 1px dashed #cbd5e1; padding-bottom: 4px;">Lỗi Flutter (${errors.length})</h4>
+  $errorsListHtml
+</div>
+''';
+      }
+
+      staticDetails = '''
+<div class="static-details-container" style="max-width: 800px; margin: 40px auto; padding: 24px; font-family: sans-serif; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+  <h2 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">Chi tiết lịch sử các màn hình</h2>
+  <p style="color: #64748b; font-size: 14px; margin-bottom: 24px;">(Danh sách chi tiết cuộc gọi API và lỗi khi xem ở chế độ xem trước ngoại tuyến/Quick Look - Bấm vào các thẻ trên sơ đồ để nhảy nhanh tới chi tiết)</p>
+  $staticDetailsList
+</div>
+''';
+
+      final contentW = (maxX - minX) + 180.0;
+      final contentH = (maxY - minY) + 65.0;
+      final cx = minX + contentW / 2;
+      final cy = minY + contentH / 2;
+
+      final vpW = 500.0;
+      final vpH = 700.0;
+      final scaleX = vpW / (contentW + 100);
+      final scaleY = vpH / (contentH + 100);
+      double scale = (scaleX < scaleY ? scaleX : scaleY);
+      if (scale > 1.0) scale = 1.0;
+      if (scale < 0.15) scale = 0.15;
+
+      final tx = vpW / 2 - cx * scale;
+      final ty = vpH / 2 - cy * scale;
+
+      workspaceTransform =
+          'transform: translate3d(${tx.toStringAsFixed(1)}px, ${ty.toStringAsFixed(1)}px, 0px) scale(${scale.toStringAsFixed(3)});';
+
+      for (final t in transitions) {
+        final fromNode = nodes.firstWhere((n) => n['route'] == t['from'],
+            orElse: () => null);
+        final toNode =
+            nodes.firstWhere((n) => n['route'] == t['to'], orElse: () => null);
+        if (fromNode != null && toNode != null) {
+          final fromX = (fromNode['x'] as num).toDouble() + 90.0;
+          final fromY = (fromNode['y'] as num).toDouble() + 65.0;
+          final toX = (toNode['x'] as num).toDouble() + 90.0;
+          final toY = (toNode['y'] as num).toDouble();
+
+          final isBack = t['isBack'] == true;
+          String d;
+          if (isBack) {
+            final midX = (fromX + toX) / 2 - 80.0;
+            final midY = (fromY + toY) / 2;
+            d = 'M $fromX $fromY Q $midX $midY $toX $toY';
+          } else {
+            final midY = (fromY + toY) / 2;
+            d = 'M $fromX $fromY C $fromX $midY, $toX $midY, $toX $toY';
+          }
+
+          final stroke = isBack ? '#ff9800' : '#2196f3';
+          final marker = isBack ? 'url(#arrow-orange)' : 'url(#arrow-blue)';
+
+          staticPaths += '''
+        <path d="$d" fill="none" stroke="$stroke" stroke-width="2" marker-end="$marker" />
+''';
+        }
+      }
+    }
+  } catch (_) {}
+
+  final prefix = _kHtmlPrefix
+      .replaceFirst(
+          'id="workspace"', 'id="workspace" style="$workspaceTransform"')
+      .replaceFirst('<!-- STATIC_PATHS -->', staticPaths)
+      .replaceFirst('<!-- STATIC_CARDS -->', staticCards);
+
+  return (prefix + jsonData + _kHtmlSuffix)
+      .replaceFirst('<!-- STATIC_DETAILS -->', staticDetails);
 }
 
 // ──────────────────────────────────────────────────────
@@ -16,6 +218,7 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
   <title>DevMonitor - Sơ đồ luồng tương tác</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
   <style>
@@ -39,23 +242,27 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
       padding: 0;
     }
     
-    body {
+    html, body {
       font-family: 'Inter', sans-serif;
       background-color: var(--bg-color);
       color: var(--text-color);
-      overflow: hidden;
-      width: 100vw;
-      height: 100vh;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow-x: auto;
+      overflow-y: auto;
     }
-
+    
     #container {
       width: 100%;
-      height: 100%;
+      height: 100vh;
+      height: 100dvh;
       position: relative;
       cursor: grab;
-      overflow: hidden;
+      overflow: auto; /* Allow scrollbars if JS is disabled */
       background-image: radial-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px);
       background-size: 20px 20px;
+      -webkit-overflow-scrolling: touch;
     }
     
     #container:active {
@@ -66,17 +273,44 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
       width: 3200px;
       height: 2400px;
       position: absolute;
+      top: 0;
+      left: 0;
       transform-origin: 0 0;
+      overflow: visible;
+    }
+
+    /* By default, show static details for non-JS viewers */
+    .static-details-container {
+      display: none !important; /* hide in Quick Look; map must be opened in browser */
+    }
+
+    /* Hide static details when JS is enabled */
+    body.js-enabled .static-details-container {
+      display: none !important;
+    }
+
+    /* By default, show static warning banner */
+    .quick-look-warning {
+      display: flex !important;
+    }
+
+    /* Hide warning banner when JS is enabled */
+    body.js-enabled .quick-look-warning {
+      display: none !important;
     }
     
     .toolbar {
       position: fixed;
-      top: 16px;
-      left: 16px;
+      top: max(16px, env(safe-area-inset-top));
+      left: max(16px, env(safe-area-inset-left));
       z-index: 100;
       display: flex;
       gap: 12px;
     }
+    /* Hide toolbar when JavaScript is disabled (Quick Look) */
+    body:not(.js-enabled) .toolbar { display: none !important; }
+    /* Hide startup hint when JavaScript is enabled (browser) */
+    body.js-enabled #startup-hint { display: none !important; }
     
     .search-box {
       background: var(--surface-color);
@@ -142,6 +376,9 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
     .card.active {
       border: 2px solid var(--success);
     }
+    .card.error {
+      border: 2px solid var(--danger);
+    }
 
     .card-header-row {
       display: flex;
@@ -181,7 +418,9 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
 
     .card-stats {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-start;
+      gap: 4px;
+      flex-wrap: wrap;
       font-size: 9px;
       color: var(--text-secondary);
     }
@@ -195,6 +434,15 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
     .stat-badge.error {
       background: rgba(243, 139, 168, 0.15);
       color: var(--danger);
+    }
+
+    .slow-apis {
+      font-size: 8px;
+      color: var(--danger);
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     
     .modal {
@@ -439,11 +687,15 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
       background: rgba(0,0,0,0.05);
       color: var(--text-color);
     }
-    /* ── Mini Map ─────────────────────────────────────────────────── */
+    /* Mini Map – hidden by default, shown only when JavaScript runs */
     #minimap-container {
+      display: none; /* hide in Quick Look where JS is off */
+    }
+    body.js-enabled #minimap-container {
+      display: block; /* show when JS is enabled */
       position: fixed;
       bottom: 20px;
-      left: 20px;
+      right: 20px;
       z-index: 400;
       background: var(--surface-color);
       border: 1px solid var(--border-color);
@@ -452,22 +704,7 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
       overflow: hidden;
       transition: opacity 0.2s;
     }
-
-    #minimap-container:hover { opacity: 1 !important; }
-
-    #minimap-header {
-      padding: 5px 10px;
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-      border-bottom: 1px solid var(--divider);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      user-select: none;
-    }
+    body.js-enabled #minimap-container:hover { opacity: 1 !important; }
 
     #minimap-canvas {
       display: block;
@@ -477,6 +714,8 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
 </head>
 <body>
   <div id="container">
+
+
     <div class="toolbar">
       <div class="search-box">
         <input type="text" id="search-input" placeholder="Tìm màn hình..." oninput="searchNodes(this.value)">
@@ -506,13 +745,10 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
     </div>
     <!-- Mini Map -->
     <div id="minimap-container" style="opacity:0.85;">
-      <div id="minimap-header" style="justify-content: flex-end; padding: 4px 8px;">
-        <button onclick="document.getElementById('minimap-container').style.display='none'" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:12px;line-height:1;">&#x2715;</button>
-      </div>
       <canvas id="minimap-canvas" width="200" height="140"></canvas>
     </div>
     <div id="workspace">
-      <svg id="svg-canvas" width="3200" height="2400" style="position:absolute; top:0; left:0; pointer-events:none;">
+      <svg id="svg-canvas" width="100%" height="100%" style="position:absolute; top:0; left:0; pointer-events:none; overflow:visible;">
         <defs>
           <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M 0 2 L 8 5 L 0 8 z" fill="#2196f3"></path>
@@ -521,7 +757,9 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
             <path d="M 0 2 L 8 5 L 0 8 z" fill="#ff9800"></path>
           </marker>
         </defs>
+        <!-- STATIC_PATHS -->
       </svg>
+      <!-- STATIC_CARDS -->
     </div>
   </div>
   
@@ -549,19 +787,40 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
 
 const String _kHtmlSuffix = '''</script>
   <script>
+    // Flag body as js-enabled to hide static details fallback
+    document.body.classList.add('js-enabled');
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    // Clear static pre-rendered fallback elements if JavaScript is enabled
+    const workspace = document.getElementById('workspace');
+    if (workspace) {
+      const staticCards = workspace.querySelectorAll('.card');
+      // Keep static cards for desktop browsers – they serve as links.
+      // const svgCanvas = document.getElementById('svg-canvas');
+      // if (svgCanvas) {
+      //   const staticPaths = svgCanvas.querySelectorAll('path');
+      //   // Keep static paths – they render connections.
+      // }
+    }
+
+    // Disable native scrollbar overflow on container since custom pan/zoom is active
+    const container = document.getElementById('container');
+    if (container) {
+      container.style.overflow = 'hidden';
+    }
+    
     const data = JSON.parse(document.getElementById('map-data').textContent);
     
     let scale = 0.8;
+let globalViewportWidth = 0;
     let tx = 100;
     let ty = 100;
     let isDragging = false;
     let startX, startY;
 
-    const workspace = document.getElementById('workspace');
-    const container = document.getElementById('container');
-
     function updateTransform() {
-      workspace.style.transform = "translate(" + tx + "px, " + ty + "px) scale(" + scale + ")";
+      workspace.style.transform = "translate3d(" + tx + "px, " + ty + "px, 0px) scale(" + scale + ")";
       drawMinimap();
     }
 
@@ -682,68 +941,74 @@ const String _kHtmlSuffix = '''</script>
       });
     }
 
-    function makeCardDraggable(cardEl, node) {
-      let cardDrag = false;
-      let cx, cy;
-      
-      cardEl.addEventListener('mousedown', (e) => {
-        if (e.target.closest('button')) return;
-        cardDrag = true;
-        e.stopPropagation();
-        cx = e.clientX;
-        cy = e.clientY;
-      });
-      
-      window.addEventListener('mousemove', (e) => {
-        if (!cardDrag) return;
-        const dx = (e.clientX - cx) / scale;
-        const dy = (e.clientY - cy) / scale;
-        node.x += dx;
-        node.y += dy;
-        cardEl.style.left = node.x + 'px';
-        cardEl.style.top = node.y + 'px';
-        cx = e.clientX;
-        cy = e.clientY;
-        drawConnections();
-      });
-      
-      window.addEventListener('mouseup', () => {
-        cardDrag = false;
-      });
-      
-      // Mobile touch drag
-      cardEl.addEventListener('touchstart', (e) => {
-        if (e.target.closest('button')) return;
-        if (e.touches.length === 1) {
-          cardDrag = true;
-          e.stopPropagation();
-          cx = e.touches[0].clientX;
-          cy = e.touches[0].clientY;
-        }
-      });
-      
-      cardEl.addEventListener('touchmove', (e) => {
-        if (!cardDrag || e.touches.length !== 1) return;
-        const dx = (e.touches[0].clientX - cx) / scale;
-        const dy = (e.touches[0].clientY - cy) / scale;
-        node.x += dx;
-        node.y += dy;
-        cardEl.style.left = node.x + 'px';
-        cardEl.style.top = node.y + 'px';
-        cx = e.touches[0].clientX;
-        cy = e.touches[0].clientY;
-        drawConnections();
-      });
-      
-      cardEl.addEventListener('touchend', () => {
-        cardDrag = false;
-      });
+function makeCardDraggable(cardEl, node) {
+  let dragging = false;
+  let startX = 0, startY = 0;
+
+  const startDrag = (clientX, clientY) => {
+    dragging = true;
+    startX = clientX;
+    startY = clientY;
+    cardEl.dataset.dragging = 'false';
+  };
+
+  const doDrag = (clientX, clientY) => {
+    if (!dragging) return;
+    const dx = (clientX - startX) / scale;
+    const dy = (clientY - startY) / scale;
+    if (dx !== 0 || dy !== 0) {
+      cardEl.dataset.dragging = 'true';
     }
+    node.x += dx;
+    node.y += dy;
+    cardEl.style.left = node.x + 'px';
+    cardEl.style.top = node.y + 'px';
+    startX = clientX;
+    startY = clientY;
+    drawConnections();
+  };
+
+  const endDrag = () => {
+    dragging = false;
+  };
+
+  // Mouse events
+  cardEl.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button')) return;
+    e.stopPropagation();
+    startDrag(e.clientX, e.clientY);
+  });
+  window.addEventListener('mousemove', (e) => doDrag(e.clientX, e.clientY));
+  window.addEventListener('mouseup', endDrag);
+
+  // Touch events
+  cardEl.addEventListener('touchstart', (e) => {
+    if (e.target.closest('button')) return;
+    if (e.touches.length !== 1) return;
+    e.stopPropagation();
+    startDrag(e.touches[0].clientX, e.touches[0].clientY);
+  });
+  cardEl.addEventListener('touchmove', (e) => {
+    if (!dragging || e.touches.length !== 1) return;
+    doDrag(e.touches[0].clientX, e.touches[0].clientY);
+  });
+  cardEl.addEventListener('touchend', endDrag);
+  cardEl.addEventListener('touchcancel', endDrag);
+}
+
 
     // Render nodes
+    // Clear existing node cards to avoid duplication (preserve other UI elements)
+    const existingCards = workspace.querySelectorAll('.card');
+    existingCards.forEach(c => c.remove());
     data.nodes.forEach(node => {
       const card = document.createElement('div');
-      card.className = 'card' + (node.isCurrent ? ' active' : '');
+      
+      const apiErrors = node.apis.filter(api => api.statusCode < 200 || api.statusCode >= 300);
+      const hasSlow = node.apis.some(api => api.isSlow);
+      const hasIssue = hasSlow || node.errors.length > 0 || apiErrors.length > 0;
+      
+      card.className = 'card' + (node.isCurrent ? ' active' : '') + (hasIssue ? ' error' : '');
       card.style.left = node.x + 'px';
       card.style.top = node.y + 'px';
       card.id = 'node-' + node.route.replace(/[^a-zA-Z0-9]/g, '_');
@@ -752,18 +1017,30 @@ const String _kHtmlSuffix = '''</script>
       const typeText = isPopup ? 'popup' : 'page';
       const typeClass = isPopup ? 'dialog' : 'page';
       
-      card.innerHTML = 
+      const slowApis = node.apis.filter(api => api.isSlow);
+      card.innerHTML =
         '<div class="card-header-row">' +
           '<span class="badge ' + typeClass + '">' + typeText + '</span>' +
           '<span class="card-title" title="' + node.title + '">' + node.title + '</span>' +
         '</div>' +
         '<div class="card-stats">' +
-          '<span class="stat-badge">' + node.visitCount + ' v</span>' +
-          '<span class="stat-badge">' + node.apis.length + ' req</span>' +
-          (node.errors.length > 0 ? '<span class="stat-badge error">' + node.errors.length + ' err</span>' : '') +
-        '</div>';
+          '<span class="stat-badge" title="Visits">' + node.visitCount + ' visits</span>' +
+          '<span class="stat-badge" title="API Requests">' + node.apis.length + ' requests</span>' +
+          (apiErrors.length > 0 ? '<span class="stat-badge error" title="API Errors">' + apiErrors.length + ' api err</span>' : '') +
+          (node.errors.length > 0 ? '<span class="stat-badge error" title="Flutter Errors">' + node.errors.length + ' err</span>' : '') +
+        '</div>' +
+        (slowApis.length > 0 ? '<div class="slow-apis">Slow: ' + slowApis.map(api => api.url).join(', ') + '</div>' : '');
         
-      card.addEventListener('click', () => showDetails(node));
+      // Only open details if the card was not dragged
+      card.addEventListener('click', (e) => {
+        // If a drag occurred, the dataset flag will be set to 'true'
+        if (card.dataset.dragging === 'true') {
+          // Reset flag for future clicks
+          card.dataset.dragging = 'false';
+          return;
+        }
+        showDetails(node);
+      });
       workspace.appendChild(card);
       
       makeCardDraggable(card, node);
@@ -806,25 +1083,27 @@ const String _kHtmlSuffix = '''</script>
       const graphWidth = (maxX - minX) + cardWidth + padding;
       const graphHeight = (maxY - minY) + cardHeight + padding;
       
-      const graphCenterX = (minX + maxX) / 2 + cardWidth / 2;
-      const graphCenterY = (minY + maxY) / 2 + cardHeight / 2;
-      
-      const { w: viewportWidth, h: viewportHeight } = getViewportSize();
-      
-      const scaleX = (viewportWidth - padding) / graphWidth;
-      const scaleY = (viewportHeight - padding) / graphHeight;
-      
-      scale = Math.min(scaleX, scaleY);
-      scale = Math.max(0.2, Math.min(1.2, scale));
-      
-      tx = (viewportWidth / 2) - (graphCenterX * scale);
-      ty = (viewportHeight / 2) - (graphCenterY * scale);
+      const contentW = maxX - minX + 200;
+      const contentH = maxY - minY + 80;
+
+      const vpW = container.clientWidth || window.innerWidth;
+globalViewportWidth = vpW;
+      const vpH = container.clientHeight || window.innerHeight;
+
+      const scaleX = vpW / (contentW + 100);
+      const scaleY = vpH / (contentH + 100);
+      scale = Math.min(1.0, Math.min(scaleX, scaleY));
+      // Allow scale to drop below 0.15 on mobile so the whole map fits
+      if (scale < 0.02) scale = 0.02;
+
+      tx = (vpW - (maxX + minX + 200) * scale) / 2;
+      ty = (vpH - (maxY + minY + 80) * scale) / 2;
       
       updateTransform();
       
       // Hide startup hint after successful centering
       const hint = document.getElementById('startup-hint');
-      if (hint && viewportWidth > 100) {
+      if (hint) {
         setTimeout(() => { hint.style.display = 'none'; }, 1500);
       }
     }
@@ -902,6 +1181,11 @@ const String _kHtmlSuffix = '''</script>
         const ny = pad + (n.y - minY) * mmScale;
         const nw = Math.max(4, CARD_W * mmScale);
         const nh = Math.max(3, CARD_H * mmScale);
+        
+        const apiErrors = n.apis ? n.apis.filter(api => api.statusCode < 200 || api.statusCode >= 300) : [];
+        const hasSlow = n.apis && n.apis.some(api => api.isSlow);
+        const hasError = n.errors && n.errors.length > 0;
+        const hasIssue = hasSlow || hasError || apiErrors.length > 0;
 
         mmCtx.fillStyle = '#4f8ef7';
         mmCtx.strokeStyle = 'rgba(79,142,247,0.6)';
@@ -922,6 +1206,14 @@ const String _kHtmlSuffix = '''</script>
         mmCtx.fill();
         mmCtx.globalAlpha = 1;
         mmCtx.stroke();
+
+        if (hasIssue) {
+          const dotRadius = Math.max(1.5, Math.min(3, nw / 8));
+          mmCtx.fillStyle = '#ef4444';
+          mmCtx.beginPath();
+          mmCtx.arc(nx + nw - dotRadius - 1, ny + dotRadius + 1, dotRadius, 0, Math.PI * 2);
+          mmCtx.fill();
+        }
       });
 
       // Draw viewport indicator
@@ -937,12 +1229,20 @@ const String _kHtmlSuffix = '''</script>
       const rw =      (vpRight  - vpLeft) * mmScale;
       const rh =      (vpBottom - vpTop)  * mmScale;
 
+      // Make camera box a constant small size (zoom invariant), centered at viewport position
+      const cx = rx + rw / 2;
+      const cy = ry + rh / 2;
+      const boxW = 16;
+      const boxH = 11;
+      const drawX = cx - boxW / 2;
+      const drawY = cy - boxH / 2;
+
       mmCtx.strokeStyle = '#ef4444';
       mmCtx.lineWidth = 1.5;
       mmCtx.setLineDash([3, 2]);
       mmCtx.fillStyle = 'rgba(239,68,68,0.07)';
-      mmCtx.fillRect(rx, ry, rw, rh);
-      mmCtx.strokeRect(rx, ry, rw, rh);
+      mmCtx.fillRect(drawX, drawY, boxW, boxH);
+      mmCtx.strokeRect(drawX, drawY, boxW, boxH);
       mmCtx.setLineDash([]);
 
       // Store minimap geometry for click navigation
@@ -1119,6 +1419,29 @@ const String _kHtmlSuffix = '''</script>
           node.x = cx + radius * Math.cos(angle);
           node.y = cy + radius * Math.sin(angle);
         });
+      }
+
+      // Dynamically resize workspace and SVG to prevent clipping on mobile Safari
+      let maxNodeX = 0;
+      let maxNodeY = 0;
+      nodes.forEach(node => {
+        if (node.x > maxNodeX) maxNodeX = node.x;
+        if (node.y > maxNodeY) maxNodeY = node.y;
+      });
+      const newWidth = Math.max(1000, maxNodeX + 400);
+      const newHeight = Math.max(1000, maxNodeY + 400);
+      
+      const workspaceEl = document.getElementById('workspace');
+      if (workspaceEl) {
+        workspaceEl.style.width = newWidth + 'px';
+        workspaceEl.style.height = newHeight + 'px';
+      }
+      const svgEl = document.getElementById('svg-canvas');
+      if (svgEl) {
+        svgEl.setAttribute('width', newWidth);
+        svgEl.setAttribute('height', newHeight);
+        svgEl.style.width = newWidth + 'px';
+        svgEl.style.height = newHeight + 'px';
       }
 
       // Update card DOM positions
@@ -1403,9 +1726,27 @@ Pha (Phase): \${api.phase}`;
       if (!document.hidden) recenterWorkspace();
     });
     
+    // Use ResizeObserver to auto-recenter as soon as the container size gets computed
+    if (window.ResizeObserver && container) {
+      let firstNonZero = false;
+      const ro = new ResizeObserver(entries => {
+        for (let entry of entries) {
+          const { width, height } = entry.contentRect;
+          if (width > 0 && height > 0) {
+            recenterWorkspace();
+            if (!firstNonZero) {
+              firstNonZero = true;
+            }
+          }
+        }
+      });
+      ro.observe(container);
+    }
+    
     // Delayed fallbacks for iOS Quick Look and sandboxed webviews
     recenterWorkspace();
     [50, 200, 500, 1000, 2000].forEach(ms => setTimeout(recenterWorkspace, ms));
   </script>
+  <!-- STATIC_DETAILS -->
 </body>
 </html>''';

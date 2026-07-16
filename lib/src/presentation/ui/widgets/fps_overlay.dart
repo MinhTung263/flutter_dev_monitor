@@ -271,7 +271,7 @@ class _FpsOverlayState extends State<FpsOverlay>
         return Stack(
           children: [
             Listener(
-              onPointerDown: (_) => MonitorNavigatorObserver.scheduleTabRouteResolutionForce(),
+              onPointerUp: (_) => MonitorNavigatorObserver.scheduleTabRouteResolutionForce(),
               behavior: HitTestBehavior.translucent,
               child: widget.child,
             ),

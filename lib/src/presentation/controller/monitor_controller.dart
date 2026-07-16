@@ -27,11 +27,11 @@ class MonitorController extends ChangeNotifier {
   /// The singleton instance of [MonitorController].
   static MonitorController get instance => _instance ??= MonitorController._();
 
-  final _apiLog    = ApiLogController();
-  final _fps       = FpsController();
-  final _hardware  = HardwareController();
-  final _errorLog  = ErrorLogController();
-  final _routeLog  = RouteLogController();
+  final _apiLog = ApiLogController();
+  final _fps = FpsController();
+  final _hardware = HardwareController();
+  final _errorLog = ErrorLogController();
+  final _routeLog = RouteLogController();
   final _datasource = HardwareDatasource();
 
   // All screen names seen this session — ordered by last visit (most recent last).
@@ -79,11 +79,21 @@ class MonitorController extends ChangeNotifier {
   }
 
   static String formatRouteName(String route) {
+    // If route has a #title suffix (e.g. "/~PRODUCT/PRODDETAIL#Tạo sản phẩm mới"),
+    // extract the title part as the display name.
+    if (route.contains('#')) {
+      final title = route.split('#').last;
+      if (title.isNotEmpty) return title;
+    }
     if (customRouteNames.containsKey(route)) {
       return customRouteNames[route]!;
     }
-    if (route == MonitorConstants.allScreensKey) return LocaleKeys.allScreens.tr;
-    if (route == MonitorConstants.unknownRoute) return LocaleKeys.unknownScreen.tr;
+    if (route == MonitorConstants.allScreensKey) {
+      return LocaleKeys.allScreens.tr;
+    }
+    if (route == MonitorConstants.unknownRoute) {
+      return LocaleKeys.unknownScreen.tr;
+    }
     if (route.isEmpty) return '';
 
     String path = route;
@@ -111,9 +121,14 @@ class MonitorController extends ChangeNotifier {
 
   DateTime? sessionStartTime(String screen) => _apiLog.sessionStartTime(screen);
 
-  ({int openCount, int openMs, int visitCount, int actionCount, int actionMs, int actionCycles}) screenStats(
-          String screen) =>
-      _apiLog.statsForScreen(screen);
+  ({
+    int openCount,
+    int openMs,
+    int visitCount,
+    int actionCount,
+    int actionMs,
+    int actionCycles
+  }) screenStats(String screen) => _apiLog.statsForScreen(screen);
 
   bool get isCurrentScreenInRefresh =>
       _apiLog.isInRefresh(MonitorNavigatorObserver.currentRoute);
@@ -140,7 +155,8 @@ class MonitorController extends ChangeNotifier {
   // ── Visited screens (never cleared on pop, ordered by last visit) ────
 
   /// Returns screen names in last-visited-first order (newest at index 0).
-  List<String> get visitedScreens => List.unmodifiable(_visitedScreens.reversed.toList());
+  List<String> get visitedScreens =>
+      List.unmodifiable(_visitedScreens.reversed.toList());
 
   // ── Expose error log state ────────────────────────────────────────────
 
@@ -162,7 +178,8 @@ class MonitorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void logRouteReplace(String oldRoute, String newRoute, {String routeType = 'page'}) {
+  void logRouteReplace(String oldRoute, String newRoute,
+      {String routeType = 'page'}) {
     _routeLog.logReplace(oldRoute, newRoute, routeType: routeType);
     notifyListeners();
   }
@@ -201,8 +218,7 @@ class MonitorController extends ChangeNotifier {
     }
 
     final currentRoute = MonitorNavigatorObserver.currentRoute;
-    if (currentRoute.contains('Monitor') ||
-        currentRoute.contains('monitor')) {
+    if (currentRoute.contains('Monitor') || currentRoute.contains('monitor')) {
       return true;
     }
 
@@ -293,12 +309,40 @@ class MonitorController extends ChangeNotifier {
     if (screenName.isNotEmpty &&
         screenName != MonitorConstants.dashboardRoute &&
         screenName != MonitorConstants.unknownRoute) {
-      // Remove then re-add so the screen moves to the END of the list,
-      // making .reversed give newest-first order in the picker.
-      _visitedScreens.remove(screenName);
+      final String baseName = screenName.contains('#')
+          ? screenName.split('#')[0]
+          : screenName;
+
+      // Remove any existing screen that matches the base route or is a sub/parent route.
+      // E.g. we want to replace the raw parent route /home with the resolved nested tab /home/home.
+      _visitedScreens.removeWhere((s) {
+        final String sBase = s.contains('#') ? s.split('#')[0] : s;
+        if (sBase == baseName) return true;
+        if (baseName.startsWith('$sBase/')) return true;
+        if (sBase.startsWith('$baseName/')) return true;
+        return false;
+      });
       _visitedScreens.add(screenName);
     }
     _apiLog.startSession(screenName);
+    notifyListeners();
+  }
+
+  void renameActiveSession(String oldScreen, String newScreen) {
+    if (oldScreen == newScreen) return;
+
+    final idx = _visitedScreens.indexOf(oldScreen);
+    if (idx >= 0) {
+      _visitedScreens[idx] = newScreen;
+    }
+
+    // Deduplicate the list to ensure all items are unique
+    final seen = <String>{};
+    _visitedScreens.removeWhere((s) => !seen.add(s));
+
+    _apiLog.renameSession(oldScreen, newScreen);
+    _routeLog.renameSession(oldScreen, newScreen);
+    _errorLog.renameSession(oldScreen, newScreen);
     notifyListeners();
   }
 
@@ -314,11 +358,36 @@ class MonitorController extends ChangeNotifier {
     String screen = item.screen;
     String popupSuffix = '';
 
-    if (_apiLog.isPopupRoute(screen)) {
-      screen = MonitorNavigatorObserver.currentContentRoute;
-      popupSuffix = ' -> ${_apiLog.activePopup ?? "Popup"}';
-    } else {
-      MonitorNavigatorObserver.currentContentRoute = screen;
+    final currentRoute = MonitorNavigatorObserver.currentRoute;
+    final currentContent = MonitorNavigatorObserver.currentContentRoute;
+
+    // Reconcile item.screen with the canonical (possibly renamed) session name.
+    // The session may have been renamed with a "#Title" suffix AFTER the API
+    // request was created (e.g. /PRODDETAIL → /PRODDETAIL#Tạo sản phẩm mới).
+    // We use currentContentRoute as the source of truth because it always
+    // reflects the CURRENT active visit — not a historical one with the same path.
+    final String screenBase =
+        screen.contains('#') ? screen.split('#')[0] : screen;
+    final String contentBase = currentContent.contains('#')
+        ? currentContent.split('#')[0]
+        : currentContent;
+    if (contentBase == screenBase && currentContent.isNotEmpty) {
+      screen = currentContent;
+    }
+
+    final isPopupActive = _apiLog.isPopupRoute(screen) ||
+        (currentRoute != currentContent &&
+            currentRoute != MonitorConstants.unknownRoute &&
+            currentRoute != MonitorConstants.dashboardRoute);
+
+    if (isPopupActive) {
+      screen = currentContent;
+      final activePopupName =
+          _apiLog.isPopupRoute(item.screen) ? item.screen : currentRoute;
+      final cleanPopup = activePopupName.contains('#')
+          ? activePopupName.split('#')[1]
+          : activePopupName;
+      popupSuffix = ' -> $cleanPopup';
     }
 
     if (!item.isSuccess || item.isSlow) {
@@ -328,6 +397,7 @@ class MonitorController extends ChangeNotifier {
     _apiLog.addLog(item, screen, popupSuffix);
     notifyListeners();
   }
+
 
   void updateDashboardView(String screen) {
     _apiLog.updateView(screen);
@@ -376,7 +446,9 @@ class MonitorController extends ChangeNotifier {
   void recordJankFrame() => _fps.recordJankFrame();
 
   void addFpsSample(String screenName, double fps) {
-    if (screenName.isEmpty || screenName == MonitorConstants.unknownRoute) return;
+    if (screenName.isEmpty || screenName == MonitorConstants.unknownRoute) {
+      return;
+    }
     if (screenName != MonitorConstants.dashboardRoute) {
       MonitorNavigatorObserver.currentContentRoute = screenName;
     }
@@ -440,7 +512,8 @@ class MonitorController extends ChangeNotifier {
       final shouldPing = _isDashboardOpen || _isOverlayVisible;
       if (!shouldPing) return;
       _fetchPing();
-      _pingTimer = Timer.periodic(const Duration(seconds: 20), (_) => _fetchPing());
+      _pingTimer =
+          Timer.periodic(const Duration(seconds: 20), (_) => _fetchPing());
     });
   }
 

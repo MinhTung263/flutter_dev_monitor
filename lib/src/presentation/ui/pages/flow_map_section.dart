@@ -12,6 +12,7 @@ enum MapLayoutMode {
   tree,
   grid,
   stream,
+  circular,
 }
 
 class _FlowMapListState extends State<_FlowMapList>
@@ -60,6 +61,7 @@ class _FlowMapListState extends State<_FlowMapList>
   final Map<String, Offset> _treePositions = {};
   final Map<String, Offset> _gridPositions = {};
   final Map<String, Offset> _streamPositions = {};
+  final Map<String, Offset> _circularPositions = {};
 
   MapLayoutMode _layoutMode = MapLayoutMode.tree;
 
@@ -71,6 +73,8 @@ class _FlowMapListState extends State<_FlowMapList>
         return _gridPositions;
       case MapLayoutMode.stream:
         return _streamPositions;
+      case MapLayoutMode.circular:
+        return _circularPositions;
     }
   }
 
@@ -160,22 +164,84 @@ class _FlowMapListState extends State<_FlowMapList>
 
     for (final api in apiLogs) {
       _ScreenVisit? matchedVisit;
+      // Clean popup suffix if any, to match the page visit route
+      final cleanScreen = api.screen.contains(' -> ')
+          ? api.screen.split(' -> ')[0]
+          : api.screen;
+      final apiRouteBase =
+          cleanScreen.contains('#') ? cleanScreen.split('#')[0] : cleanScreen;
+
+      // 1. Try to find a visit of the SAME route (by base path) that overlaps in time.
       for (final visit in visits) {
-        final afterStart = api.timestamp.isAfter(visit.startTime) ||
-            api.timestamp.isAtSameMomentAs(visit.startTime);
-        final beforeEnd =
-            visit.endTime == null || api.timestamp.isBefore(visit.endTime!);
-        if (afterStart && beforeEnd) {
-          matchedVisit = visit;
-          break;
+        final visitRouteBase =
+            visit.route.contains('#') ? visit.route.split('#')[0] : visit.route;
+        if (visitRouteBase == apiRouteBase) {
+          final afterStart = api.timestamp.isAfter(visit.startTime) ||
+              api.timestamp.isAtSameMomentAs(visit.startTime);
+          final beforeEnd =
+              visit.endTime == null || api.timestamp.isBefore(visit.endTime!);
+          if (afterStart && beforeEnd) {
+            matchedVisit = visit;
+            break;
+          }
         }
       }
+
+      // 2. If no time-matching visit of the same route is found (e.g. API logged after pop),
+      // associate with the most recent visit of the SAME route (by base path) before/at the API timestamp.
+      if (matchedVisit == null) {
+        for (final visit in visits.reversed) {
+          final visitRouteBase = visit.route.contains('#')
+              ? visit.route.split('#')[0]
+              : visit.route;
+          if (visitRouteBase == apiRouteBase) {
+            final startedBefore = api.timestamp.isAfter(visit.startTime) ||
+                api.timestamp.isAtSameMomentAs(visit.startTime);
+            if (startedBefore) {
+              matchedVisit = visit;
+              break;
+            }
+          }
+        }
+      }
+
+      // 3. Fallback: if still no match, get the absolute latest visit of the same route (by base path).
+      if (matchedVisit == null) {
+        for (final visit in visits.reversed) {
+          final visitRouteBase = visit.route.contains('#')
+              ? visit.route.split('#')[0]
+              : visit.route;
+          if (visitRouteBase == apiRouteBase) {
+            matchedVisit = visit;
+            break;
+          }
+        }
+      }
+
+      // 4. Fallback: only if no visit of the same route exists, try matching any visit by timestamp.
+      if (matchedVisit == null) {
+        for (final visit in visits) {
+          final afterStart = api.timestamp.isAfter(visit.startTime) ||
+              api.timestamp.isAtSameMomentAs(visit.startTime);
+          final beforeEnd =
+              visit.endTime == null || api.timestamp.isBefore(visit.endTime!);
+          if (afterStart && beforeEnd) {
+            matchedVisit = visit;
+            break;
+          }
+        }
+      }
+
       if (matchedVisit != null) {
         matchedVisit.apiLogs.add(api);
       } else {
         if (visits.isNotEmpty) {
           final sameScreenVisit = visits.lastWhere(
-            (v) => v.route == api.screen,
+            (v) {
+              final vBase =
+                  v.route.contains('#') ? v.route.split('#')[0] : v.route;
+              return vBase == apiRouteBase;
+            },
             orElse: () => visits.last,
           );
           sameScreenVisit.apiLogs.add(api);
@@ -191,22 +257,84 @@ class _FlowMapListState extends State<_FlowMapList>
 
     for (final err in errorLogs) {
       _ScreenVisit? matchedVisit;
+      // Clean popup suffix if any
+      final cleanScreen = err.screen.contains(' -> ')
+          ? err.screen.split(' -> ')[0]
+          : err.screen;
+      final errRouteBase =
+          cleanScreen.contains('#') ? cleanScreen.split('#')[0] : cleanScreen;
+
+      // 1. Try to find a visit of the SAME route (by base path) that overlaps in time.
       for (final visit in visits) {
-        final afterStart = err.timestamp.isAfter(visit.startTime) ||
-            err.timestamp.isAtSameMomentAs(visit.startTime);
-        final beforeEnd =
-            visit.endTime == null || err.timestamp.isBefore(visit.endTime!);
-        if (afterStart && beforeEnd) {
-          matchedVisit = visit;
-          break;
+        final visitRouteBase =
+            visit.route.contains('#') ? visit.route.split('#')[0] : visit.route;
+        if (visitRouteBase == errRouteBase) {
+          final afterStart = err.timestamp.isAfter(visit.startTime) ||
+              err.timestamp.isAtSameMomentAs(visit.startTime);
+          final beforeEnd =
+              visit.endTime == null || err.timestamp.isBefore(visit.endTime!);
+          if (afterStart && beforeEnd) {
+            matchedVisit = visit;
+            break;
+          }
         }
       }
+
+      // 2. If no time-matching visit of the same route is found (e.g. Error logged after pop),
+      // associate with the most recent visit of the SAME route (by base path) before/at the Error timestamp.
+      if (matchedVisit == null) {
+        for (final visit in visits.reversed) {
+          final visitRouteBase = visit.route.contains('#')
+              ? visit.route.split('#')[0]
+              : visit.route;
+          if (visitRouteBase == errRouteBase) {
+            final startedBefore = err.timestamp.isAfter(visit.startTime) ||
+                err.timestamp.isAtSameMomentAs(visit.startTime);
+            if (startedBefore) {
+              matchedVisit = visit;
+              break;
+            }
+          }
+        }
+      }
+
+      // 3. Fallback: if still no match, get the absolute latest visit of the same route (by base path).
+      if (matchedVisit == null) {
+        for (final visit in visits.reversed) {
+          final visitRouteBase = visit.route.contains('#')
+              ? visit.route.split('#')[0]
+              : visit.route;
+          if (visitRouteBase == errRouteBase) {
+            matchedVisit = visit;
+            break;
+          }
+        }
+      }
+
+      // 4. Fallback: only if no visit of the same route exists, try matching any visit by timestamp.
+      if (matchedVisit == null) {
+        for (final visit in visits) {
+          final afterStart = err.timestamp.isAfter(visit.startTime) ||
+              err.timestamp.isAtSameMomentAs(visit.startTime);
+          final beforeEnd =
+              visit.endTime == null || err.timestamp.isBefore(visit.endTime!);
+          if (afterStart && beforeEnd) {
+            matchedVisit = visit;
+            break;
+          }
+        }
+      }
+
       if (matchedVisit != null) {
         matchedVisit.errorLogs.add(err);
       } else {
         if (visits.isNotEmpty) {
           final sameScreenVisit = visits.lastWhere(
-            (v) => v.route == err.screen,
+            (v) {
+              final vBase =
+                  v.route.contains('#') ? v.route.split('#')[0] : v.route;
+              return vBase == errRouteBase;
+            },
             orElse: () => visits.last,
           );
           sameScreenVisit.errorLogs.add(err);
@@ -261,24 +389,51 @@ class _FlowMapListState extends State<_FlowMapList>
     double canvasWidth,
     double canvasHeight,
   ) {
-    final scaleX = _MiniMap.width / canvasWidth;
-    final scaleY = _MiniMap.height / canvasHeight;
-    final scale = math.min(scaleX, scaleY);
+    if (_activePositions.isEmpty) return;
 
-    final offsetX = (_MiniMap.width - canvasWidth * scale) / 2;
-    final offsetY = (_MiniMap.height - canvasHeight * scale) / 2;
+    double minX = double.infinity;
+    double maxX = double.negativeInfinity;
+    double minY = double.infinity;
+    double maxY = double.negativeInfinity;
 
-    final canvasX = (localPos.dx - offsetX) / scale;
-    final canvasY = (localPos.dy - offsetY) / scale;
+    for (final pos in _activePositions.values) {
+      if (pos.dx < minX) minX = pos.dx;
+      if (pos.dx > maxX) maxX = pos.dx;
+      if (pos.dy < minY) minY = pos.dy;
+      if (pos.dy > maxY) maxY = pos.dy;
+    }
 
-    final clampedX = canvasX.clamp(0.0, canvasWidth);
-    final clampedY = canvasY.clamp(0.0, canvasHeight);
+    const double cardHalfW = 90.0;
+    const double cardHalfH = 32.5;
+
+    minX -= cardHalfW;
+    maxX += cardHalfW;
+    minY -= cardHalfH;
+    maxY += cardHalfH;
+
+    final contentW = (maxX - minX).abs();
+    final contentH = (maxY - minY).abs();
+    final double safeContentW = contentW < 1 ? 1 : contentW;
+    final double safeContentH = contentH < 1 ? 1 : contentH;
+
+    const double padding = 6.0;
+    final double scaleX = (_MiniMap.width - padding * 2) / safeContentW;
+    final double scaleY = (_MiniMap.height - padding * 2) / safeContentH;
+    final double mmScale = math.min(scaleX, scaleY);
+
+    final double offsetX =
+        padding + (_MiniMap.width - padding * 2 - safeContentW * mmScale) / 2;
+    final double offsetY =
+        padding + (_MiniMap.height - padding * 2 - safeContentH * mmScale) / 2;
+
+    final double worldX = (localPos.dx - offsetX) / mmScale + minX;
+    final double worldY = (localPos.dy - offsetY) / mmScale + minY;
 
     final currentMatrix = _transformationController.value;
     final double currentScale = currentMatrix.getMaxScaleOnAxis();
 
-    final tx = viewportSize.width / 2 - clampedX * currentScale;
-    final ty = viewportSize.height / 2 - clampedY * currentScale;
+    final tx = viewportSize.width / 2 - worldX * currentScale;
+    final double ty = viewportSize.height / 2 - worldY * currentScale;
 
     setState(() {
       final Matrix4 newMatrix = Matrix4.identity();
@@ -400,9 +555,13 @@ class _FlowMapListState extends State<_FlowMapList>
                         dividerColor: Colors.transparent,
                         tabs: [
                           Tab(
-                              text:
-                                  'APIs (${filteredApis.length}/${allApis.length})'),
-                          Tab(text: 'Errors (${errors.length})'),
+                              text: LocaleKeys.mapApisCount.trWith({
+                            'filtered': filteredApis.length,
+                            'total': allApis.length,
+                          })),
+                          Tab(
+                              text: LocaleKeys.errorsCount
+                                  .trWith({'count': errors.length})),
                         ],
                       ),
                     ),
@@ -444,13 +603,17 @@ class _FlowMapListState extends State<_FlowMapList>
                                                       .secondaryText),
                                             ),
                                             const SizedBox(height: 10),
-                                            MonoText(
+                                            Text(
                                               localSearchQuery.isEmpty
-                                                  ? 'No API requests captured on this screen.'
-                                                  : 'No matching API requests found.',
-                                              11.5,
-                                              color:
-                                                  MonitorColors.secondaryText,
+                                                  ? LocaleKeys
+                                                      .mapNoApiRequests.tr
+                                                  : LocaleKeys
+                                                      .mapNoMatchingApi.tr,
+                                              style: TextStyle(
+                                                fontSize: 11.5,
+                                                color:
+                                                    MonitorColors.secondaryText,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -493,10 +656,12 @@ class _FlowMapListState extends State<_FlowMapList>
                                             color: MonitorColors.secondaryText),
                                       ),
                                       const SizedBox(height: 10),
-                                      MonoText(
-                                        'No Flutter errors captured on this screen.',
-                                        11.5,
-                                        color: MonitorColors.secondaryText,
+                                      Text(
+                                        LocaleKeys.mapNoFlutterErrors.tr,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: MonitorColors.secondaryText,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -608,12 +773,15 @@ class _FlowMapListState extends State<_FlowMapList>
   }
 
   void _resetZoom() {
-    final initialTx = (_lastViewportWidth - _lastCanvasWidth) / 2;
-    final targetMatrix = Matrix4.translationValues(initialTx, 0.0, 0.0);
-    _animateToMatrix(targetMatrix);
     setState(() {
       _activePositions.clear();
       _draggedRoutes.clear();
+    });
+    // Wait for the layout to rebuild with default positions, then recenter
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _recenterCamera();
+      }
     });
   }
 
@@ -664,6 +832,185 @@ class _FlowMapListState extends State<_FlowMapList>
     _animateToMatrix(targetMatrix);
   }
 
+  void _focusOnNode(String route) {
+    final pos = _activePositions[route];
+    if (pos == null) return;
+
+    const double fitScale = 0.95;
+    final double tx = (_lastViewportWidth / 2) - (pos.dx * fitScale);
+    final double ty = (_lastViewportHeight / 2) - (pos.dy * fitScale);
+
+    final targetMatrix = Matrix4.identity()
+      ..setEntry(0, 0, fitScale)
+      ..setEntry(1, 1, fitScale)
+      ..setEntry(0, 3, tx)
+      ..setEntry(1, 3, ty);
+
+    _animateToMatrix(targetMatrix);
+  }
+
+  void _showSearchNodeSheet(List<String> routes) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return _MapSearchSheet(
+          routes: routes,
+          onSelected: (route) {
+            _focusOnNode(route);
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _exportInteractiveMapHtml(
+    List<String> uniqueRoutes,
+    List<_RouteTransition> transitions,
+    double canvasWidth,
+    double canvasHeight,
+  ) async {
+    try {
+      // Calculate sharing origin bounds before async gap
+      final box = context.findRenderObject() as RenderBox?;
+      final Rect? sharePositionOrigin =
+          box != null ? (box.localToGlobal(Offset.zero) & box.size) : null;
+
+      final visits = _buildScreenVisits();
+
+      // Calculate API and error mappings
+      final Map<String, List<ApiLogItem>> routeApis = {};
+      final Map<String, List<ErrorLogItem>> routeErrors = {};
+      final Map<String, int> routeVisits = {};
+      final Map<String, Set<String>> seenApiOrders = {};
+      final Map<String, Set<String>> seenErrorKeys = {};
+      final Map<String, String> routeTypes = {};
+
+      for (final r in uniqueRoutes) {
+        routeApis[r] = [];
+        routeErrors[r] = [];
+        routeVisits[r] = 0;
+        seenApiOrders[r] = {};
+        seenErrorKeys[r] = {};
+        routeTypes[r] = 'page';
+      }
+
+      for (final visit in visits) {
+        if (!routeApis.containsKey(visit.route)) continue;
+        routeTypes[visit.route] = visit.routeItem.routeType;
+        for (final api in visit.apiLogs) {
+          final key =
+              '${api.timestamp.microsecondsSinceEpoch}_${api.method}_${api.url}';
+          if (seenApiOrders[visit.route]!.add(key)) {
+            routeApis[visit.route]!.add(api);
+          }
+        }
+        for (final err in visit.errorLogs) {
+          final key =
+              '${err.timestamp.microsecondsSinceEpoch}_${err.message.hashCode}';
+          if (seenErrorKeys[visit.route]!.add(key)) {
+            routeErrors[visit.route]!.add(err);
+          }
+        }
+        routeVisits[visit.route] = routeVisits[visit.route]! + 1;
+      }
+
+      final activeRoute = visits.isNotEmpty ? visits.last.route : '';
+
+      final List<Map<String, dynamic>> nodes = [];
+      for (final route in uniqueRoutes) {
+        final apis = routeApis[route] ?? [];
+        final errors = routeErrors[route] ?? [];
+        final pos = _activePositions[route] ?? Offset.zero;
+        nodes.add({
+          'route': route,
+          'title': MonitorController.formatRouteName(route),
+          'x': pos.dx,
+          'y': pos.dy,
+          'isCurrent': route == activeRoute,
+          'visitCount': routeVisits[route] ?? 0,
+          'routeType': routeTypes[route] ?? 'page',
+          'apis': apis
+              .map((api) => {
+                    'method': api.method,
+                    'url': api.url,
+                    'statusCode': api.statusCode,
+                    'duration': api.duration,
+                    'phase': api.phase,
+                    'timestamp': api.timestamp.toIso8601String(),
+                    'requestHeaders': api.requestHeaders,
+                    'requestBody': api.requestBody,
+                    'responseHeaders': api.responseHeaders,
+                    'responseBody': api.responseBody,
+                    'responseBytes': api.responseBytes,
+                  })
+              .toList(),
+          'errors': errors
+              .map((err) => {
+                    'message': err.message,
+                    'stackTrace': err.stackTrace,
+                    'type': err.type,
+                    'timestamp': err.timestamp.toIso8601String(),
+                  })
+              .toList(),
+        });
+      }
+
+      final List<Map<String, dynamic>> transitionsData = transitions
+          .map((t) => {
+                'from': t.from,
+                'to': t.to,
+                'isBack': t.isBack,
+              })
+          .toList();
+
+      final Map<String, dynamic> exportData = {
+        'layoutMode': _layoutMode.name,
+        'canvasWidth': canvasWidth,
+        'canvasHeight': canvasHeight,
+        'nodes': nodes,
+        'transitions': transitionsData,
+      };
+
+      final String jsonData = jsonEncode(exportData).replaceAll('</', '<\\/');
+      final String htmlContent = _buildHtmlTemplate(jsonData);
+
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/interactive_flow_map.html');
+      await tempFile.writeAsString(htmlContent);
+
+      debugPrint(
+          '[DevMonitor] HTML file written: ${tempFile.path}, size=${await tempFile.length()} bytes');
+      debugPrint('[DevMonitor] HTML content length: ${htmlContent.length}');
+
+      if (!mounted) return;
+
+      final shareText = LocaleKeys.mapSubject.tr.isNotEmpty
+          ? LocaleKeys.mapSubject.tr
+          : 'Interactive DevMonitor Flow Map';
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(
+              tempFile.path,
+              mimeType: 'text/html',
+            ),
+          ],
+          subject: shareText,
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[DevMonitor] Error exporting HTML map: $e');
+    }
+  }
+
+  /// Delegates to [buildFlowMapHtml] defined in flow_map_html_builder.dart.
+  String _buildHtmlTemplate(String jsonData) =>
+      buildFlowMapHtml(jsonData: jsonData);
+
   @override
   void dispose() {
     _transformationController.removeListener(_onTransformationChanged);
@@ -687,8 +1034,8 @@ class _FlowMapListState extends State<_FlowMapList>
       builder: (context, constraints) {
         final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
 
-        final double spacingY = 160.0;
-        final double startY = 80.0;
+        final double spacingY = 220.0;
+        double startY = 80.0;
 
         const double cardWidth = 180.0;
         const double cardHeight = 90.0;
@@ -752,19 +1099,19 @@ class _FlowMapListState extends State<_FlowMapList>
         final double dynamicWidthFactor = maxLayerSize * 260.0 + 400.0;
         final canvasWidth = math.max(3200.0,
             math.max(viewportSize.width * 2.0, dynamicWidthFactor + 1600.0));
-        final double canvasHeight;
+        double canvasHeight = 2400.0;
         final double centerX = canvasWidth / 2;
 
         if (_layoutMode == MapLayoutMode.grid) {
           final int columns = 2;
-          final double spacingX = 260.0;
+          final double spacingX = 320.0;
           final double gridTotalWidth = (columns - 1) * spacingX;
           final double gridStartX = centerX - gridTotalWidth / 2;
 
-          canvasHeight = math.max(
-            2400.0,
-            ((uniqueRoutes.length + 1) ~/ columns) * spacingY + startY + 600.0,
-          );
+          final int rows = (uniqueRoutes.length + columns - 1) ~/ columns;
+          final double actualHeight = math.max(1, rows) * spacingY;
+          canvasHeight = math.max(2400.0, actualHeight + 600.0);
+          startY = (canvasHeight - actualHeight) / 2;
 
           for (int i = 0; i < uniqueRoutes.length; i++) {
             final route = uniqueRoutes[i];
@@ -777,34 +1124,141 @@ class _FlowMapListState extends State<_FlowMapList>
             }
           }
         } else if (_layoutMode == MapLayoutMode.tree) {
-          final Map<int, List<String>> layerNodes = {};
-          for (final route in uniqueRoutes) {
-            final lvl = levels[route] ?? 0;
-            layerNodes[lvl] ??= [];
-            layerNodes[lvl]!.add(route);
-          }
+          final double actualHeight = (calculatedMaxLevel + 1) * spacingY;
+          canvasHeight = math.max(2400.0, actualHeight + 600.0);
+          startY = (canvasHeight - actualHeight) / 2;
 
-          canvasHeight = math.max(
-              2400.0, (calculatedMaxLevel + 1) * spacingY + startY + 600.0);
+          final Map<String, List<String>> childrenMap = {};
+          final Set<String> allChildren = {};
+          final Set<String> visited = {};
 
-          final double spacingX = 240.0;
-          for (int lvl = 0; lvl <= calculatedMaxLevel; lvl++) {
-            final layer = layerNodes[lvl] ?? [];
-            final int N = layer.length;
-            final double startX = centerX - ((N - 1) * spacingX) / 2;
-
-            for (int col = 0; col < N; col++) {
-              final route = layer[col];
-              if (!_draggedRoutes.contains(route)) {
-                final x = startX + col * spacingX;
-                final y = startY + lvl * spacingY;
-                _activePositions[route] = Offset(x, y);
+          for (final t in transitions) {
+            if (!t.isBack) {
+              if (!visited.contains(t.to) && t.from != t.to) {
+                childrenMap.putIfAbsent(t.from, () => []).add(t.to);
+                allChildren.add(t.to);
+                visited.add(t.to);
               }
             }
           }
+
+          final Map<String, double> subtreeWidths = {};
+          final Set<String> measureVisited = {};
+          double measure(String node) {
+            if (measureVisited.contains(node)) {
+              return cardWidth; // Cycle or DAG prevention
+            }
+            measureVisited.add(node);
+
+            final children = childrenMap[node] ?? [];
+            if (children.isEmpty) {
+              subtreeWidths[node] = cardWidth;
+              return cardWidth;
+            }
+            double totalWidth = 0.0;
+            for (final child in children) {
+              totalWidth += measure(child);
+            }
+            totalWidth += (children.length - 1) * 120.0; // sibling spacing
+            subtreeWidths[node] = math.max(cardWidth, totalWidth);
+            return subtreeWidths[node]!;
+          }
+
+          final List<String> roots = [];
+          for (final route in uniqueRoutes) {
+            if (!allChildren.contains(route)) {
+              roots.add(route);
+            }
+          }
+          if (roots.isEmpty && uniqueRoutes.isNotEmpty) {
+            roots.add(uniqueRoutes.first);
+          }
+
+          for (final root in roots) {
+            measure(root);
+          }
+
+          int maxLvl = 0;
+          final Set<String> layoutVisited = {};
+          void layoutNode(String node, double x, int level) {
+            if (layoutVisited.contains(node)) return;
+            layoutVisited.add(node);
+
+            if (level > maxLvl) maxLvl = level;
+            final double y = startY + level * spacingY;
+            if (!_draggedRoutes.contains(node)) {
+              _activePositions[node] = Offset(x, y);
+            }
+
+            final children = childrenMap[node] ?? [];
+            if (children.isEmpty) return;
+
+            double totalChildrenWidth = 0.0;
+            for (final child in children) {
+              totalChildrenWidth += subtreeWidths[child] ?? cardWidth;
+            }
+            totalChildrenWidth += (children.length - 1) * 120.0;
+
+            double currentX = x - totalChildrenWidth / 2;
+            for (final child in children) {
+              final double childWidth = subtreeWidths[child] ?? cardWidth;
+              final double childCenterX = currentX + childWidth / 2;
+              layoutNode(child, childCenterX, level + 1);
+              currentX += childWidth + 120.0;
+            }
+          }
+
+          double totalRootsWidth = 0.0;
+          for (final root in roots) {
+            totalRootsWidth += subtreeWidths[root] ?? cardWidth;
+          }
+          totalRootsWidth += (roots.length - 1) * 200.0;
+
+          double currentRootX = centerX - totalRootsWidth / 2;
+          for (final root in roots) {
+            final double rootWidth = subtreeWidths[root] ?? cardWidth;
+            final double rootCenterX = currentRootX + rootWidth / 2;
+            layoutNode(root, rootCenterX, 0);
+            currentRootX += rootWidth + 200.0;
+          }
+
+          // Fallback for unreachable nodes
+          for (int i = 0; i < uniqueRoutes.length; i++) {
+            final route = uniqueRoutes[i];
+            if (!_activePositions.containsKey(route)) {
+              if (!_draggedRoutes.contains(route)) {
+                _activePositions[route] = Offset(
+                  centerX + (i * 200.0) - (uniqueRoutes.length * 100.0),
+                  startY + actualHeight + 200.0,
+                );
+              }
+            }
+          }
+        } else if (_layoutMode == MapLayoutMode.circular) {
+          final double radius = math.max(250.0, uniqueRoutes.length * 45.0);
+          final double actualHeight = radius * 2;
+          canvasHeight = math.max(2400.0, actualHeight + 600.0);
+          startY = (canvasHeight - actualHeight) / 2;
+          final double centerY = startY + radius;
+
+          final int N = uniqueRoutes.length;
+          final double angleStep = N > 0 ? (2 * math.pi) / N : 0.0;
+
+          for (int i = 0; i < N; i++) {
+            final route = uniqueRoutes[i];
+            if (!_draggedRoutes.contains(route)) {
+              final double angle =
+                  i * angleStep - (math.pi / 2); // Start at 12 o'clock
+              final double x = centerX + radius * math.cos(angle);
+              final double y = centerY + radius * math.sin(angle);
+              _activePositions[route] = Offset(x, y);
+            }
+          }
         } else {
-          canvasHeight =
-              math.max(2400.0, uniqueRoutes.length * spacingY + startY + 600.0);
+          final double actualHeight =
+              math.max(1, uniqueRoutes.length) * spacingY;
+          canvasHeight = math.max(2400.0, actualHeight + 600.0);
+          startY = (canvasHeight - actualHeight) / 2;
 
           for (int i = 0; i < uniqueRoutes.length; i++) {
             final route = uniqueRoutes[i];
@@ -820,8 +1274,8 @@ class _FlowMapListState extends State<_FlowMapList>
         _lastCanvasWidth = canvasWidth;
 
         if (!_isInitialMatrixSet) {
-          _isInitialMatrixSet = true;
-          if (_activePositions.isNotEmpty) {
+          if (_activePositions.isNotEmpty && viewportSize.width > 50) {
+            _isInitialMatrixSet = true;
             double minX = double.infinity;
             double maxX = -double.infinity;
             double minY = double.infinity;
@@ -864,18 +1318,26 @@ class _FlowMapListState extends State<_FlowMapList>
               ..setEntry(0, 3, tx)
               ..setEntry(1, 3, ty);
 
-            _transformationController.value = targetMatrix;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _animateToMatrix(targetMatrix);
+              }
+            });
           } else {
             final initialTx = (viewportSize.width - canvasWidth) / 2;
-            _transformationController.value =
-                Matrix4.translationValues(initialTx, 0.0, 0.0);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _animateToMatrix(
+                    Matrix4.translationValues(initialTx, 0.0, 0.0));
+              }
+            });
           }
         }
 
         final Map<String, List<ApiLogItem>> routeApis = {};
         final Map<String, List<ErrorLogItem>> routeErrors = {};
         final Map<String, int> routeVisits = {};
-        final Map<String, Set<int>> seenApiOrders = {};
+        final Map<String, Set<String>> seenApiOrders = {};
         final Map<String, Set<String>> seenErrorKeys = {};
         final Map<String, String> routeTypes = {};
 
@@ -892,8 +1354,10 @@ class _FlowMapListState extends State<_FlowMapList>
           if (!routeApis.containsKey(visit.route)) continue;
           routeTypes[visit.route] = visit.routeItem.routeType;
           for (final api in visit.apiLogs) {
+            final key =
+                '${api.timestamp.microsecondsSinceEpoch}_${api.method}_${api.url}';
             final seen = seenApiOrders[visit.route]!;
-            if (seen.add(api.orderNumber)) {
+            if (seen.add(key)) {
               routeApis[visit.route]!.add(api);
             }
           }
@@ -910,6 +1374,17 @@ class _FlowMapListState extends State<_FlowMapList>
 
         final activeRoute = visits.isNotEmpty ? visits.last.route : '';
 
+        final issueRoutes = <String>{};
+        for (final route in uniqueRoutes) {
+          final apis = routeApis[route] ?? [];
+          final errors = routeErrors[route] ?? [];
+          final hasSlow = apis.any((api) => api.isSlow);
+          final hasError = errors.isNotEmpty;
+          if (hasSlow || hasError) {
+            issueRoutes.add(route);
+          }
+        }
+
         return Scaffold(
           backgroundColor: MonitorColors.pageBackground,
           body: Stack(
@@ -923,9 +1398,10 @@ class _FlowMapListState extends State<_FlowMapList>
                   minScale: 0.15,
                   maxScale: 2.0,
                   boundaryMargin: const EdgeInsets.all(500.0),
-                  child: SizedBox(
+                  child: Container(
                     width: canvasWidth,
                     height: canvasHeight,
+                    color: MonitorColors.pageBackground,
                     child: Stack(
                       children: [
                         if (_showBgGrid)
@@ -960,7 +1436,8 @@ class _FlowMapListState extends State<_FlowMapList>
                                     final double currentScale =
                                         _transformationController.value
                                             .getMaxScaleOnAxis();
-                                    if (currentScale > 0.05 && currentScale.isFinite) {
+                                    if (currentScale > 0.05 &&
+                                        currentScale.isFinite) {
                                       _activePositions[route] =
                                           _activePositions[route]! +
                                               details.delta / currentScale;
@@ -1007,6 +1484,7 @@ class _FlowMapListState extends State<_FlowMapList>
                   canvasWidth: canvasWidth,
                   canvasHeight: canvasHeight,
                   viewportSize: viewportSize,
+                  issueRoutes: issueRoutes,
                   onGesture: (localPos) => _handleMiniMapGesture(
                     localPos,
                     viewportSize,
@@ -1051,7 +1529,7 @@ class _FlowMapListState extends State<_FlowMapList>
                           icon: Icon(Icons.arrow_back_ios_new_rounded,
                               color: MonitorColors.primaryText, size: 16),
                           onPressed: () => Navigator.of(context).pop(),
-                          tooltip: 'Back',
+                          tooltip: LocaleKeys.mapBack.tr,
                           constraints:
                               const BoxConstraints(minWidth: 36, minHeight: 36),
                           padding: EdgeInsets.zero,
@@ -1066,7 +1544,9 @@ class _FlowMapListState extends State<_FlowMapList>
                               ? Icons.account_tree_rounded
                               : _layoutMode == MapLayoutMode.grid
                                   ? Icons.grid_view_rounded
-                                  : Icons.view_stream_rounded,
+                                  : _layoutMode == MapLayoutMode.stream
+                                      ? Icons.view_stream_rounded
+                                      : Icons.circle_outlined,
                           color: MonitorColors.primaryText,
                           size: 18,
                         ),
@@ -1077,16 +1557,20 @@ class _FlowMapListState extends State<_FlowMapList>
                               _layoutMode = MapLayoutMode.grid;
                             } else if (_layoutMode == MapLayoutMode.grid) {
                               _layoutMode = MapLayoutMode.stream;
+                            } else if (_layoutMode == MapLayoutMode.stream) {
+                              _layoutMode = MapLayoutMode.circular;
                             } else {
                               _layoutMode = MapLayoutMode.tree;
                             }
                           });
                         },
                         tooltip: _layoutMode == MapLayoutMode.tree
-                            ? 'Switch to Grid Layout'
+                            ? LocaleKeys.mapSwitchGrid.tr
                             : _layoutMode == MapLayoutMode.grid
-                                ? 'Switch to Stream Layout'
-                                : 'Switch to Tree Layout',
+                                ? LocaleKeys.mapSwitchStream.tr
+                                : _layoutMode == MapLayoutMode.stream
+                                    ? LocaleKeys.mapSwitchCircular.tr
+                                    : LocaleKeys.mapSwitchTree.tr,
                         constraints:
                             const BoxConstraints(minWidth: 36, minHeight: 36),
                         padding: EdgeInsets.zero,
@@ -1098,7 +1582,35 @@ class _FlowMapListState extends State<_FlowMapList>
                         icon: Icon(Icons.gps_fixed_rounded,
                             color: MonitorColors.primaryText, size: 18),
                         onPressed: _recenterCamera,
-                        tooltip: 'Recenter Camera',
+                        tooltip: LocaleKeys.mapRecenterCamera.tr,
+                        constraints:
+                            const BoxConstraints(minWidth: 36, minHeight: 36),
+                        padding: EdgeInsets.zero,
+                      ),
+                      Container(
+                          width: 1, height: 20, color: MonitorColors.divider),
+                      IconButton(
+                        icon: Icon(Icons.search_rounded,
+                            color: MonitorColors.primaryText, size: 18),
+                        onPressed: () => _showSearchNodeSheet(uniqueRoutes),
+                        tooltip: LocaleKeys.mapSearchScreen.tr,
+                        constraints:
+                            const BoxConstraints(minWidth: 36, minHeight: 36),
+                        padding: EdgeInsets.zero,
+                      ),
+
+                      Container(
+                          width: 1, height: 20, color: MonitorColors.divider),
+                      IconButton(
+                        icon: Icon(Icons.share_rounded,
+                            color: MonitorColors.primaryText, size: 18),
+                        onPressed: () => _exportInteractiveMapHtml(
+                          uniqueRoutes,
+                          transitions,
+                          canvasWidth,
+                          canvasHeight,
+                        ),
+                        tooltip: LocaleKeys.mapExportWeb.tr,
                         constraints:
                             const BoxConstraints(minWidth: 36, minHeight: 36),
                         padding: EdgeInsets.zero,
@@ -1120,8 +1632,8 @@ class _FlowMapListState extends State<_FlowMapList>
                           });
                         },
                         tooltip: _showBgGrid
-                            ? 'Hide Background Grid'
-                            : 'Show Background Grid',
+                            ? LocaleKeys.mapHideGrid.tr
+                            : LocaleKeys.mapShowGrid.tr,
                         constraints:
                             const BoxConstraints(minWidth: 36, minHeight: 36),
                         padding: EdgeInsets.zero,
@@ -1132,7 +1644,7 @@ class _FlowMapListState extends State<_FlowMapList>
                         icon: Icon(Icons.refresh,
                             color: MonitorColors.primaryText, size: 18),
                         onPressed: _resetZoom,
-                        tooltip: 'Reset Layout & Zoom',
+                        tooltip: LocaleKeys.mapResetLayoutZoom.tr,
                         constraints:
                             const BoxConstraints(minWidth: 36, minHeight: 36),
                         padding: EdgeInsets.zero,
@@ -1161,8 +1673,8 @@ class _FlowMapListState extends State<_FlowMapList>
                           }
                         },
                         tooltip: widget.isFullScreen
-                            ? 'Exit Full Screen'
-                            : 'Full Screen Preview',
+                            ? LocaleKeys.mapExitFullScreen.tr
+                            : LocaleKeys.mapFullScreen.tr,
                         constraints:
                             const BoxConstraints(minWidth: 36, minHeight: 36),
                         padding: EdgeInsets.zero,
@@ -1376,7 +1888,7 @@ class _FlowMapStateCard extends StatelessWidget {
                         size: 9, color: MonitorColors.secondaryText),
                     const SizedBox(width: 3),
                     MonoText(
-                      '$visitCount visits',
+                      LocaleKeys.mapVisitsCount.trWith({'count': visitCount}),
                       8.5,
                       color: MonitorColors.secondaryText,
                     ),
@@ -1421,7 +1933,7 @@ class _FlowMapStateCard extends StatelessWidget {
                 Row(
                   children: [
                     MonoText(
-                      '$totalApis requests',
+                      LocaleKeys.mapRequestsCount.trWith({'count': totalApis}),
                       8,
                       color: MonitorColors.primaryText,
                       weight: FontWeight.bold,
@@ -1515,7 +2027,16 @@ class _StateGraphPainter extends CustomPainter {
       final endPoint = toPos - Offset(ux * edgeOffsetTo, uy * edgeOffsetTo);
 
       final isBidirectional = bidirectionalKeys.contains(t.key);
-      final double curveOffset = isBidirectional ? 30.0 : 15.0;
+      final double baseOffset =
+          t.isBack ? 65.0 : (isBidirectional ? 45.0 : 30.0);
+      double curveOffset = baseOffset + (dist * 0.12);
+
+      // Determine bend direction: always bend outwards from the center line of the canvas
+      final double centerX = size.width / 2;
+      final double midX = (startPoint.dx + endPoint.dx) / 2;
+      if (midX < centerX) {
+        curveOffset = -curveOffset;
+      }
 
       final double px = -uy;
       final double py = ux;
@@ -1574,8 +2095,7 @@ class _StateGraphPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _StateGraphPainter oldDelegate) {
-    return oldDelegate.isDark != isDark ||
-        oldDelegate.transitions.length != transitions.length;
+    return true;
   }
 }
 
@@ -1614,9 +2134,10 @@ class _MiniMap extends StatelessWidget {
   final double canvasHeight;
   final Size viewportSize;
   final Function(Offset localPos)? onGesture;
+  final Set<String> issueRoutes;
 
-  static const double width = 160.0;
-  static const double height = 100.0;
+  static const double width = 120.0;
+  static const double height = 75.0;
 
   const _MiniMap({
     required this.transformationController,
@@ -1626,6 +2147,7 @@ class _MiniMap extends StatelessWidget {
     required this.canvasWidth,
     required this.canvasHeight,
     required this.viewportSize,
+    required this.issueRoutes,
     this.onGesture,
   });
 
@@ -1667,6 +2189,7 @@ class _MiniMap extends StatelessWidget {
                   width: width,
                   height: height,
                   isDark: MonitorColors.isDark,
+                  issueRoutes: issueRoutes,
                 ),
               ),
             ),
@@ -1688,6 +2211,7 @@ class _MiniMapPainter extends CustomPainter {
   final double width;
   final double height;
   final bool isDark;
+  final Set<String> issueRoutes;
 
   _MiniMapPainter({
     required this.matrix,
@@ -1700,27 +2224,70 @@ class _MiniMapPainter extends CustomPainter {
     required this.width,
     required this.height,
     required this.isDark,
+    required this.issueRoutes,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final scaleX = width / canvasWidth;
-    final scaleY = height / canvasHeight;
-    final scale = math.min(scaleX, scaleY);
+    if (nodePositions.isEmpty) return;
 
-    final offsetX = (width - canvasWidth * scale) / 2;
-    final offsetY = (height - canvasHeight * scale) / 2;
+    double minX = double.infinity;
+    double maxX = double.negativeInfinity;
+    double minY = double.infinity;
+    double maxY = double.negativeInfinity;
+
+    for (final pos in nodePositions.values) {
+      if (pos.dx < minX) minX = pos.dx;
+      if (pos.dx > maxX) maxX = pos.dx;
+      if (pos.dy < minY) minY = pos.dy;
+      if (pos.dy > maxY) maxY = pos.dy;
+    }
+
+    const double cardHalfW = 90.0;
+    const double cardHalfH = 32.5;
+
+    minX -= cardHalfW;
+    maxX += cardHalfW;
+    minY -= cardHalfH;
+    maxY += cardHalfH;
+
+    final contentW = (maxX - minX).abs();
+    final contentH = (maxY - minY).abs();
+    final double safeContentW = contentW < 1 ? 1 : contentW;
+    final double safeContentH = contentH < 1 ? 1 : contentH;
+
+    const double padding = 6.0;
+    final double scaleX = (width - padding * 2) / safeContentW;
+    final double scaleY = (height - padding * 2) / safeContentH;
+    final double mmScale = math.min(scaleX, scaleY);
+
+    final double offsetX =
+        padding + (width - padding * 2 - safeContentW * mmScale) / 2;
+    final double offsetY =
+        padding + (height - padding * 2 - safeContentH * mmScale) / 2;
 
     Offset toMiniMap(Offset point) {
       return Offset(
-        point.dx * scale + offsetX,
-        point.dy * scale + offsetY,
+        (point.dx - minX) * mmScale + offsetX,
+        (point.dy - minY) * mmScale + offsetY,
       );
+    }
+
+    // 0. Draw dot grid (matching HTML)
+    final dotPaint = Paint()
+      ..color = isDark
+          ? Colors.white.withValues(alpha: 0.05)
+          : Colors.black.withValues(alpha: 0.06)
+      ..style = PaintingStyle.fill;
+    for (double gx = padding; gx < width - padding; gx += 14) {
+      for (double gy = padding; gy < height - padding; gy += 14) {
+        canvas.drawCircle(Offset(gx, gy), 0.6, dotPaint);
+      }
     }
 
     // 1. Draw connections
     final linePaint = Paint()
-      ..strokeWidth = 1.0
+      ..strokeWidth = 0.8
       ..style = PaintingStyle.stroke;
 
     for (final t in transitions) {
@@ -1731,17 +2298,17 @@ class _MiniMapPainter extends CustomPainter {
       final start = toMiniMap(from);
       final end = toMiniMap(to);
 
-      linePaint.color = t.isBack
-          ? const Color(0xFFF59E0B).withValues(alpha: 0.4)
-          : const Color(0xFF6366F1).withValues(alpha: 0.4);
-
+      // HTML uses a uniform light blue for connections
+      linePaint.color = const Color(0xFF4F8EF7).withValues(alpha: 0.25);
       canvas.drawLine(start, end, linePaint);
     }
 
     // 2. Draw nodes
     final nodePaint = Paint()..style = PaintingStyle.fill;
-    const double nodeW = 18.0;
-    const double nodeH = 9.0;
+    final nodeBorderPaint = Paint()
+      ..color = const Color(0xFF4F8EF7).withValues(alpha: 0.6)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke;
 
     for (final entry in nodePositions.entries) {
       final route = entry.key;
@@ -1750,47 +2317,64 @@ class _MiniMapPainter extends CustomPainter {
       final center = toMiniMap(pos);
 
       final isCurrent = route == activeRoute;
+      // HTML uses blue for all nodes, we keep active node green to stand out
       nodePaint.color = isCurrent
           ? const Color(0xFF57D888)
-          : MonitorColors.divider.withValues(alpha: 0.8);
+          : const Color(0xFF4F8EF7).withValues(alpha: 0.7);
 
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: center,
-            width: math.max(6.0, nodeW * (scale / 0.1)),
-            height: math.max(4.0, nodeH * (scale / 0.1)),
-          ),
-          const Radius.circular(1.5),
+      final nodeW = math.max(6.0, 180.0 * mmScale);
+      final nodeH = math.max(4.0, 65.0 * mmScale);
+      
+      final rrect = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: center,
+          width: nodeW,
+          height: nodeH,
         ),
-        nodePaint,
+        const Radius.circular(1.5),
       );
+
+      canvas.drawRRect(rrect, nodePaint);
+      canvas.drawRRect(rrect, nodeBorderPaint);
+
+      if (issueRoutes.contains(route)) {
+        final dotRadius = math.max(1.5, math.min(3.0, nodeW / 8));
+        final dotPaint = Paint()..color = const Color(0xFFEF4444);
+        final dotCenter = Offset(
+          center.dx + nodeW / 2 - dotRadius - 1,
+          center.dy - nodeH / 2 + dotRadius + 1,
+        );
+        canvas.drawCircle(dotCenter, dotRadius, dotPaint);
+      }
     }
 
-    // 3. Draw viewport indicator
-    final double rawScale = matrix.getMaxScaleOnAxis();
-    final double viewportScale = (rawScale.isNaN || rawScale.isInfinite || rawScale <= 0.01) ? 1.0 : rawScale;
-    final double tx = matrix.entry(0, 3);
-    final double ty = matrix.entry(1, 3);
+    // 3. Draw viewport indicator (fixed small box centered on viewport)
 
-    final double viewportCanvasW = viewportSize.width / viewportScale;
-    final double viewportCanvasH = viewportSize.height / viewportScale;
-    final double topLeftCanvasX = -tx / viewportScale;
-    final double topLeftCanvasY = -ty / viewportScale;
+    // Compute the world coordinates of the viewport center using the inverse matrix
+    final Matrix4 inv = Matrix4.copy(matrix);
+    inv.invert();
+    final Offset viewCenter =
+        Offset(viewportSize.width / 2, viewportSize.height / 2);
+    final Offset worldCenter = MatrixUtils.transformPoint(inv, viewCenter);
+    // Map this world center to mini‑map coordinates
+    final miniCenter = toMiniMap(worldCenter);
 
-    final miniTopLeft = toMiniMap(Offset(topLeftCanvasX, topLeftCanvasY));
-    final miniWidth = viewportCanvasW * scale;
-    final miniHeight = viewportCanvasH * scale;
+    // Fixed small size (same as HTML implementation)
+    const double fixedW = 16.0;
+    const double fixedH = 11.0;
+    Rect miniViewportRect = Rect.fromCenter(
+      center: miniCenter,
+      width: fixedW,
+      height: fixedH,
+    );
 
-    final miniViewportRect =
-        Rect.fromLTWH(miniTopLeft.dx, miniTopLeft.dy, miniWidth, miniHeight);
-
+    // HTML uses a red dashed box; we use a thin red box for performance
     final viewportPaint = Paint()
-      ..color = const Color(0xFF57D888).withValues(alpha: 0.12)
+      ..color = const Color(0xFFEF4444).withValues(alpha: 0.07)
       ..style = PaintingStyle.fill;
     final viewportBorderPaint = Paint()
-      ..color = const Color(0xFF57D888).withValues(alpha: 0.7)
-      ..strokeWidth = 1.0
+      ..color = const Color(0xFFEF4444).withValues(alpha: 0.8)
+      ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
 
     canvas.drawRect(miniViewportRect, viewportPaint);
@@ -1890,7 +2474,7 @@ class _ZoomControls extends StatelessWidget {
                 icon: Icon(Icons.remove,
                     color: MonitorColors.primaryText, size: 16),
                 onPressed: onZoomOut,
-                tooltip: 'Zoom Out',
+                tooltip: LocaleKeys.mapZoomOut.tr,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 padding: EdgeInsets.zero,
               ),
@@ -1908,13 +2492,199 @@ class _ZoomControls extends StatelessWidget {
                 icon:
                     Icon(Icons.add, color: MonitorColors.primaryText, size: 16),
                 onPressed: onZoomIn,
-                tooltip: 'Zoom In',
+                tooltip: LocaleKeys.mapZoomIn.tr,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 padding: EdgeInsets.zero,
               ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _MapSearchSheet extends StatefulWidget {
+  final List<String> routes;
+  final ValueChanged<String> onSelected;
+
+  const _MapSearchSheet({
+    required this.routes,
+    required this.onSelected,
+  });
+
+  @override
+  State<_MapSearchSheet> createState() => _MapSearchSheetState();
+}
+
+class _MapSearchSheetState extends State<_MapSearchSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  List<String> _filteredRoutes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredRoutes = widget.routes;
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text.toLowerCase().trim();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredRoutes = widget.routes;
+      } else {
+        _filteredRoutes = widget.routes.where((r) {
+          final title = MonitorController.formatRouteName(r).toLowerCase();
+          final path = r.toLowerCase();
+          return title.contains(query) || path.contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: MonitorColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.6,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 12),
+              decoration: BoxDecoration(
+                color: MonitorColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  BodyText(LocaleKeys.mapSearchTitle.tr, 15,
+                      weight: FontWeight.bold),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close,
+                        color: MonitorColors.secondaryText, size: 20),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                style:
+                    TextStyle(color: MonitorColors.primaryText, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: LocaleKeys.mapSearchHint.tr,
+                  hintStyle: TextStyle(
+                      color: MonitorColors.secondaryText, fontSize: 13),
+                  prefixIcon: Icon(Icons.search,
+                      color: MonitorColors.secondaryText, size: 20),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear,
+                              color: MonitorColors.secondaryText, size: 18),
+                          onPressed: () => _searchController.clear(),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: MonitorColors.pageBackground,
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Divider(height: 1, color: MonitorColors.divider),
+            Flexible(
+              child: _filteredRoutes.isEmpty
+                  ? Container(
+                      padding: const EdgeInsets.all(32),
+                      alignment: Alignment.center,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.search_off_rounded,
+                              size: 40, color: MonitorColors.secondaryText),
+                          const SizedBox(height: 8),
+                          BodyText(LocaleKeys.mapSearchNotFound.tr, 13,
+                              color: MonitorColors.secondaryText),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _filteredRoutes.length,
+                      padding: const EdgeInsets.all(12),
+                      itemBuilder: (context, index) {
+                        final r = _filteredRoutes[index];
+                        final title = MonitorController.formatRouteName(r);
+                        final isPopup =
+                            r.contains('dialog') || r.contains('bottomSheet');
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          leading: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: (isPopup ? Colors.amber : Colors.blue)
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(
+                              isPopup
+                                  ? Icons.filter_none_rounded
+                                  : Icons.crop_portrait_rounded,
+                              size: 16,
+                              color: isPopup ? Colors.amber : Colors.blue,
+                            ),
+                          ),
+                          title: BodyText(title, 14, weight: FontWeight.w600),
+                          subtitle: MonoText(
+                            r.contains('#') ? r.split('#').first : r,
+                            11,
+                            color: MonitorColors.secondaryText,
+                          ),
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            widget.onSelected(r);
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

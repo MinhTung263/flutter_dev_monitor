@@ -64,7 +64,6 @@ class MonitorInterceptor extends Interceptor {
         MonitorNavigatorObserver.currentRoute;
 
     MonitorController.instance.addLog(ApiLogItem(
-      orderNumber: 0,
       url: options.uri.toString(),
       method: options.method,
       statusCode: statusCode,

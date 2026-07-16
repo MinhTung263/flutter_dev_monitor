@@ -6,8 +6,7 @@ class ApiLogItem {
   /// Label for request triggered by user actions on the screen.
   static const String phaseRefresh = 'ACTION';
 
-  /// Sequential identifier number for logs.
-  final int orderNumber;
+
 
   /// The complete endpoint URL of the request.
   final String url;
@@ -59,7 +58,6 @@ class ApiLogItem {
 
   /// Creates a new [ApiLogItem] log entry.
   const ApiLogItem({
-    required this.orderNumber,
     required this.url,
     required this.method,
     required this.statusCode,
@@ -108,7 +106,6 @@ class ApiLogItem {
 
   /// Returns a copy of this log with updated fields.
   ApiLogItem copyWith({
-    int? orderNumber,
     int? statusCode,
     int? duration,
     int? responseBytes,
@@ -119,7 +116,6 @@ class ApiLogItem {
     String? screen,
   }) {
     return ApiLogItem(
-      orderNumber: orderNumber ?? this.orderNumber,
       url: url,
       method: method,
       statusCode: statusCode ?? this.statusCode,

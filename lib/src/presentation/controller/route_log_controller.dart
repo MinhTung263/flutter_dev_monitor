@@ -57,6 +57,31 @@ class RouteLogController {
     _pushTimes.clear();
   }
 
+  void renameSession(String oldScreen, String newScreen) {
+    if (oldScreen == newScreen) return;
+
+    if (_pushTimes.containsKey(oldScreen)) {
+      _pushTimes[newScreen] = _pushTimes.remove(oldScreen)!;
+    }
+
+    for (int i = 0; i < _logs.length; i++) {
+      final log = _logs[i];
+      final newRoute = log.route == oldScreen ? newScreen : log.route;
+      final newFrom = log.from == oldScreen ? newScreen : log.from;
+      if (newRoute != log.route || newFrom != log.from) {
+        _logs[i] = RouteLogItem(
+          id: log.id,
+          event: log.event,
+          route: newRoute,
+          from: newFrom,
+          timestamp: log.timestamp,
+          duration: log.duration,
+          routeType: log.routeType,
+        );
+      }
+    }
+  }
+
   void _insert(RouteLogItem item) {
     _logs.insert(0, item);
     if (_logs.length > _max) _logs.removeLast();

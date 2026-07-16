@@ -205,6 +205,7 @@ class _ScreenPickerSheet extends StatelessWidget {
               itemBuilder: (_, i) {
                 final s = screens[i];
                 final isSelected = s == selected;
+
                 final (title, sub) = _parseRoute(s);
                 final accent = MonitorColors.metricTotal;
 
