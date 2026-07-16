@@ -450,7 +450,7 @@ class _FlowMapListState extends State<_FlowMapList>
       context: context,
       backgroundColor: MonitorColors.surface,
       isScrollControlled: true,
-      routeSettings: const RouteSettings(name: '/MonitorScreenApiDetail'),
+      routeSettings: const RouteSettings(name: MonitorConstants.screenApiDetailSheet),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -854,6 +854,7 @@ class _FlowMapListState extends State<_FlowMapList>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      routeSettings: const RouteSettings(name: MonitorConstants.mapSearchSheet),
       builder: (context) {
         return _MapSearchSheet(
           routes: routes,
@@ -1665,6 +1666,7 @@ class _FlowMapListState extends State<_FlowMapList>
                           } else {
                             Navigator.of(context).push(
                               MaterialPageRoute(
+                                settings: const RouteSettings(name: MonitorConstants.flowMapFullScreen),
                                 builder: (context) => const Scaffold(
                                   body: _FlowMapList(isFullScreen: true),
                                 ),

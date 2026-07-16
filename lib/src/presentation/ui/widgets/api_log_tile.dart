@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../domain/api_log_item.dart';
 import '../../../core/monitor_strings.dart';
+import '../../../core/monitor_constants.dart';
 import '../../../core/monitor_filter_keys.dart';
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
@@ -458,7 +459,7 @@ class _CollapsedRow extends StatelessWidget {
                       Navigator.of(context).push(
                         MonitorResponsiveRoute(
                           builder: (_) => MonitorApiDetailPage(log: log),
-                          settings: const RouteSettings(name: '/MonitorApiDetailPage'),
+                          settings: const RouteSettings(name: MonitorConstants.apiDetailPage),
                         ),
                       );
                     },
@@ -640,7 +641,7 @@ class _CompactCollapsedRow extends StatelessWidget {
                 Navigator.of(context).push(
                   MonitorResponsiveRoute(
                     builder: (_) => MonitorApiDetailPage(log: log),
-                    settings: const RouteSettings(name: '/MonitorApiDetailPage'),
+                    settings: const RouteSettings(name: MonitorConstants.apiDetailPage),
                   ),
                 );
               },
@@ -800,7 +801,7 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      routeSettings: const RouteSettings(name: '/MonitorCopyActions'),
+      routeSettings: const RouteSettings(name: MonitorConstants.copyActionsSheet),
       builder: (_) => _CopyActionsSheet(log: log),
     );
   }
@@ -2394,7 +2395,7 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      routeSettings: const RouteSettings(name: '/MonitorCopyActions'),
+      routeSettings: const RouteSettings(name: MonitorConstants.copyActionsSheet),
       builder: (_) => _CopyActionsSheet(log: log),
     );
   }

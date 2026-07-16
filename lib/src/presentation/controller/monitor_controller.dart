@@ -208,17 +208,19 @@ class MonitorController extends ChangeNotifier {
     MonitorColors.load(); // fire-and-forget: restores persisted theme
   }
 
-  bool _shouldIgnoreError(String exception, String stack) {
+  bool _shouldIgnoreError(String exception, String stack, [String? info]) {
     final excLower = exception.toLowerCase();
     final stackLower = stack.toLowerCase();
+    final infoLower = info?.toLowerCase() ?? '';
 
     if (stackLower.contains('flutter_dev_monitor') ||
-        excLower.contains('flutter_dev_monitor')) {
+        excLower.contains('flutter_dev_monitor') ||
+        infoLower.contains('flutter_dev_monitor')) {
       return true;
     }
 
-    final currentRoute = MonitorNavigatorObserver.currentRoute;
-    if (currentRoute.contains('Monitor') || currentRoute.contains('monitor')) {
+    final activeRoute = MonitorNavigatorObserver.actualTopRoute.toLowerCase();
+    if (activeRoute.contains('monitor')) {
       return true;
     }
 
@@ -236,7 +238,8 @@ class MonitorController extends ChangeNotifier {
       try {
         final exceptionStr = details.exceptionAsString();
         final stackStr = details.stack?.toString() ?? '';
-        if (!_shouldIgnoreError(exceptionStr, stackStr)) {
+        final infoStr = details.toString();
+        if (!_shouldIgnoreError(exceptionStr, stackStr, infoStr)) {
           _alertsDismissed = false;
           _errorLog.addError(
             exceptionStr,

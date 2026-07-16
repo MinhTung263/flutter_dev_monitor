@@ -192,7 +192,7 @@ class _FpsOverlayState extends State<FpsOverlay>
     nav.push(MonitorResponsiveRoute(
       builder: (_) => MonitorDashboardPage(
           initialScreen: route.isEmpty ? MonitorConstants.unknownRoute : route),
-      settings: const RouteSettings(name: '/MonitorDashboardPage'),
+      settings: const RouteSettings(name: MonitorConstants.dashboardRoute),
     ));
   }
 

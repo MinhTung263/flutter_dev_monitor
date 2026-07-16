@@ -88,6 +88,10 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   /// The topmost active route (including popups).
   static String _currentRoute = MonitorConstants.unknownRoute;
   static String _cachedCurrentRoute = MonitorConstants.unknownRoute;
+  static String _actualTopRoute = MonitorConstants.unknownRoute;
+
+  static String get actualTopRoute => _actualTopRoute;
+
   static String _lastResolvedRoute = MonitorConstants.unknownRoute;
   static String? _lastResolvedTabName;
   static String? _lastTabTitle;
@@ -212,7 +216,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
   static String _resolveTabRouteFor(String route) {
     // Keep the dashboard route as is
-    if (route == '/MonitorDashboardPage') return route;
+    if (route == MonitorConstants.dashboardRoute) return route;
 
     if (_lastResolvedRoute != MonitorConstants.unknownRoute &&
         _lastResolvedTabName != null) {
@@ -303,6 +307,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _cachedBottomBarElement = null;
     super.didPush(route, previousRoute);
+    _actualTopRoute = route.settings.name ?? _popupFallbackName(route);
     if (isMonitorRoute(route)) return;
 
     // Handle PopupRoute (BottomSheet, Dialog) before the name guard
@@ -359,6 +364,11 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _cachedBottomBarElement = null;
     super.didPop(route, previousRoute);
+    if (previousRoute != null) {
+      _actualTopRoute = previousRoute.settings.name ?? _popupFallbackName(previousRoute);
+    } else {
+      _actualTopRoute = MonitorConstants.unknownRoute;
+    }
     if (isMonitorRoute(route)) return;
 
     // Handle PopupRoute before the name guard (BottomSheet may have no name).
@@ -413,7 +423,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       }
       if (prevName != null &&
           prevName.isNotEmpty &&
-          prevName != '/MonitorDashboardPage') {
+          prevName != MonitorConstants.dashboardRoute) {
         MonitorController.instance.updateDashboardView(prevName);
       }
       _updateActiveRouteTitle();
@@ -425,10 +435,15 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _cachedBottomBarElement = null;
     super.didRemove(route, previousRoute);
+    if (previousRoute != null) {
+      _actualTopRoute = previousRoute.settings.name ?? _popupFallbackName(previousRoute);
+    } else {
+      _actualTopRoute = MonitorConstants.unknownRoute;
+    }
     if (isMonitorRoute(route)) return;
     if (route is! PageRoute) return;
     final name = route.settings.name;
-    if (name == null || name.isEmpty || name == '/MonitorDashboardPage') return;
+    if (name == null || name.isEmpty || name == MonitorConstants.dashboardRoute) return;
 
     final prevName = previousRoute?.settings.name;
     final stackName = pageStack.lastWhere(
@@ -441,7 +456,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     }
     if (prevName != null &&
         prevName.isNotEmpty &&
-        prevName != '/MonitorDashboardPage') {
+        prevName != MonitorConstants.dashboardRoute) {
       MonitorController.instance.updateDashboardView(prevName);
     }
   }
@@ -451,6 +466,9 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _cachedBottomBarElement = null;
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    if (newRoute != null) {
+      _actualTopRoute = newRoute.settings.name ?? _popupFallbackName(newRoute);
+    }
     if (isMonitorRoute(newRoute)) return;
     final oldName = oldRoute is PageRoute ? oldRoute.settings.name : null;
     final newName = newRoute is PageRoute ? newRoute.settings.name : null;
@@ -473,7 +491,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
     if (initialNewName != null &&
         initialNewName.isNotEmpty &&
-        initialNewName != '/MonitorDashboardPage') {
+        initialNewName != MonitorConstants.dashboardRoute) {
       currentRoute = initialNewName;
       pageStack.add(initialNewName);
       MonitorController.instance.startSession(initialNewName);
@@ -482,7 +500,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
 
     if (stackOldName != null &&
         initialNewName != null &&
-        initialNewName != '/MonitorDashboardPage') {
+        initialNewName != MonitorConstants.dashboardRoute) {
       MonitorController.instance.logRouteReplace(stackOldName, initialNewName);
     }
   }

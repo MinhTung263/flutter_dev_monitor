@@ -235,7 +235,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     if (isLargeScreen) {
       showDialog(
         context: context,
-        routeSettings: const RouteSettings(name: '/MonitorFilterDialog'),
+        routeSettings: const RouteSettings(name: MonitorConstants.filterDialog),
         barrierColor: Colors.black.withValues(alpha: 0.4),
         builder: (_) => Center(
           child: Container(
@@ -275,7 +275,8 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      routeSettings: const RouteSettings(name: '/MonitorScreenPicker'),
+      routeSettings:
+          const RouteSettings(name: MonitorConstants.screenPickerSheet),
       builder: (_) => _ScreenPickerSheet(
         screens: screens,
         selected: _selectedScreen,
@@ -392,15 +393,17 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
                 color: isAll ? accent : MonitorColors.secondaryText,
               ),
               const SizedBox(width: 6),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 180),
-                child: MonoText(
-                  MonitorController.formatRouteName(_selectedScreen),
-                  11,
-                  color: MonitorColors.primaryText,
-                  weight: FontWeight.bold,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 180),
+                  child: MonoText(
+                    MonitorController.formatRouteName(_selectedScreen),
+                    11,
+                    color: MonitorColors.primaryText,
+                    weight: FontWeight.bold,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
               const SizedBox(width: 4),
@@ -433,7 +436,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
           onPressed: () => Navigator.of(context).push(
             MonitorResponsiveRoute(
               builder: (_) => const MonitorLogsPage(),
-              settings: const RouteSettings(name: '/MonitorLogsPage'),
+              settings: const RouteSettings(name: MonitorConstants.logsPage),
             ),
           ),
         ),
