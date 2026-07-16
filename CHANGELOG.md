@@ -1,3 +1,14 @@
+## 2.4.0
+
+* **Minimize Overlay HUD**: Added ability to tuck or minimize the floating overlay HUD into a small edge handle, persisting the overlay configuration and visibility state across app launches.
+* **Interactive Flow Map & Minimap UX**: Added an interactive flow map with zoom controls, dot grid, minimap navigation, and HTML export capability.
+* **Route Flow Tree Representation**: Enabled tree-based visualization for route navigation flows.
+* **Deduplicate API Logs**: Preserves unique API logs when they have different request payloads.
+* **Isolate Monitor Internal Events**: Prevent monitor-internal screens, bottom sheets (like search and copy actions), and fullscreen flow map from being logged in flow/map by assigning proper `RouteSettings`.
+* **Fix Monitor Error Leaks**: Implemented `actualTopRoute` tracking in `MonitorNavigatorObserver` to safely ignore layout overflows or other UI errors occurring within the monitor itself instead of attributing them to host app screens.
+* **Fix Title Render Overflow**: Wrapped dashboard title in `Flexible` to prevent `RenderFlex` overflow errors when host app screen titles are long.
+* **Performance & UI Polish**: Optimized JSON serialization, tab routing performance, and tablet layout dialog sizes.
+
 ## 2.3.3
 
 * **Auto-Dismiss Virtual Keyboard**: Automatically unfocuses the search text field and dismisses the keyboard when the user taps anywhere outside the search bar on the dashboard.
