@@ -25,7 +25,7 @@ apply plugin: 'kotlin-android'
 
 android {
     namespace 'com.flutter_dev_monitor.vn'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         minSdk 21

@@ -116,4 +116,15 @@ class LocaleKeys {
   static const mapApisCount = MonitorLocaleKey('mapApisCount');
   static const mapVisitsCount = MonitorLocaleKey('mapVisitsCount');
   static const mapRequestsCount = MonitorLocaleKey('mapRequestsCount');
+  static const tabStats = MonitorLocaleKey('tabStats');
+  static const statsTopScreens = MonitorLocaleKey('statsTopScreens');
+  static const statsTopApis = MonitorLocaleKey('statsTopApis');
+  static const statsTopErrors = MonitorLocaleKey('statsTopErrors');
+  static const statsTopSlow = MonitorLocaleKey('statsTopSlow');
+  static const statsNoData = MonitorLocaleKey('statsNoData');
+  static const statsVisits = MonitorLocaleKey('statsVisits');
+  static const statsCalls = MonitorLocaleKey('statsCalls');
+  static const statsErrors = MonitorLocaleKey('statsErrors');
+  static const statsApiTraffic = MonitorLocaleKey('statsApiTraffic');
+  static const statsErrorDistribution = MonitorLocaleKey('statsErrorDistribution');
 }

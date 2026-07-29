@@ -183,5 +183,167 @@
   "diffRequestsLabel": {
     "en": "diff",
     "vi": "khác"
+  },
+  "mapNoApiRequests": {
+    "en": "No API requests captured on this screen.",
+    "vi": "Không có log API nào trên màn hình này."
+  },
+  "mapNoMatchingApi": {
+    "en": "No matching API requests found.",
+    "vi": "Không tìm thấy API nào khớp với tìm kiếm."
+  },
+  "mapNoFlutterErrors": {
+    "en": "No Flutter errors captured on this screen.",
+    "vi": "Không có lỗi Flutter nào trên màn hình này."
+  },
+  "mapSubject": {
+    "en": "Interactive DevMonitor Flow Map",
+    "vi": "Sơ đồ luồng DevMonitor tương tác"
+  },
+  "mapBack": {
+    "en": "Back",
+    "vi": "Quay lại"
+  },
+  "mapSwitchGrid": {
+    "en": "Switch to Grid Layout",
+    "vi": "Chuyển sang dạng Lưới (Grid)"
+  },
+  "mapSwitchStream": {
+    "en": "Switch to Stream Layout",
+    "vi": "Chuyển sang dạng Luồng (Stream)"
+  },
+  "mapSwitchCircular": {
+    "en": "Switch to Circular Layout",
+    "vi": "Chuyển sang dạng Vòng (Circular)"
+  },
+  "mapSwitchTree": {
+    "en": "Switch to Tree Layout",
+    "vi": "Chuyển sang dạng Cây (Tree)"
+  },
+  "mapRecenterCamera": {
+    "en": "Recenter Camera",
+    "vi": "Đưa camera về trung tâm"
+  },
+  "mapSearchScreen": {
+    "en": "Search Screen",
+    "vi": "Tìm kiếm màn hình"
+  },
+  "mapExportWeb": {
+    "en": "Export Interactive Web Map",
+    "vi": "Xuất sơ đồ ra Web tương tác"
+  },
+  "mapHideGrid": {
+    "en": "Hide Background Grid",
+    "vi": "Ẩn lưới nền"
+  },
+  "mapShowGrid": {
+    "en": "Show Background Grid",
+    "vi": "Hiện lưới nền"
+  },
+  "mapResetLayoutZoom": {
+    "en": "Reset Layout & Zoom",
+    "vi": "Đặt lại bố cục & Thu phóng"
+  },
+  "mapExitFullScreen": {
+    "en": "Exit Full Screen",
+    "vi": "Thoát toàn màn hình"
+  },
+  "mapFullScreen": {
+    "en": "Full Screen Preview",
+    "vi": "Xem toàn màn hình"
+  },
+  "mapZoomOut": {
+    "en": "Zoom Out",
+    "vi": "Thu nhỏ"
+  },
+  "mapZoomIn": {
+    "en": "Zoom In",
+    "vi": "Phóng to"
+  },
+  "mapSearchTitle": {
+    "en": "Search Screen",
+    "vi": "Tìm kiếm màn hình"
+  },
+  "mapSearchHint": {
+    "en": "Enter screen name or route...",
+    "vi": "Nhập tên màn hình hoặc route..."
+  },
+  "mapSearchNotFound": {
+    "en": "No matching screen found",
+    "vi": "Không tìm thấy màn hình phù hợp"
+  },
+  "mapApisCount": {
+    "en": "APIs ({filtered}/{total})",
+    "vi": "APIs ({filtered}/{total})"
+  },
+  "mapVisitsCount": {
+    "en": "{count} visits",
+    "vi": "{count} lượt vào"
+  },
+  "mapRequestsCount": {
+    "en": "{count} requests",
+    "vi": "{count} requests"
+  },
+  "tabStats": {
+    "en": "STATS",
+    "vi": "THỐNG KÊ"
+  },
+  "statsTopScreens": {
+    "en": "Top Screens (72h)",
+    "vi": "Màn hình mở nhiều (72h)"
+  },
+  "statsTopApis": {
+    "en": "Top Called APIs (72h)",
+    "vi": "API gọi nhiều nhất (72h)"
+  },
+  "statsTopErrors": {
+    "en": "Top Error Screens (72h)",
+    "vi": "Màn hình hay lỗi (72h)"
+  },
+  "statsTopSlow": {
+    "en": "Top Slowest APIs (72h)",
+    "vi": "API phản hồi chậm (72h)"
+  },
+  "statsNoData": {
+    "en": "No statistics data in the last 72h",
+    "vi": "Chưa có dữ liệu thống kê trong 72h qua"
+  },
+  "statsVisits": {
+    "en": "{count} visits",
+    "vi": "{count} lượt",
+    "type": "parameterized",
+    "params": ["int count"],
+    "replace": ["{count}", "count"],
+    "hasOne": true,
+    "enOne": "1 visit",
+    "viOne": "1 lượt"
+  },
+  "statsCalls": {
+    "en": "{count} calls",
+    "vi": "{count} cuộc gọi",
+    "type": "parameterized",
+    "params": ["int count"],
+    "replace": ["{count}", "count"],
+    "hasOne": true,
+    "enOne": "1 call",
+    "viOne": "1 cuộc gọi"
+  },
+  "statsErrors": {
+    "en": "{count} errors",
+    "vi": "{count} lỗi",
+    "type": "parameterized",
+    "params": ["int count"],
+    "replace": ["{count}", "count"],
+    "hasOne": true,
+    "enOne": "1 error",
+    "viOne": "1 lỗi"
+  },
+  "statsApiTraffic": {
+    "en": "API Call Traffic (72h)",
+    "vi": "Tần suất gọi API (72h)"
+  },
+  "statsErrorDistribution": {
+    "en": "Error Distribution (72h)",
+    "vi": "Phân bổ lỗi theo màn hình (72h)"
   }
 }

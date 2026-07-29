@@ -977,7 +977,7 @@ class _FlowMapListState extends State<_FlowMapList>
       final String jsonData = jsonEncode(exportData).replaceAll('</', '<\\/');
       final String htmlContent = _buildHtmlTemplate(jsonData);
 
-      final tempDir = await getTemporaryDirectory();
+      final tempDir = Directory.systemTemp;
       final tempFile = File('${tempDir.path}/interactive_flow_map.html');
       await tempFile.writeAsString(htmlContent);
 

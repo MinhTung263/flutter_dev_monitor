@@ -5,7 +5,6 @@ import 'dart:ui' show PointMode;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'flow_map_html_builder.dart';
@@ -20,6 +19,7 @@ import '../widgets/api_log_tile.dart';
 import '../../../domain/api_log_item.dart';
 import '../../../domain/error_log_item.dart';
 import '../../../domain/route_log_item.dart';
+import '../../../domain/daily_stat_item.dart';
 import '../../controller/route_log_controller.dart';
 import '../widgets/fps_chart.dart';
 import '../widgets/hardware_grid.dart';
@@ -34,6 +34,7 @@ part 'api_log_section.dart';
 part 'error_log_section.dart';
 part 'route_log_section.dart';
 part 'flow_map_section.dart';
+part 'stats_section.dart';
 
 class MonitorDashboardPage extends StatefulWidget {
   /// The route name of the initial screen to view in the dashboard.
@@ -482,7 +483,7 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
   void initState() {
     super.initState();
     _tabController =
-        TabController(length: 3, vsync: this, initialIndex: widget.initialTab);
+        TabController(length: 4, vsync: this, initialIndex: widget.initialTab);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -589,47 +590,70 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
               tabs: [
                 Tab(
                   height: 30,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.map_outlined, size: 12.5),
-                      const SizedBox(width: 5),
-                      const Text('MAP'),
-                      if (flowCount > 0) ...[
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.map_outlined, size: 12.5),
                         const SizedBox(width: 5),
-                        _buildBadge(flowCount, const Color(0xFF57D888)),
+                        const Text('MAP'),
+                        if (flowCount > 0) ...[
+                          const SizedBox(width: 5),
+                          _buildBadge(flowCount, const Color(0xFF57D888)),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
                 Tab(
                   height: 30,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.alt_route_rounded, size: 12.5),
-                      const SizedBox(width: 5),
-                      const Text('FLOW'),
-                      if (flowCount > 0) ...[
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.alt_route_rounded, size: 12.5),
                         const SizedBox(width: 5),
-                        _buildBadge(flowCount, const Color(0xFF57D888)),
+                        const Text('FLOW'),
+                        if (flowCount > 0) ...[
+                          const SizedBox(width: 5),
+                          _buildBadge(flowCount, const Color(0xFF57D888)),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
                 Tab(
                   height: 30,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.bug_report_outlined, size: 12.5),
-                      const SizedBox(width: 5),
-                      const Text('ERRORS'),
-                      if (errorCount > 0) ...[
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.bug_report_outlined, size: 12.5),
                         const SizedBox(width: 5),
-                        _buildBadge(errorCount, MonitorColors.statusError),
+                        const Text('ERRORS'),
+                        if (errorCount > 0) ...[
+                          const SizedBox(width: 5),
+                          _buildBadge(errorCount, MonitorColors.statusError),
+                        ],
                       ],
-                    ],
+                    ),
+                  ),
+                ),
+                Tab(
+                  height: 30,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.bar_chart_rounded, size: 12.5),
+                        const SizedBox(width: 5),
+                        Text(LocaleKeys.tabStats.tr),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -643,8 +667,10 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
             onPressed: () {
               if (_tabController.index == 0 || _tabController.index == 1) {
                 _ctrl.clearFlow();
-              } else {
+              } else if (_tabController.index == 2) {
                 _ctrl.clearErrors();
+              } else if (_tabController.index == 3) {
+                _ctrl.clearDailyStats();
               }
             },
           ),
@@ -663,6 +689,7 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
           flutterErrors.isEmpty
               ? const _EmptyErrorState()
               : const _ErrorFlowLogList(),
+          const _StatsSection(),
         ],
       ),
     );

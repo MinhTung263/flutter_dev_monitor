@@ -9,6 +9,8 @@ import '../../data/hardware_datasource.dart';
 import '../../domain/api_log_item.dart';
 import '../../domain/error_log_item.dart';
 import '../../domain/route_log_item.dart';
+import '../../domain/daily_stat_item.dart';
+import '../../data/daily_stats_storage.dart';
 import '../navigation/monitor_navigator_observer.dart';
 import 'api_log_controller.dart';
 import 'error_log_controller.dart';
@@ -28,6 +30,7 @@ class MonitorController extends ChangeNotifier {
   static MonitorController get instance => _instance ??= MonitorController._();
 
   final _apiLog = ApiLogController();
+  final _statsStorage = DailyStatsStorage();
   final _fps = FpsController();
   final _hardware = HardwareController();
   final _errorLog = ErrorLogController();
@@ -168,8 +171,23 @@ class MonitorController extends ChangeNotifier {
   List<RouteLogItem> get routeLogs => _routeLog.logs;
   int get routeLogCount => _routeLog.count;
 
+  // ── Expose daily stats ────────────────────────────────────────────────
+
+  /// Fetches daily statistics from the rolling persistent storage.
+  Future<List<DailyStatItem>> getDailyStats() => _statsStorage.loadAndPrune();
+
+  /// Clears the daily statistics persistent storage.
+  Future<void> clearDailyStats() => _statsStorage.clearAll();
+
   void logRoutePush(String route, String? from, {String routeType = 'page'}) {
     _routeLog.logPush(route, from, routeType: routeType);
+    if (routeType == 'page') {
+      _statsStorage.saveItem(DailyStatItem(
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        type: 'route',
+        route: route,
+      ));
+    }
     notifyListeners();
   }
 
@@ -181,6 +199,13 @@ class MonitorController extends ChangeNotifier {
   void logRouteReplace(String oldRoute, String newRoute,
       {String routeType = 'page'}) {
     _routeLog.logReplace(oldRoute, newRoute, routeType: routeType);
+    if (routeType == 'page') {
+      _statsStorage.saveItem(DailyStatItem(
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        type: 'route',
+        route: newRoute,
+      ));
+    }
     notifyListeners();
   }
 
@@ -241,14 +266,21 @@ class MonitorController extends ChangeNotifier {
         final infoStr = details.toString();
         if (!_shouldIgnoreError(exceptionStr, stackStr, infoStr)) {
           _alertsDismissed = false;
+          final errorRoute = MonitorNavigatorObserver.currentRoute.isEmpty
+              ? MonitorConstants.unknownRoute
+              : MonitorNavigatorObserver.currentRoute;
           _errorLog.addError(
             exceptionStr,
             stackStr,
             ErrorLogItem.typeFlutter,
-            MonitorNavigatorObserver.currentRoute.isEmpty
-                ? MonitorConstants.unknownRoute
-                : MonitorNavigatorObserver.currentRoute,
+            errorRoute,
           );
+          _statsStorage.saveItem(DailyStatItem(
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            type: 'error',
+            route: errorRoute,
+            error: exceptionStr,
+          ));
           if (!_disposed) {
             scheduleMicrotask(() {
               if (!_disposed) {
@@ -274,14 +306,21 @@ class MonitorController extends ChangeNotifier {
         final stackStr = stack.toString();
         if (!_shouldIgnoreError(exceptionStr, stackStr)) {
           _alertsDismissed = false;
+          final errorRoute = MonitorNavigatorObserver.currentRoute.isEmpty
+              ? MonitorConstants.unknownRoute
+              : MonitorNavigatorObserver.currentRoute;
           _errorLog.addError(
             exceptionStr,
             stackStr,
             ErrorLogItem.typeDart,
-            MonitorNavigatorObserver.currentRoute.isEmpty
-                ? MonitorConstants.unknownRoute
-                : MonitorNavigatorObserver.currentRoute,
+            errorRoute,
           );
+          _statsStorage.saveItem(DailyStatItem(
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+            type: 'error',
+            route: errorRoute,
+            error: exceptionStr,
+          ));
           if (!_disposed) {
             scheduleMicrotask(() {
               if (!_disposed) {
@@ -398,6 +437,17 @@ class MonitorController extends ChangeNotifier {
     }
 
     _apiLog.addLog(item, screen, popupSuffix);
+
+    _statsStorage.saveItem(DailyStatItem(
+      timestamp: item.timestamp.millisecondsSinceEpoch,
+      type: 'api',
+      route: screen,
+      url: item.url,
+      method: item.method,
+      duration: item.duration,
+      status: item.statusCode,
+    ));
+
     notifyListeners();
   }
 
@@ -420,6 +470,7 @@ class MonitorController extends ChangeNotifier {
     _routeLog.clearAll();
     _visitedScreens.clear();
     _alertsDismissed = false;
+    _statsStorage.clearAll();
     notifyListeners();
   }
 
