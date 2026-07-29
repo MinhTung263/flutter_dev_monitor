@@ -14,6 +14,16 @@ An in-app developer monitor for Flutter. Tracks API calls, FPS, RAM, and disk us
 - **Route log** — records every push / pop / replace with timestamp
 - **Screen-aware** — data is scoped per route; up to 50 screens tracked (LRU eviction)
 
+## Screenshots
+
+| DevMonitor Lab & Overlay | Performance Console |
+| :---: | :---: |
+| <img src="screenshots/dev_monitor_lab.png" width="350"/> | <img src="screenshots/performance_console.png" width="350"/> |
+
+| Flow Trace Timeline | Interactive Route Map | Stats & Analytics |
+| :---: | :---: | :---: |
+| <img src="screenshots/log_flow_timeline.png" width="240"/> | <img src="screenshots/log_map_graph.png" width="240"/> | <img src="screenshots/log_stats_analytics.png" width="240"/> |
+
 ## Getting started
 
 Add the package to your `pubspec.yaml`:

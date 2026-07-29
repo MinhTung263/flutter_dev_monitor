@@ -1,3 +1,7 @@
+## 2.4.1
+
+* **Dashboard & Metric UX Refinements**: Polish performance console views, flow trace timeline, route map visualization, and analytics dashboard layout.
+
 ## 2.4.0
 
 * **Minimize Overlay HUD**: Added ability to tuck or minimize the floating overlay HUD into a small edge handle, persisting the overlay configuration and visibility state across app launches.
