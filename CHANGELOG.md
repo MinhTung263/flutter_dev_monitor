@@ -1,4 +1,4 @@
-## 2.4.1
+## 2.4.2
 
 * **Dashboard & Metric UX Refinements**: Polish performance console views, flow trace timeline, route map visualization, and analytics dashboard layout.
 
