@@ -1,3 +1,9 @@
+## 2.5.0
+
+* **Overlay Configuration Options**: Added `enableSnapToEdge`, `tuckedByDefault`, and `alwaysHideToEdge` configuration options to `DevMonitor.builder()`.
+* **Compact Badge UI & Device/OS Display**: Enhanced `FpsOverlayPillBadge` to display device model and indented OS version sub-line with inline `WidgetSpan` icon alignment.
+* **Fix iOS Bundle ID Auto-Signing**: Updated package identifier format to `com.flutterdevmonitor.vn` (removing underscores) for seamless Xcode automatic signing on Apple Developer Portal.
+
 ## 2.4.2
 
 * **Dashboard & Metric UX Refinements**: Polish performance console views, flow trace timeline, route map visualization, and analytics dashboard layout.

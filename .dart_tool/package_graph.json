@@ -5,7 +5,7 @@
   "packages": [
     {
       "name": "flutter_dev_monitor",
-      "version": "2.4.2",
+      "version": "2.5.0",
       "dependencies": [
         "dio",
         "flutter",
