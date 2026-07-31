@@ -18,7 +18,9 @@ class FpsOverlayPillBadge extends StatelessWidget {
           final rawModel = ctrl.deviceModel.isNotEmpty
               ? ctrl.deviceModel
               : (Platform.isIOS ? 'iPhone' : 'Android');
-          final deviceName = rawModel.split(' • ').first;
+          final parts = rawModel.split(' • ');
+          final deviceName = parts.first;
+          final osVersion = parts.length > 1 ? parts.last : '';
 
           final fps = ctrl.currentFps;
           final memMb = ctrl.currentRam;
@@ -90,17 +92,16 @@ class FpsOverlayPillBadge extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── ROW 1: DEVICE NAME ───────────────────────────
+                    // ── ROW 1: DEVICE NAME & OS VERSION ──────────────
                     Text.rich(
                       TextSpan(
                         children: [
                           WidgetSpan(
                             alignment: PlaceholderAlignment.middle,
                             child: Padding(
-                              padding:
-                                  const EdgeInsets.only(right: 1.0, top: 3),
+                              padding: const EdgeInsets.only(right: 2.0),
                               child: Icon(
-                                Icons.smartphone_outlined,
+                                Icons.smartphone_rounded,
                                 size: 8.0,
                                 color: Colors.white.withValues(alpha: 0.50),
                               ),
@@ -120,6 +121,24 @@ class FpsOverlayPillBadge extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (osVersion.isNotEmpty) ...[
+                      const SizedBox(height: 0.5),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 10.0),
+                        child: Text(
+                          osVersion,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            fontSize: 6.2,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: MonitorTextStyle.monoFontFamily,
+                            height: 1.0,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 1.0),
                     // ── ROW 2: FPS + JANK ────────────────────────────
                     Row(

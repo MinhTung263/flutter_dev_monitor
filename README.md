@@ -57,17 +57,27 @@ MaterialApp(
 - `DevMonitor.observer` tracks the active route so API logs are grouped by screen.
 - `DevMonitor.builder()` injects the draggable FPS/RAM overlay automatically.
 
-#### Overlay visibility
+#### Overlay configuration options
 
-By default the overlay is always visible. Pass `showOverlay: false` to start hidden — useful for production builds where you only want the overlay on demand:
+Customize overlay behavior by passing parameters to `DevMonitor.builder()`:
 
 ```dart
-// Always visible (default):
+// Default configuration:
 builder: DevMonitor.builder(),
 
-// Hidden until toggled (e.g. release / QA builds):
-builder: DevMonitor.builder(showOverlay: false),
+// Custom options:
+builder: DevMonitor.builder(
+  showOverlay: true,        // Initial visibility (default: true)
+  enableSnapToEdge: true,   // Snap to nearest screen edge on drag release (default: true)
+  tuckedByDefault: false,   // Start initialised as a small side-handle (default: false)
+  alwaysHideToEdge: false,  // Auto-tuck into side-handle on drag release (default: false)
+),
 ```
+
+- **`showOverlay`**: Initial visibility. Set `false` for release/QA builds where overlay should only be shown on demand.
+- **`enableSnapToEdge`**: When `true`, releasing after dragging snaps the badge to the left/right screen edge. Set to `false` for free placement anywhere on screen.
+- **`tuckedByDefault`**: When `true`, overlay starts initialised tucked as a small side-handle on the screen edge.
+- **`alwaysHideToEdge`**: When `true`, overlay automatically tucks into the side handle whenever dragging is released.
 
 Toggle at runtime from anywhere:
 
@@ -221,6 +231,10 @@ final monitorProvider = ChangeNotifierProvider((_) => MonitorController.instance
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `showOverlay` | `bool` | `true` | Initial overlay visibility; can be changed at runtime via `showOverlay()`/`hideOverlay()` |
+| `expandedByDefault` | `bool` | `false` | Initial overlay expansion mode (expanded panel or pill badge) |
+| `enableSnapToEdge` | `bool` | `true` | When `true`, automatically snaps overlay to nearest screen edge on drag release |
+| `tuckedByDefault` | `bool` | `false` | When `true`, initializes overlay hidden as a small handle at the screen edge |
+| `alwaysHideToEdge` | `bool` | `false` | When `true`, automatically tucks into the side handle every time drag is released |
 
 ### `DevMonitor.tapToToggle()` parameters
 

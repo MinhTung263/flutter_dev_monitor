@@ -23,6 +23,9 @@ class FpsOverlay extends StatefulWidget {
   final Widget child;
   final bool isShowing;
   final bool expandedByDefault;
+  final bool enableSnapToEdge;
+  final bool tuckedByDefault;
+  final bool alwaysHideToEdge;
   final VoidCallback? onHide;
 
   const FpsOverlay({
@@ -30,6 +33,9 @@ class FpsOverlay extends StatefulWidget {
     required this.child,
     this.isShowing = true,
     this.expandedByDefault = false,
+    this.enableSnapToEdge = true,
+    this.tuckedByDefault = false,
+    this.alwaysHideToEdge = false,
     this.onHide,
   });
 
@@ -226,6 +232,9 @@ class _FpsOverlayState extends State<FpsOverlay>
           // Let initialization defer so it doesn't trigger build locks
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _overlayCtrl.initializePosition(top, left);
+            if (widget.tuckedByDefault || widget.alwaysHideToEdge) {
+              _overlayCtrl.tuck(false, size.width, 18.0);
+            }
           });
         }
 
@@ -366,17 +375,21 @@ class _FpsOverlayState extends State<FpsOverlay>
                             return;
                           }
 
-                          // Only tuck if dragged intentionally deep into the edge (at least 25% offscreen)
-                          if (currentLeft < -w * 0.25) {
+                          if (widget.alwaysHideToEdge) {
+                            final isLeft = (currentLeft + w / 2) < sw / 2;
+                            _overlayCtrl.tuck(isLeft, sw, 18.0);
+                          } else if (currentLeft < -w * 0.25) {
                             _overlayCtrl.tuck(true, sw, 18.0);
                           } else if (currentLeft + w > sw + w * 0.25) {
                             _overlayCtrl.tuck(false, sw, 18.0);
-                          } else {
+                          } else if (widget.enableSnapToEdge) {
                             final center = currentLeft + w / 2;
                             final double snapLeft = center < sw / 2
                                 ? OverlayLayout.edgeMargin
                                 : sw - w - OverlayLayout.edgeMargin;
                             _overlayCtrl.finalizePosition(currentTop, snapLeft);
+                          } else {
+                            _overlayCtrl.finalizePosition(currentTop, currentLeft);
                           }
                         },
                         onPanCancel: () {

@@ -52,6 +52,9 @@ abstract final class DevMonitor {
   static TransitionBuilder builder({
     bool showOverlay = true,
     bool expandedByDefault = true,
+    bool enableSnapToEdge = true,
+    bool tuckedByDefault = false,
+    bool alwaysHideToEdge = false,
   }) {
     if (_configuredShowOverlay != showOverlay) {
       _configuredShowOverlay = showOverlay;
@@ -62,6 +65,9 @@ abstract final class DevMonitor {
           builder: (_, enabled, __) => FpsOverlay(
             isShowing: enabled,
             expandedByDefault: expandedByDefault,
+            enableSnapToEdge: enableSnapToEdge,
+            tuckedByDefault: tuckedByDefault,
+            alwaysHideToEdge: alwaysHideToEdge,
             onHide: hideOverlay,
             child: child ?? const SizedBox.shrink(),
           ),
