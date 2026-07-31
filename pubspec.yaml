@@ -34,7 +34,7 @@ flutter:
   plugin:
     platforms:
       android:
-        package: com.flutter_dev_monitor.vn
+        package: com.flutterdevmonitor.vn
         pluginClass: FlutterDevMonitorPlugin
       ios:
         pluginClass: FlutterDevMonitorPlugin

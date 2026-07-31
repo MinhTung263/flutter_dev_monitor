@@ -1,4 +1,4 @@
-group 'com.flutter_dev_monitor.vn'
+group 'com.flutterdevmonitor.vn'
 version '1.0'
 
 buildscript {
@@ -24,7 +24,7 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
 android {
-    namespace 'com.flutter_dev_monitor.vn'
+    namespace 'com.flutterdevmonitor.vn'
     compileSdk 35
 
     defaultConfig {

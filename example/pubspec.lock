@@ -164,7 +164,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "2.4.0"
+    version: "2.4.2"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:

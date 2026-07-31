@@ -1,4 +1,4 @@
-package com.flutter_dev_monitor.vn
+package com.flutterdevmonitor.vn
 
 import io.flutter.embedding.android.FlutterActivity
 

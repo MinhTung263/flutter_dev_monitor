@@ -1,49 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../core/monitor_strings.dart';
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 
-class FpsOverlayPillBadge extends StatefulWidget {
+class FpsOverlayPillBadge extends StatelessWidget {
   const FpsOverlayPillBadge({super.key});
-
-  @override
-  State<FpsOverlayPillBadge> createState() => _FpsOverlayPillBadgeState();
-}
-
-class _FpsOverlayPillBadgeState extends State<FpsOverlayPillBadge>
-    with SingleTickerProviderStateMixin {
-  static bool _hintShown = false;
-
-  late final AnimationController _hintCtrl;
-  late final Animation<double> _hintAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _hintCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _hintAnim = CurvedAnimation(parent: _hintCtrl, curve: Curves.easeInOut);
-
-    if (!_hintShown) {
-      _hintShown = true;
-      Future.delayed(const Duration(seconds: 1), () {
-        if (!mounted) return;
-        _hintCtrl.forward().then((_) {
-          Future.delayed(const Duration(milliseconds: 2500), () {
-            if (mounted) _hintCtrl.reverse();
-          });
-        });
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _hintCtrl.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +15,11 @@ class _FpsOverlayPillBadgeState extends State<FpsOverlayPillBadge>
         listenable: MonitorController.instance,
         builder: (context, _) {
           final ctrl = MonitorController.instance;
+          final rawModel = ctrl.deviceModel.isNotEmpty
+              ? ctrl.deviceModel
+              : (Platform.isIOS ? 'iPhone' : 'Android');
+          final deviceName = rawModel.split(' • ').first;
+
           final fps = ctrl.currentFps;
           final memMb = ctrl.currentRam;
           final apiCount = ctrl.currentPhaseApiCount;
@@ -101,10 +68,11 @@ class _FpsOverlayPillBadgeState extends State<FpsOverlayPillBadge>
                 width: OverlayLayout.pillW,
                 height: OverlayLayout.pillH,
                 alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                 decoration: BoxDecoration(
                   color: MonitorColors.overlayBg,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(7),
                   border: Border.all(
                       color: showAlert
                           ? alertColor.withValues(alpha: 0.65)
@@ -122,7 +90,38 @@ class _FpsOverlayPillBadgeState extends State<FpsOverlayPillBadge>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── FPS ──────────────────────────────────────────
+                    // ── ROW 1: DEVICE NAME ───────────────────────────
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.only(right: 1.0, top: 3),
+                              child: Icon(
+                                Icons.smartphone_outlined,
+                                size: 8.0,
+                                color: Colors.white.withValues(alpha: 0.50),
+                              ),
+                            ),
+                          ),
+                          TextSpan(
+                            text: deviceName,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 7.5,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: MonitorTextStyle.monoFontFamily,
+                            ),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 1.0),
+                    // ── ROW 2: FPS + JANK ────────────────────────────
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -136,82 +135,71 @@ class _FpsOverlayPillBadgeState extends State<FpsOverlayPillBadge>
                               color: fpsColor, shape: BoxShape.circle),
                         ),
                         const SizedBox(width: 3.5),
-                        Text(fps.toStringAsFixed(1),
-                            style: TextStyle(
-                                color: fpsColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: MonitorTextStyle.monoFontFamily,
-                                height: 1.1)),
+                        Text(
+                          fps.toStringAsFixed(1),
+                          style: TextStyle(
+                            color: fpsColor,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: MonitorTextStyle.monoFontFamily,
+                            height: 1.0,
+                          ),
+                        ),
                         const SizedBox(width: 1.5),
-                        Text(LocaleKeys.overlayFpsLabel.tr,
-                            style: TextStyle(
-                                color: fpsColor.withValues(alpha: 0.6),
-                                fontSize: 7,
-                                fontFamily: MonitorTextStyle.monoFontFamily,
-                                height: 1.1)),
+                        Text(
+                          LocaleKeys.overlayFpsLabel.tr,
+                          style: TextStyle(
+                            color: fpsColor.withValues(alpha: 0.6),
+                            fontSize: 7,
+                            fontFamily: MonitorTextStyle.monoFontFamily,
+                            height: 1.0,
+                          ),
+                        ),
                         if (jankCount > 0) ...[
-                          const SizedBox(width: 4),
-                          Text('⚡$jankCount',
-                              style: const TextStyle(
-                                  color: MonitorColors.overlayGpu,
-                                  fontSize: 7.5,
-                                  fontWeight: FontWeight.w700,
-                                  fontFamily: MonitorTextStyle.monoFontFamily,
-                                  height: 1.1)),
+                          const SizedBox(width: 3.5),
+                          Text(
+                            '⚡$jankCount',
+                            style: const TextStyle(
+                              color: MonitorColors.overlayGpu,
+                              fontSize: 7.5,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: MonitorTextStyle.monoFontFamily,
+                              height: 1.0,
+                            ),
+                          ),
                         ],
                       ],
                     ),
-                    const SizedBox(height: 1.5),
-                    // ── API + MEM ────────────────────────────────────
+                    const SizedBox(height: 1.0),
+                    // ── ROW 3: API + MEM (Grouped together) ─────────
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(LocaleKeys.overlayApiLabel.tr,
-                            style: lblStyle.copyWith(color: MonitorColors.overlayApi)),
+                            style: lblStyle.copyWith(
+                                color: MonitorColors.overlayApi)),
                         Text('$apiCount',
-                            style: valStyle.copyWith(color: MonitorColors.overlayApi)),
+                            style: valStyle.copyWith(
+                                color: MonitorColors.overlayApi)),
                         const SizedBox(width: 5),
                         Text(LocaleKeys.overlayMemLabel.tr,
-                            style: lblStyle.copyWith(color: MonitorColors.overlayMem)),
+                            style: lblStyle.copyWith(
+                                color: MonitorColors.overlayMem)),
                         Text('${memMb.toStringAsFixed(0)}M',
-                            style: valStyle.copyWith(color: MonitorColors.overlayMem)),
+                            style: valStyle.copyWith(
+                                color: MonitorColors.overlayMem)),
                       ],
                     ),
-                    const SizedBox(height: 1),
-                    // ── NET ──────────────────────────────────────────
+                    const SizedBox(height: 1.0),
+                    // ── ROW 4: NET PING ──────────────────────────────
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(LocaleKeys.overlayNetLabel.tr, style: lblStyle.copyWith(color: pingColor)),
+                        Text(LocaleKeys.overlayNetLabel.tr,
+                            style: lblStyle.copyWith(color: pingColor)),
                         Text(pingMs == null ? '--' : '${pingMs}ms',
                             style: valStyle.copyWith(color: pingColor)),
                       ],
-                    ),
-                    SizeTransition(
-                      sizeFactor: _hintAnim,
-                      axisAlignment: 1,
-                      child: FadeTransition(
-                        opacity: _hintAnim,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.touch_app_outlined,
-                                  size: 8, color: Colors.white54),
-                              const SizedBox(width: 3),
-                              Text(LocaleKeys.overlayHoldToOpen.tr,
-                                  style: const TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 6.5,
-                                    fontFamily: MonitorTextStyle.monoFontFamily,
-                                    height: 1.1,
-                                  )),
-                            ],
-                          ),
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -225,16 +213,17 @@ class _FpsOverlayPillBadgeState extends State<FpsOverlayPillBadge>
                     height: 14,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                       color: alertColor,
-                       shape: BoxShape.circle,
-                       border: Border.all(color: MonitorColors.overlayBg, width: 1.2),
-                       boxShadow: [
-                         BoxShadow(
-                           color: alertColor.withValues(alpha: 0.5),
-                           blurRadius: 4,
-                           spreadRadius: 1,
-                         ),
-                       ],
+                      color: alertColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: MonitorColors.overlayBg, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: alertColor.withValues(alpha: 0.5),
+                          blurRadius: 4,
+                          spreadRadius: 1,
+                        ),
+                      ],
                     ),
                     child: const Text(
                       '!',
