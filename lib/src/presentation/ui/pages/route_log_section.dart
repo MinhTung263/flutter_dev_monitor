@@ -304,9 +304,9 @@ List<_GitNode> _buildGitNodes(List<RouteLogItem> logs) {
 class _GitLanePainter extends CustomPainter {
   final _GitNode node;
 
-  static const double laneW = 14.0;
-  static const double dotR = 4.5;
-  static const double lineW = 1.8;
+  static const double laneW = 9.0;
+  static const double dotR = 3.0;
+  static const double lineW = 1.3;
 
   // Same palette as popular git GUIs: blue → green → orange → purple → …
   static const List<Color> _palette = [
@@ -384,15 +384,40 @@ class _GitLanePainter extends CustomPainter {
 
     // ── 7. Dot ────────────────────────────────────────────────────────
     final bg = MonitorColors.pageBackground;
-    // Dark ring so dot is legible over lane lines
-    canvas.drawCircle(
-        Offset(dotX, midY), dotR + 1.5, Paint()..color = bg);
-    // Filled dot
-    canvas.drawCircle(Offset(dotX, midY), dotR, Paint()..color = _c(node.lane));
-    // POP dots are hollow (ring only)
-    if (node.item is RouteLogItem && (node.item as RouteLogItem).event == RouteLogItem.eventPop) {
+    final item = node.item;
+
+    if (item is ApiLogItem) {
+      final isSuccess = item.isSuccess;
+      final isSlow = item.isSlow;
+      final Color dotColor = !isSuccess
+          ? MonitorColors.statusError
+          : (isSlow ? MonitorColors.statusSlow : _c(node.lane));
+      // Outer ring
+      canvas.drawCircle(Offset(dotX, midY), 2.8, Paint()..color = bg);
+      // Inner dot
+      canvas.drawCircle(Offset(dotX, midY), 2.0, Paint()..color = dotColor);
+      if (!isSuccess) {
+        canvas.drawCircle(Offset(dotX, midY), 0.8, Paint()..color = bg);
+      }
+    } else if (item is ErrorLogItem) {
+      final Color errColor = MonitorColors.statusError;
+      // Alert glow
       canvas.drawCircle(
-          Offset(dotX, midY), dotR - 2.0, Paint()..color = bg);
+          Offset(dotX, midY), 3.8, Paint()..color = errColor.withValues(alpha: 0.25));
+      canvas.drawCircle(Offset(dotX, midY), 2.8, Paint()..color = bg);
+      canvas.drawCircle(Offset(dotX, midY), 2.0, Paint()..color = errColor);
+    } else {
+      // Dark ring so dot is legible over lane lines
+      canvas.drawCircle(
+          Offset(dotX, midY), dotR + 1.2, Paint()..color = bg);
+      // Filled dot
+      canvas.drawCircle(Offset(dotX, midY), dotR, Paint()..color = _c(node.lane));
+      // POP dots are hollow (ring only)
+      if (node.item is RouteLogItem &&
+          (node.item as RouteLogItem).event == RouteLogItem.eventPop) {
+        canvas.drawCircle(
+            Offset(dotX, midY), dotR - 1.4, Paint()..color = bg);
+      }
     }
   }
 
@@ -445,7 +470,7 @@ class _RouteTreeView extends StatelessWidget {
 
     final displayNodes = oldestFirst ? finalNodes.reversed.toList() : finalNodes;
     final maxLane = finalNodes.fold(0, (m, n) => math.max(m, n.maxLane));
-    final graphW = (maxLane + 1) * _GitLanePainter.laneW + 10.0;
+    final graphW = (maxLane + 1) * _GitLanePainter.laneW + 4.0;
     final totalSteps = finalNodes.length;
 
     final activeIndex = needVirtualCurrent
@@ -494,13 +519,11 @@ class _GitRouteInfo extends StatelessWidget {
   final bool isCurrent;
   final int stepNum; // chronological step number (newest = highest)
   final bool compact;
-  final bool isErrorTrace;
   const _GitRouteInfo({
     required this.node,
     required this.isCurrent,
     required this.stepNum,
     this.compact = false,
-    this.isErrorTrace = false,
   });
 
   @override
@@ -531,7 +554,7 @@ class _GitRouteInfo extends StatelessWidget {
         : null;
 
     final laneColor = _GitLanePainter._palette[node.lane % _GitLanePainter._palette.length];
-    final badgeColor = isErrorTrace ? MonitorColors.statusError : MonitorColors.overlayApi;
+    final badgeColor = MonitorColors.overlayApi;
 
     return Container(
       margin: EdgeInsets.only(
@@ -629,13 +652,13 @@ class _GitRouteInfo extends StatelessWidget {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          isErrorTrace ? Icons.bug_report_outlined : Icons.api_outlined,
+                                          Icons.api_outlined,
                                           size: 8,
                                           color: badgeColor,
                                         ),
                                         const SizedBox(width: 2.5),
                                         MonoText(
-                                          isErrorTrace ? '${node.apiCount}' : '${node.apiCount} • ${fmtDuration(node.apiDurationMs)}',
+                                          '${node.apiCount} • ${fmtDuration(node.apiDurationMs)}',
                                           8,
                                           color: badgeColor,
                                           weight: FontWeight.bold,

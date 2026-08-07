@@ -10,6 +10,7 @@ abstract class MonitorConstants {
   static const String screenApiDetailSheet = '/MonitorScreenApiDetail';
   static const String mapSearchSheet = '/MonitorMapSearchSheet';
   static const String flowMapFullScreen = '/MonitorFlowMapFullScreen';
+  static const String resetConfirmDialog = '/MonitorResetConfirmDialog';
 
   static const String unknownRoute = '/unknown';
   static const String allScreensKey = 'ALL';

@@ -27,6 +27,7 @@ import '../widgets/metrics_bar.dart';
 import '../widgets/monitor_text.dart';
 import '../widgets/ram_chart.dart';
 import '../widgets/responsive_dialog_wrapper.dart';
+import '../widgets/monitor_confirm_dialog.dart';
 
 part 'dashboard_header.dart';
 part 'log_tab_section.dart';
@@ -93,6 +94,27 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
       _searchQuery = '';
     });
     _ctrl.updateDashboardView(screen);
+  }
+
+  Future<void> _showResetConfirmDialog(
+    BuildContext context, {
+    required String message,
+    required VoidCallback onConfirm,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      routeSettings: const RouteSettings(name: MonitorConstants.resetConfirmDialog),
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (ctx) => MonitorConfirmDialog(
+        title: LocaleKeys.resetConfirmTitle.tr,
+        message: message,
+        confirmLabel: LocaleKeys.confirm.tr,
+        cancelLabel: LocaleKeys.cancel.tr,
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      onConfirm();
+    }
   }
 
   List<ApiLogItem> _applyFilter(List<ApiLogItem> logs) {
@@ -454,11 +476,15 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         IconButton(
           icon: Icon(Icons.restart_alt,
               color: MonitorColors.statusError, size: 22),
-          onPressed: () {
-            _ctrl.clearAll();
-            _ctrl.clearOverlayHistory();
-            setState(() => _selectedScreen = MonitorConstants.allScreensKey);
-          },
+          onPressed: () => _showResetConfirmDialog(
+            context,
+            message: LocaleKeys.resetConfirmMessage.tr,
+            onConfirm: () {
+              _ctrl.clearAll();
+              _ctrl.clearOverlayHistory();
+              setState(() => _selectedScreen = MonitorConstants.allScreensKey);
+            },
+          ),
         ),
       ],
     );
@@ -499,6 +525,27 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
 
   void _onUpdate() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _showResetConfirmDialog(
+    BuildContext context, {
+    required String message,
+    required VoidCallback onConfirm,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      routeSettings: const RouteSettings(name: MonitorConstants.resetConfirmDialog),
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (ctx) => MonitorConfirmDialog(
+        title: LocaleKeys.resetConfirmTitle.tr,
+        message: message,
+        confirmLabel: LocaleKeys.confirm.tr,
+        cancelLabel: LocaleKeys.cancel.tr,
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      onConfirm();
+    }
   }
 
   Widget _buildBadge(int count, Color activeColor) {
@@ -665,13 +712,20 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
             icon: Icon(Icons.restart_alt,
                 color: MonitorColors.statusError, size: 22),
             onPressed: () {
-              if (_tabController.index == 0 || _tabController.index == 1) {
-                _ctrl.clearFlow();
-              } else if (_tabController.index == 2) {
-                _ctrl.clearErrors();
-              } else if (_tabController.index == 3) {
-                _ctrl.clearDailyStats();
+              final idx = _tabController.index;
+              String message;
+              VoidCallback action;
+              if (idx == 0 || idx == 1) {
+                message = LocaleKeys.resetFlowConfirmMessage.tr;
+                action = _ctrl.clearFlow;
+              } else if (idx == 2) {
+                message = LocaleKeys.resetErrorsConfirmMessage.tr;
+                action = _ctrl.clearErrors;
+              } else {
+                message = LocaleKeys.resetStatsConfirmMessage.tr;
+                action = _ctrl.clearDailyStats;
               }
+              _showResetConfirmDialog(context, message: message, onConfirm: action);
             },
           ),
         ],
@@ -753,3 +807,5 @@ class _PulseGlowRingState extends State<_PulseGlowRing>
     );
   }
 }
+
+

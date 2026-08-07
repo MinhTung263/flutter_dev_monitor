@@ -311,23 +311,21 @@ class _ApiLogTileState extends State<ApiLogTile> {
     final laneColor = widget.lane != null ? _palette[widget.lane! % _palette.length] : null;
 
     return Container(
-      margin: widget.compact ? const EdgeInsets.only(bottom: 2) : const EdgeInsets.only(bottom: 5),
-      decoration: widget.compact
-          ? null
-          : BoxDecoration(
-              color: MonitorColors.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: log.isSlow
-                    ? MonitorColors.statusSlow.withValues(alpha: 0.4)
-                    : (log.isSuccess
-                        ? MonitorColors.border
-                        : MonitorColors.statusError.withValues(alpha: 0.35)),
-                width: 1.0,
-              ),
-            ),
+      margin: widget.compact ? const EdgeInsets.symmetric(vertical: 2.5) : const EdgeInsets.only(bottom: 5),
+      decoration: BoxDecoration(
+        color: MonitorColors.surface,
+        borderRadius: BorderRadius.circular(widget.compact ? 6 : 8),
+        border: Border.all(
+          color: log.isSlow
+              ? MonitorColors.statusSlow.withValues(alpha: widget.compact ? 0.35 : 0.4)
+              : (log.isSuccess
+                  ? MonitorColors.border.withValues(alpha: widget.compact ? 0.45 : 1.0)
+                  : MonitorColors.statusError.withValues(alpha: 0.35)),
+          width: widget.compact ? 0.6 : 1.0,
+        ),
+      ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(widget.compact ? 5.5 : 7),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -550,6 +548,10 @@ class _CompactCollapsedRow extends StatelessWidget {
     final methodColor =
         isGet ? MonitorColors.methodGet : MonitorColors.methodPost;
 
+    final ts = log.timestamp;
+    final timeStr =
+        '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
+
     // Shorten URL path
     String displayUrl = log.url;
     if (!showFullUrl) {
@@ -566,110 +568,116 @@ class _CompactCollapsedRow extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Method Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: methodColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                    color: methodColor.withValues(alpha: 0.3), width: 0.5),
-              ),
-              child: LabelText(
-                log.method,
-                methodColor,
-                size: 7.5,
-                spacing: 0.2,
-              ),
-            ),
-            const SizedBox(width: 6),
-            // URL Path
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  MonoText(
-                    displayUrl,
-                    10,
-                    color: MonitorColors.primaryText,
-                    maxLines: showFullUrl ? null : 1,
-                    overflow: showFullUrl ? null : TextOverflow.ellipsis,
+            // Row 1: Method Badge + Status Code + Duration + Multi-call count + Spacer + Timestamp + Detail button + Expand
+            Row(
+              children: [
+                // Method Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: methodColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(3),
+                    border: Border.all(
+                        color: methodColor.withValues(alpha: 0.3), width: 0.5),
                   ),
-                  if (compactPayloadRow != null) ...[
-                    const SizedBox(height: 2),
-                    compactPayloadRow,
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            // Duration
-            MonoText(
-              '${log.duration}ms',
-              9,
-              color: log.duration > 800
-                  ? MonitorColors.statusSlow
-                  : MonitorColors.secondaryText,
-            ),
-            const SizedBox(width: 6),
-            // Status Code
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: MonoText(
-                '${log.statusCode}',
-                8.5,
-                color: statusColor,
-                weight: FontWeight.bold,
-              ),
-            ),
-            if (log.hasMultipleCalls) ...[
-              const SizedBox(width: 4),
-              _CallCountBadge(count: log.callCount),
-            ],
-            const SizedBox(width: 6),
-            InkWell(
-              borderRadius: BorderRadius.circular(13),
-              onTap: () {
-                Navigator.of(context).push(
-                  MonitorResponsiveRoute(
-                    builder: (_) => MonitorApiDetailPage(log: log),
-                    settings: const RouteSettings(name: MonitorConstants.apiDetailPage),
-                  ),
-                );
-              },
-              child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: MonitorColors.expandedDetailBg,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: MonitorColors.border,
-                    width: 0.5,
+                  child: LabelText(
+                    log.method,
+                    methodColor,
+                    size: 7.5,
+                    spacing: 0.2,
                   ),
                 ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.open_in_new_rounded,
-                  color: MonitorColors.primaryText,
+                const SizedBox(width: 5),
+                // Status Code
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: MonoText(
+                    '${log.statusCode}',
+                    8.5,
+                    color: statusColor,
+                    weight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                // Duration
+                MonoText(
+                  '${log.duration}ms',
+                  8.5,
+                  color: log.duration > 800
+                      ? MonitorColors.statusSlow
+                      : MonitorColors.secondaryText,
+                ),
+                if (log.hasMultipleCalls) ...[
+                  const SizedBox(width: 4),
+                  _CallCountBadge(count: log.callCount),
+                ],
+                const Spacer(),
+                MonoText(
+                  timeStr,
+                  8.5,
+                  color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+                ),
+                const SizedBox(width: 6),
+                InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MonitorResponsiveRoute(
+                        builder: (_) => MonitorApiDetailPage(log: log),
+                        settings: const RouteSettings(name: MonitorConstants.apiDetailPage),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: MonitorColors.expandedDetailBg,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: MonitorColors.border,
+                        width: 0.5,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.open_in_new_rounded,
+                      color: MonitorColors.primaryText,
+                      size: 11,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Icon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  color: MonitorColors.secondaryText,
                   size: 13,
                 ),
-              ),
+              ],
             ),
-            const SizedBox(width: 4),
-            Icon(
-              expanded ? Icons.expand_less : Icons.expand_more,
-              color: MonitorColors.secondaryText,
-              size: 14,
+            const SizedBox(height: 4),
+            // Row 2: Full-width URL
+            MonoText(
+              displayUrl,
+              10.5,
+              color: MonitorColors.primaryText,
+              weight: FontWeight.w500,
+              maxLines: showFullUrl || expanded ? null : 2,
+              overflow: showFullUrl || expanded ? null : TextOverflow.ellipsis,
             ),
+            if (compactPayloadRow != null) ...[
+              const SizedBox(height: 3),
+              compactPayloadRow,
+            ],
           ],
         ),
       ),

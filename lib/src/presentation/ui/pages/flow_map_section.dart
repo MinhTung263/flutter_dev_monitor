@@ -15,12 +15,22 @@ enum MapLayoutMode {
   circular,
 }
 
+enum MapPathMode {
+  curved,
+  orthogonal,
+  arc,
+}
+
 class _FlowMapListState extends State<_FlowMapList>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final TransformationController _transformationController =
       TransformationController();
   late AnimationController _animationController;
+  late AnimationController _pulseAnimationController;
   Animation<Matrix4>? _mapAnimation;
+
+  MapPathMode _pathMode = MapPathMode.curved;
+  String? _focusedRoute;
 
   @override
   void initState() {
@@ -34,17 +44,10 @@ class _FlowMapListState extends State<_FlowMapList>
         _transformationController.value = _mapAnimation!.value;
       }
     });
-    _transformationController.addListener(_onTransformationChanged);
-  }
-
-  void _onTransformationChanged() {
-    if (mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {});
-        }
-      });
-    }
+    _pulseAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat();
   }
 
   void _animateToMatrix(Matrix4 targetMatrix) {
@@ -85,6 +88,8 @@ class _FlowMapListState extends State<_FlowMapList>
   double _lastCanvasWidth = 0.0;
   bool _showBgGrid = true;
   final Set<String> _draggedRoutes = {};
+
+
 
   List<_ScreenVisit> _buildScreenVisits() {
     final routeLogs =
@@ -785,11 +790,34 @@ class _FlowMapListState extends State<_FlowMapList>
     });
   }
 
-  void _recenterCamera() {
+  Future<void> _confirmAndResetZoom(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      routeSettings: const RouteSettings(name: MonitorConstants.resetConfirmDialog),
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (ctx) => MonitorConfirmDialog(
+        title: LocaleKeys.resetConfirmTitle.tr,
+        message: LocaleKeys.resetLayoutConfirmMessage.tr,
+        confirmLabel: LocaleKeys.confirm.tr,
+        cancelLabel: LocaleKeys.cancel.tr,
+      ),
+    );
+    if (confirmed == true && mounted) {
+      _resetZoom();
+    }
+  }
+
+  void _recenterCamera({bool animate = true}) {
+    if (_lastViewportWidth <= 0 || _lastViewportHeight <= 0) return;
+
     if (_activePositions.isEmpty) {
       final initialTx = (_lastViewportWidth - _lastCanvasWidth) / 2;
       final targetMatrix = Matrix4.translationValues(initialTx, 0.0, 0.0);
-      _animateToMatrix(targetMatrix);
+      if (animate) {
+        _animateToMatrix(targetMatrix);
+      } else {
+        _transformationController.value = targetMatrix;
+      }
       return;
     }
 
@@ -805,11 +833,12 @@ class _FlowMapListState extends State<_FlowMapList>
       if (pos.dy > maxY) maxY = pos.dy;
     }
 
-    const double cardWidth = 180.0;
-    const double cardHeight = 65.0;
+    const double cardWidth = 175.0;
+    const double cardHeight = 80.0;
 
-    final double graphWidth = (maxX - minX) + cardWidth + 80.0;
-    final double graphHeight = (maxY - minY) + cardHeight + 80.0;
+    const double margin = 28.0;
+    final double graphWidth = (maxX - minX) + cardWidth + margin * 2;
+    final double graphHeight = (maxY - minY) + cardHeight + margin * 2;
 
     final double graphCenterX = (minX + maxX) / 2;
     final double graphCenterY = (minY + maxY) / 2;
@@ -818,7 +847,11 @@ class _FlowMapListState extends State<_FlowMapList>
     final double scaleY = _lastViewportHeight / graphHeight;
 
     double fitScale = math.min(scaleX, scaleY);
-    fitScale = fitScale.clamp(0.7, 1.0);
+    if (fitScale.isNaN || fitScale.isInfinite || fitScale <= 0.0) {
+      fitScale = 1.0;
+    } else {
+      fitScale = fitScale.clamp(0.2, 1.0);
+    }
 
     final double tx = (_lastViewportWidth / 2) - (graphCenterX * fitScale);
     final double ty = (_lastViewportHeight / 2) - (graphCenterY * fitScale);
@@ -829,7 +862,11 @@ class _FlowMapListState extends State<_FlowMapList>
       ..setEntry(0, 3, tx)
       ..setEntry(1, 3, ty);
 
-    _animateToMatrix(targetMatrix);
+    if (animate) {
+      _animateToMatrix(targetMatrix);
+    } else {
+      _transformationController.value = targetMatrix;
+    }
   }
 
   void _focusOnNode(String route) {
@@ -1014,7 +1051,7 @@ class _FlowMapListState extends State<_FlowMapList>
 
   @override
   void dispose() {
-    _transformationController.removeListener(_onTransformationChanged);
+    _pulseAnimationController.dispose();
     _animationController.dispose();
     _transformationController.dispose();
     super.dispose();
@@ -1035,84 +1072,20 @@ class _FlowMapListState extends State<_FlowMapList>
       builder: (context, constraints) {
         final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
 
-        final double spacingY = 220.0;
-        double startY = 80.0;
+        const double cardWidth = 175.0;
+        const double cardHeight = 80.0;
 
-        const double cardWidth = 180.0;
-        const double cardHeight = 90.0;
-
-        int maxLayerSize = 1;
-        int calculatedMaxLevel = 0;
-        final Map<String, int> levels = {};
-
-        if (_layoutMode == MapLayoutMode.tree) {
-          final List<String> queue = [];
-          final Set<String> visited = {};
-
-          if (uniqueRoutes.isNotEmpty) {
-            final root = uniqueRoutes.first;
-            levels[root] = 0;
-            queue.add(root);
-            visited.add(root);
-          }
-
-          while (queue.isNotEmpty) {
-            final parent = queue.removeAt(0);
-            final parentLevel = levels[parent] ?? 0;
-
-            for (final t in transitions) {
-              if (t.from == parent) {
-                final child = t.to;
-                if (!visited.contains(child)) {
-                  levels[child] = parentLevel + 1;
-                  queue.add(child);
-                  visited.add(child);
-                }
-              }
-            }
-          }
-
-          int maxLvl = 0;
-          for (final lvl in levels.values) {
-            if (lvl > maxLvl) maxLvl = lvl;
-          }
-          for (final route in uniqueRoutes) {
-            if (!levels.containsKey(route)) {
-              levels[route] = maxLvl + 1;
-            }
-          }
-
-          for (final lvl in levels.values) {
-            if (lvl > calculatedMaxLevel) calculatedMaxLevel = lvl;
-          }
-
-          final Map<int, int> layerCounts = {};
-          for (final route in uniqueRoutes) {
-            final lvl = levels[route] ?? 0;
-            layerCounts[lvl] = (layerCounts[lvl] ?? 0) + 1;
-          }
-
-          for (final count in layerCounts.values) {
-            if (count > maxLayerSize) maxLayerSize = count;
-          }
-        }
-
-        final double dynamicWidthFactor = maxLayerSize * 260.0 + 400.0;
-        final canvasWidth = math.max(3200.0,
-            math.max(viewportSize.width * 2.0, dynamicWidthFactor + 1600.0));
-        double canvasHeight = 2400.0;
-        final double centerX = canvasWidth / 2;
+        const double baseCenterX = 1200.0;
+        const double baseStartY = 600.0;
 
         if (_layoutMode == MapLayoutMode.grid) {
-          final int columns = 2;
-          final double spacingX = 320.0;
+          final int columns = uniqueRoutes.length <= 1 ? 1 : 2;
+          const double gridGapX = 48.0;
+          const double gridGapY = 60.0;
+          final double spacingX = cardWidth + gridGapX;
+          final double rowSpacingY = cardHeight + gridGapY;
           final double gridTotalWidth = (columns - 1) * spacingX;
-          final double gridStartX = centerX - gridTotalWidth / 2;
-
-          final int rows = (uniqueRoutes.length + columns - 1) ~/ columns;
-          final double actualHeight = math.max(1, rows) * spacingY;
-          canvasHeight = math.max(2400.0, actualHeight + 600.0);
-          startY = (canvasHeight - actualHeight) / 2;
+          final double gridStartX = baseCenterX - gridTotalWidth / 2;
 
           for (int i = 0; i < uniqueRoutes.length; i++) {
             final route = uniqueRoutes[i];
@@ -1120,54 +1093,36 @@ class _FlowMapListState extends State<_FlowMapList>
               final row = i ~/ columns;
               final col = i % columns;
               final x = gridStartX + col * spacingX;
-              final y = startY + row * spacingY;
+              final y = baseStartY + row * rowSpacingY;
               _activePositions[route] = Offset(x, y);
             }
           }
         } else if (_layoutMode == MapLayoutMode.tree) {
-          final double actualHeight = (calculatedMaxLevel + 1) * spacingY;
-          canvasHeight = math.max(2400.0, actualHeight + 600.0);
-          startY = (canvasHeight - actualHeight) / 2;
-
-          final Map<String, List<String>> childrenMap = {};
-          final Set<String> allChildren = {};
-          final Set<String> visited = {};
+          // 1. Build adjacency maps for forward transitions
+          final Map<String, List<String>> forwardAdj = {};
+          final Map<String, List<String>> reverseAdj = {};
+          for (final route in uniqueRoutes) {
+            forwardAdj[route] = [];
+            reverseAdj[route] = [];
+          }
 
           for (final t in transitions) {
-            if (!t.isBack) {
-              if (!visited.contains(t.to) && t.from != t.to) {
-                childrenMap.putIfAbsent(t.from, () => []).add(t.to);
-                allChildren.add(t.to);
-                visited.add(t.to);
+            if (!t.isBack && t.from != t.to) {
+              if (forwardAdj.containsKey(t.from) && forwardAdj.containsKey(t.to)) {
+                if (!forwardAdj[t.from]!.contains(t.to)) {
+                  forwardAdj[t.from]!.add(t.to);
+                }
+                if (!reverseAdj[t.to]!.contains(t.from)) {
+                  reverseAdj[t.to]!.add(t.from);
+                }
               }
             }
           }
 
-          final Map<String, double> subtreeWidths = {};
-          final Set<String> measureVisited = {};
-          double measure(String node) {
-            if (measureVisited.contains(node)) {
-              return cardWidth; // Cycle or DAG prevention
-            }
-            measureVisited.add(node);
-
-            final children = childrenMap[node] ?? [];
-            if (children.isEmpty) {
-              subtreeWidths[node] = cardWidth;
-              return cardWidth;
-            }
-            double totalWidth = 0.0;
-            for (final child in children) {
-              totalWidth += measure(child);
-            }
-            totalWidth += (children.length - 1) * 120.0; // sibling spacing
-            subtreeWidths[node] = math.max(cardWidth, totalWidth);
-            return subtreeWidths[node]!;
-          }
-
+          // 2. Identify root nodes (in-degree == 0 among uniqueRoutes)
           final List<String> roots = [];
           for (final route in uniqueRoutes) {
-            if (!allChildren.contains(route)) {
+            if (reverseAdj[route]!.isEmpty) {
               roots.add(route);
             }
           }
@@ -1175,72 +1130,165 @@ class _FlowMapListState extends State<_FlowMapList>
             roots.add(uniqueRoutes.first);
           }
 
+          // 3. Assign layer levels using BFS starting from roots
+          final Map<String, int> nodeLevels = {};
+          final List<String> bfsQueue = [];
+
           for (final root in roots) {
-            measure(root);
+            nodeLevels[root] = 0;
+            bfsQueue.add(root);
           }
 
-          int maxLvl = 0;
-          final Set<String> layoutVisited = {};
-          void layoutNode(String node, double x, int level) {
-            if (layoutVisited.contains(node)) return;
-            layoutVisited.add(node);
+          final Set<String> bfsVisited = Set.from(roots);
 
-            if (level > maxLvl) maxLvl = level;
-            final double y = startY + level * spacingY;
-            if (!_draggedRoutes.contains(node)) {
-              _activePositions[node] = Offset(x, y);
-            }
+          while (bfsQueue.isNotEmpty) {
+            final current = bfsQueue.removeAt(0);
+            final currentLvl = nodeLevels[current] ?? 0;
 
-            final children = childrenMap[node] ?? [];
-            if (children.isEmpty) return;
-
-            double totalChildrenWidth = 0.0;
-            for (final child in children) {
-              totalChildrenWidth += subtreeWidths[child] ?? cardWidth;
-            }
-            totalChildrenWidth += (children.length - 1) * 120.0;
-
-            double currentX = x - totalChildrenWidth / 2;
-            for (final child in children) {
-              final double childWidth = subtreeWidths[child] ?? cardWidth;
-              final double childCenterX = currentX + childWidth / 2;
-              layoutNode(child, childCenterX, level + 1);
-              currentX += childWidth + 120.0;
+            for (final next in forwardAdj[current] ?? <String>[]) {
+              final newLvl = currentLvl + 1;
+              if (!nodeLevels.containsKey(next) || newLvl > nodeLevels[next]!) {
+                nodeLevels[next] = newLvl;
+              }
+              if (!bfsVisited.contains(next)) {
+                bfsVisited.add(next);
+                bfsQueue.add(next);
+              }
             }
           }
 
-          double totalRootsWidth = 0.0;
-          for (final root in roots) {
-            totalRootsWidth += subtreeWidths[root] ?? cardWidth;
-          }
-          totalRootsWidth += (roots.length - 1) * 200.0;
-
-          double currentRootX = centerX - totalRootsWidth / 2;
-          for (final root in roots) {
-            final double rootWidth = subtreeWidths[root] ?? cardWidth;
-            final double rootCenterX = currentRootX + rootWidth / 2;
-            layoutNode(root, rootCenterX, 0);
-            currentRootX += rootWidth + 200.0;
+          // Any disconnected routes get assigned level 0
+          for (final route in uniqueRoutes) {
+            if (!nodeLevels.containsKey(route)) {
+              nodeLevels[route] = 0;
+            }
           }
 
-          // Fallback for unreachable nodes
-          for (int i = 0; i < uniqueRoutes.length; i++) {
-            final route = uniqueRoutes[i];
-            if (!_activePositions.containsKey(route)) {
+          // Helper for stable pseudo-random jitter
+          double seededRnd(String key, int salt) {
+            int hash = key.hashCode ^ (salt * 0x45d9f3b);
+            hash = ((hash >> 16) ^ hash) * 0x45d9f3b;
+            hash = ((hash >> 16) ^ hash) * 0x45d9f3b;
+            hash = (hash >> 16) ^ hash;
+            return ((hash & 0x7FFFFFFF) % 10000) / 10000.0;
+          }
+
+          // 4. Position nodes organically based on parent tree connections with spacious layout
+          final Map<String, Offset> tempPositions = {};
+
+          // Place roots with ample separation
+          for (int i = 0; i < roots.length; i++) {
+            final r = roots[i];
+            final double ox = (i - (roots.length - 1) / 2.0) * 240.0 + (seededRnd(r, 1) - 0.5) * 35.0;
+            final double oy = (seededRnd(r, 2) - 0.5) * 20.0;
+            tempPositions[r] = Offset(baseCenterX + ox, baseStartY + oy);
+          }
+
+          // Sort routes by level ascending to position parents before children
+          final sortedRoutes = List<String>.from(uniqueRoutes)
+            ..sort((a, b) => (nodeLevels[a] ?? 0).compareTo(nodeLevels[b] ?? 0));
+
+          for (final route in sortedRoutes) {
+            if (tempPositions.containsKey(route)) continue;
+
+            final parents = reverseAdj[route] ?? [];
+            final validParents = parents.where((p) => tempPositions.containsKey(p)).toList();
+
+            if (validParents.isNotEmpty) {
+              final p = validParents.first;
+              final pPos = tempPositions[p]!;
+              final children = forwardAdj[p] ?? [];
+              final sibIdx = math.max(0, children.indexOf(route));
+              final k = math.max(1, children.length);
+
+              const double stepX = 245.0;
+              const double stepY = 155.0;
+              final double fanOutX = (sibIdx - (k - 1) / 2.0) * stepX;
+              final double jitterX = (seededRnd(route, 11) - 0.5) * 45.0;
+              final double jitterY = (seededRnd(route, 22) - 0.5) * 28.0;
+              final double zigZag = k == 1
+                  ? (((nodeLevels[route] ?? 1) % 2 == 1 ? 1.0 : -1.0) * (25.0 + seededRnd(route, 33) * 25.0))
+                  : 0.0;
+
+              tempPositions[route] = Offset(
+                pPos.dx + fanOutX + zigZag + jitterX,
+                pPos.dy + stepY + jitterY,
+              );
+            } else {
+              // Unconnected node - place in organic ring close to center
+              final double angle = seededRnd(route, 41) * 2 * math.pi;
+              final double dist = 210.0 + seededRnd(route, 52) * 80.0;
+              tempPositions[route] = Offset(
+                baseCenterX + dist * math.cos(angle),
+                baseStartY + dist * math.sin(angle),
+              );
+            }
+          }
+
+          // 5. Anti-overlap force relaxation (25 iterations) with larger minimum separation
+          const double minSepX = cardWidth + 48.0;
+          const double minSepY = cardHeight + 42.0;
+
+          for (int iter = 0; iter < 25; iter++) {
+            for (int i = 0; i < uniqueRoutes.length; i++) {
+              final rA = uniqueRoutes[i];
+              final posA = tempPositions[rA] ?? const Offset(baseCenterX, baseStartY);
+              for (int j = i + 1; j < uniqueRoutes.length; j++) {
+                final rB = uniqueRoutes[j];
+                final posB = tempPositions[rB] ?? const Offset(baseCenterX, baseStartY);
+
+                final double dx = posB.dx - posA.dx;
+                final double dy = posB.dy - posA.dy;
+                final double absDx = dx.abs();
+                final double absDy = dy.abs();
+
+                if (absDx < minSepX && absDy < minSepY) {
+                  final double overlapX = minSepX - absDx;
+                  final double overlapY = minSepY - absDy;
+
+                  double pushX = 0;
+                  double pushY = 0;
+                  if (overlapX / minSepX < overlapY / minSepY) {
+                    final double signX = dx == 0 ? (rA.hashCode > rB.hashCode ? 1.0 : -1.0) : dx.sign;
+                    pushX = signX * overlapX * 0.5;
+                  } else {
+                    final double signY = dy == 0 ? (rA.hashCode > rB.hashCode ? 1.0 : -1.0) : dy.sign;
+                    pushY = signY * overlapY * 0.5;
+                  }
+
+                  tempPositions[rA] = Offset(posA.dx - pushX, posA.dy - pushY);
+                  tempPositions[rB] = Offset(posB.dx + pushX, posB.dy + pushY);
+                }
+              }
+            }
+          }
+
+          // 6. Recenter the whole cluster to (baseCenterX, baseStartY)
+          if (tempPositions.isNotEmpty) {
+            double sumX = 0;
+            double sumY = 0;
+            for (final pos in tempPositions.values) {
+              sumX += pos.dx;
+              sumY += pos.dy;
+            }
+            final double avgX = sumX / tempPositions.length;
+            final double avgY = sumY / tempPositions.length;
+            final double shiftX = baseCenterX - avgX;
+            final double shiftY = baseStartY - avgY;
+
+            for (final route in uniqueRoutes) {
               if (!_draggedRoutes.contains(route)) {
-                _activePositions[route] = Offset(
-                  centerX + (i * 200.0) - (uniqueRoutes.length * 100.0),
-                  startY + actualHeight + 200.0,
-                );
+                final raw = tempPositions[route] ?? const Offset(baseCenterX, baseStartY);
+                _activePositions[route] = Offset(raw.dx + shiftX, raw.dy + shiftY);
               }
             }
           }
         } else if (_layoutMode == MapLayoutMode.circular) {
-          final double radius = math.max(250.0, uniqueRoutes.length * 45.0);
-          final double actualHeight = radius * 2;
-          canvasHeight = math.max(2400.0, actualHeight + 600.0);
-          startY = (canvasHeight - actualHeight) / 2;
-          final double centerY = startY + radius;
+          final double calculatedRadius =
+              (uniqueRoutes.length * (cardWidth + 50.0)) / (2 * math.pi);
+          final double radius =
+              math.max(140.0, calculatedRadius).clamp(140.0, 450.0);
+          final double centerY = baseStartY + radius;
 
           final int N = uniqueRoutes.length;
           final double angleStep = N > 0 ? (2 * math.pi) / N : 0.0;
@@ -1250,89 +1298,50 @@ class _FlowMapListState extends State<_FlowMapList>
             if (!_draggedRoutes.contains(route)) {
               final double angle =
                   i * angleStep - (math.pi / 2); // Start at 12 o'clock
-              final double x = centerX + radius * math.cos(angle);
+              final double x = baseCenterX + radius * math.cos(angle);
               final double y = centerY + radius * math.sin(angle);
               _activePositions[route] = Offset(x, y);
             }
           }
         } else {
-          final double actualHeight =
-              math.max(1, uniqueRoutes.length) * spacingY;
-          canvasHeight = math.max(2400.0, actualHeight + 600.0);
-          startY = (canvasHeight - actualHeight) / 2;
+          const double streamGapY = 55.0;
+          final double streamSpacingY = cardHeight + streamGapY;
 
           for (int i = 0; i < uniqueRoutes.length; i++) {
             final route = uniqueRoutes[i];
             if (!_draggedRoutes.contains(route)) {
-              final y = startY + i * spacingY;
-              _activePositions[route] = Offset(centerX, y);
+              final y = baseStartY + i * streamSpacingY;
+              _activePositions[route] = Offset(baseCenterX, y);
             }
           }
         }
+
+        // Bounding box of content
+        double minX = double.infinity;
+        double maxX = -double.infinity;
+        double minY = double.infinity;
+        double maxY = -double.infinity;
+
+        for (final pos in _activePositions.values) {
+          if (pos.dx < minX) minX = pos.dx;
+          if (pos.dx > maxX) maxX = pos.dx;
+          if (pos.dy < minY) minY = pos.dy;
+          if (pos.dy > maxY) maxY = pos.dy;
+        }
+
+        final double graphContentW = (maxX.isFinite && minX.isFinite) ? (maxX - minX + cardWidth) : 400.0;
+        final double graphContentH = (maxY.isFinite && minY.isFinite) ? (maxY - minY + cardHeight) : 400.0;
+
+        final double canvasWidth = math.max(viewportSize.width, graphContentW + 2000.0);
+        final double canvasHeight = math.max(viewportSize.height, graphContentH + 2000.0);
 
         _lastViewportWidth = viewportSize.width;
         _lastViewportHeight = viewportSize.height;
         _lastCanvasWidth = canvasWidth;
 
-        if (!_isInitialMatrixSet) {
-          if (_activePositions.isNotEmpty && viewportSize.width > 50) {
-            _isInitialMatrixSet = true;
-            double minX = double.infinity;
-            double maxX = -double.infinity;
-            double minY = double.infinity;
-            double maxY = -double.infinity;
-
-            for (final pos in _activePositions.values) {
-              if (pos.dx < minX) minX = pos.dx;
-              if (pos.dx > maxX) maxX = pos.dx;
-              if (pos.dy < minY) minY = pos.dy;
-              if (pos.dy > maxY) maxY = pos.dy;
-            }
-
-            const double cardWidth = 180.0;
-            const double cardHeight = 65.0;
-
-            final double graphWidth = (maxX - minX) + cardWidth + 80.0;
-            final double graphHeight = (maxY - minY) + cardHeight + 80.0;
-
-            final double graphCenterX = (minX + maxX) / 2;
-            final double graphCenterY = (minY + maxY) / 2;
-
-            final double scaleX = viewportSize.width / graphWidth;
-            final double scaleY = viewportSize.height / graphHeight;
-
-            double fitScale = math.min(scaleX, scaleY);
-            if (fitScale.isNaN || fitScale.isInfinite || fitScale <= 0.0) {
-              fitScale = 1.0;
-            } else {
-              fitScale = fitScale.clamp(0.7, 1.0);
-            }
-
-            final double tx =
-                (viewportSize.width / 2) - (graphCenterX * fitScale);
-            final double ty =
-                (viewportSize.height / 2) - (graphCenterY * fitScale);
-
-            final targetMatrix = Matrix4.identity()
-              ..setEntry(0, 0, fitScale)
-              ..setEntry(1, 1, fitScale)
-              ..setEntry(0, 3, tx)
-              ..setEntry(1, 3, ty);
-
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                _animateToMatrix(targetMatrix);
-              }
-            });
-          } else {
-            final initialTx = (viewportSize.width - canvasWidth) / 2;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                _animateToMatrix(
-                    Matrix4.translationValues(initialTx, 0.0, 0.0));
-              }
-            });
-          }
+        if (!_isInitialMatrixSet && viewportSize.width > 50) {
+          _isInitialMatrixSet = true;
+          _recenterCamera(animate: false);
         }
 
         final Map<String, List<ApiLogItem>> routeApis = {};
@@ -1397,79 +1406,114 @@ class _FlowMapListState extends State<_FlowMapList>
                   transformationController: _transformationController,
                   constrained: false,
                   minScale: 0.15,
-                  maxScale: 2.0,
+                  maxScale: 2.5,
                   boundaryMargin: const EdgeInsets.all(500.0),
-                  child: Container(
-                    width: canvasWidth,
-                    height: canvasHeight,
-                    color: MonitorColors.pageBackground,
-                    child: Stack(
-                      children: [
-                        if (_showBgGrid)
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _CanvasGridPainter(
-                                canvasWidth: canvasWidth,
-                                canvasHeight: canvasHeight,
-                                isDark: MonitorColors.isDark,
-                              ),
-                            ),
-                          ),
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: _StateGraphPainter(
-                              transitions: transitions,
-                              nodePositions: _activePositions,
-                              cardWidth: cardWidth,
-                              cardHeight: cardHeight,
-                              isDark: MonitorColors.isDark,
-                            ),
-                          ),
-                        ),
-                        for (final route in uniqueRoutes) ...[
-                          if (_activePositions.containsKey(route))
-                            Positioned(
-                              left: _activePositions[route]!.dx - cardWidth / 2,
-                              top: _activePositions[route]!.dy - cardHeight / 2,
-                              child: GestureDetector(
-                                onPanUpdate: (details) {
-                                  setState(() {
-                                    final double currentScale =
-                                        _transformationController.value
-                                            .getMaxScaleOnAxis();
-                                    if (currentScale > 0.05 &&
-                                        currentScale.isFinite) {
-                                      _activePositions[route] =
-                                          _activePositions[route]! +
-                                              details.delta / currentScale;
-                                      _draggedRoutes.add(route);
-                                    }
-                                  });
-                                },
-                                child: _FlowMapStateCard(
-                                  route: route,
-                                  routeType: routeTypes[route] ?? 'page',
-                                  visitCount: routeVisits[route] ?? 0,
-                                  apiLogs: routeApis[route] ?? [],
-                                  flutterErrors: routeErrors[route] ?? [],
-                                  isCurrent: route == activeRoute,
-                                  width: cardWidth,
-                                  height: cardHeight,
-                                  onTap: () {
-                                    final apis = routeApis[route] ?? [];
-                                    final errors = routeErrors[route] ?? [];
-                                    if (apis.isEmpty && errors.isEmpty) return;
-                                    _showScreenApisBottomSheet(
-                                      route,
-                                      apis,
-                                      errors,
-                                    );
-                                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (_focusedRoute != null) {
+                        setState(() => _focusedRoute = null);
+                      }
+                    },
+                    child: Container(
+                      width: canvasWidth,
+                      height: canvasHeight,
+                      color: MonitorColors.pageBackground,
+                      child: Stack(
+                        children: [
+                          if (_showBgGrid)
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: _CanvasGridPainter(
+                                  canvasWidth: canvasWidth,
+                                  canvasHeight: canvasHeight,
+                                  isDark: MonitorColors.isDark,
                                 ),
                               ),
                             ),
+                          Positioned.fill(
+                            child: AnimatedBuilder(
+                              animation: _pulseAnimationController,
+                              builder: (context, _) {
+                                return CustomPaint(
+                                  painter: _StateGraphPainter(
+                                    transitions: transitions,
+                                    nodePositions: _activePositions,
+                                    cardWidth: cardWidth,
+                                    cardHeight: cardHeight,
+                                    isDark: MonitorColors.isDark,
+                                    pathMode: _pathMode,
+                                    focusedRoute: _focusedRoute,
+                                    pulseProgress: _pulseAnimationController.value,
+                                    issueRoutes: issueRoutes,
+                                    routeTypes: routeTypes,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          for (final route in uniqueRoutes) ...[
+                            if (_activePositions.containsKey(route))
+                              Positioned(
+                                left: _activePositions[route]!.dx - cardWidth / 2,
+                                top: _activePositions[route]!.dy - cardHeight / 2,
+                                child: GestureDetector(
+                                  onPanUpdate: (details) {
+                                    setState(() {
+                                      final double currentScale =
+                                          _transformationController.value
+                                              .getMaxScaleOnAxis();
+                                      if (currentScale > 0.05 &&
+                                          currentScale.isFinite) {
+                                        final currentPos = _activePositions[route] ??
+                                            const Offset(baseCenterX, baseStartY);
+                                        final newDx = (currentPos.dx +
+                                                details.delta.dx / currentScale)
+                                            .clamp(cardWidth / 2 + 16.0,
+                                                canvasWidth - cardWidth / 2 - 16.0);
+                                        final newDy = (currentPos.dy +
+                                                details.delta.dy / currentScale)
+                                            .clamp(cardHeight / 2 + 16.0,
+                                                canvasHeight - cardHeight / 2 - 16.0);
+                                        _activePositions[route] =
+                                            Offset(newDx, newDy);
+                                        _draggedRoutes.add(route);
+                                      }
+                                    });
+                                  },
+                                  child: _FlowMapStateCard(
+                                    route: route,
+                                    routeType: routeTypes[route] ?? 'page',
+                                    visitCount: routeVisits[route] ?? 0,
+                                    apiLogs: routeApis[route] ?? [],
+                                    flutterErrors: routeErrors[route] ?? [],
+                                    isCurrent: route == activeRoute,
+                                    isFocused: route == _focusedRoute,
+                                    width: cardWidth,
+                                    height: cardHeight,
+                                    onTap: () {
+                                      setState(() {
+                                        if (_focusedRoute == route) {
+                                          final apis = routeApis[route] ?? [];
+                                          final errors = routeErrors[route] ?? [];
+                                          if (apis.isNotEmpty || errors.isNotEmpty) {
+                                            _showScreenApisBottomSheet(
+                                              route,
+                                              apis,
+                                              errors,
+                                            );
+                                          }
+                                        } else {
+                                          _focusedRoute = route;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -1554,6 +1598,8 @@ class _FlowMapListState extends State<_FlowMapList>
                         onPressed: () {
                           setState(() {
                             _isInitialMatrixSet = false;
+                            _activePositions.clear();
+                            _draggedRoutes.clear();
                             if (_layoutMode == MapLayoutMode.tree) {
                               _layoutMode = MapLayoutMode.grid;
                             } else if (_layoutMode == MapLayoutMode.grid) {
@@ -1578,7 +1624,40 @@ class _FlowMapListState extends State<_FlowMapList>
                       ),
                       Container(
                           width: 1, height: 20, color: MonitorColors.divider),
-                      // 2. Recenter camera
+                      // 2. Path Style mode (Curved / Metro / Arc)
+                      IconButton(
+                        icon: Icon(
+                          _pathMode == MapPathMode.curved
+                              ? Icons.alt_route_rounded
+                              : _pathMode == MapPathMode.orthogonal
+                                  ? Icons.polyline_rounded
+                                  : Icons.gesture_rounded,
+                          color: MonitorColors.primaryText,
+                          size: 18,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            if (_pathMode == MapPathMode.curved) {
+                              _pathMode = MapPathMode.orthogonal;
+                            } else if (_pathMode == MapPathMode.orthogonal) {
+                              _pathMode = MapPathMode.arc;
+                            } else {
+                              _pathMode = MapPathMode.curved;
+                            }
+                          });
+                        },
+                        tooltip: _pathMode == MapPathMode.curved
+                            ? 'Kiểu đường: Bézier - Nhấn để đổi sang Metro'
+                            : _pathMode == MapPathMode.orthogonal
+                                ? 'Kiểu đường: Metro - Nhấn để đổi sang Vòng cung'
+                                : 'Kiểu đường: Vòng cung - Nhấn để đổi sang Bézier',
+                        constraints:
+                            const BoxConstraints(minWidth: 36, minHeight: 36),
+                        padding: EdgeInsets.zero,
+                      ),
+                      Container(
+                          width: 1, height: 20, color: MonitorColors.divider),
+                      // 3. Recenter camera
                       IconButton(
                         icon: Icon(Icons.gps_fixed_rounded,
                             color: MonitorColors.primaryText, size: 18),
@@ -1644,7 +1723,7 @@ class _FlowMapListState extends State<_FlowMapList>
                       IconButton(
                         icon: Icon(Icons.refresh,
                             color: MonitorColors.primaryText, size: 18),
-                        onPressed: _resetZoom,
+                        onPressed: () => _confirmAndResetZoom(context),
                         tooltip: LocaleKeys.mapResetLayoutZoom.tr,
                         constraints:
                             const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -1715,6 +1794,7 @@ class _FlowMapStateCard extends StatelessWidget {
   final List<ApiLogItem> apiLogs;
   final List<ErrorLogItem> flutterErrors;
   final bool isCurrent;
+  final bool isFocused;
   final double width;
   final double height;
   final VoidCallback onTap;
@@ -1726,6 +1806,7 @@ class _FlowMapStateCard extends StatelessWidget {
     required this.apiLogs,
     required this.flutterErrors,
     required this.isCurrent,
+    this.isFocused = false,
     required this.width,
     required this.height,
     required this.onTap,
@@ -1795,24 +1876,49 @@ class _FlowMapStateCard extends StatelessWidget {
       borderThemeColor = MonitorColors.statusSlow;
     }
 
+    Color borderColor;
+    double borderWidth = 1.0;
+    if (isFocused) {
+      borderColor = const Color(0xFF6366F1);
+      borderWidth = 2.2;
+    } else if (isCurrent) {
+      borderColor = borderThemeColor;
+      borderWidth = 2.0;
+    } else if (hasIssues || hasWarning) {
+      borderColor = borderThemeColor.withValues(alpha: 0.7);
+      borderWidth = 1.2;
+    } else {
+      borderColor = MonitorColors.border;
+      borderWidth = 1.0;
+    }
+
     return SizedBox(
       width: width,
       height: height,
-      child: Card(
-        margin: EdgeInsets.zero,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
+      child: Container(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: isCurrent
-                ? borderThemeColor
-                : (hasIssues || hasWarning
-                    ? borderThemeColor.withValues(alpha: 0.7)
-                    : MonitorColors.border),
-            width: isCurrent ? 2.0 : 1.0,
-          ),
+          boxShadow: isFocused
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
-        color: MonitorColors.surface,
+        child: Card(
+          margin: EdgeInsets.zero,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: borderColor,
+              width: borderWidth,
+            ),
+          ),
+          color: MonitorColors.surface,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,
@@ -1955,7 +2061,8 @@ class _FlowMapStateCard extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildMiniBadge(int count, Color color) {
@@ -1983,6 +2090,11 @@ class _StateGraphPainter extends CustomPainter {
   final double cardWidth;
   final double cardHeight;
   final bool isDark;
+  final MapPathMode pathMode;
+  final String? focusedRoute;
+  final double pulseProgress;
+  final Set<String> issueRoutes;
+  final Map<String, String> routeTypes;
 
   _StateGraphPainter({
     required this.transitions,
@@ -1990,6 +2102,11 @@ class _StateGraphPainter extends CustomPainter {
     required this.cardWidth,
     required this.cardHeight,
     required this.isDark,
+    this.pathMode = MapPathMode.curved,
+    this.focusedRoute,
+    this.pulseProgress = 0.0,
+    required this.issueRoutes,
+    required this.routeTypes,
   });
 
   @override
@@ -2008,73 +2125,341 @@ class _StateGraphPainter extends CustomPainter {
       }
     }
 
+    final bool hasFocusActive = focusedRoute != null;
+
     for (final t in transitions) {
       final fromPos = nodePositions[t.from];
       final toPos = nodePositions[t.to];
       if (fromPos == null || toPos == null) continue;
 
-      final double dx = toPos.dx - fromPos.dx;
-      final double dy = toPos.dy - fromPos.dy;
-      final double dist = math.sqrt(dx * dx + dy * dy);
-      if (dist < 1.0) continue;
-
-      final double ux = dx / dist;
-      final double uy = dy / dist;
-
-      final double edgeOffsetFrom = _getEdgeOffset(ux, uy);
-      final double edgeOffsetTo = _getEdgeOffset(-ux, -uy);
-
-      final startPoint =
-          fromPos + Offset(ux * edgeOffsetFrom, uy * edgeOffsetFrom);
-      final endPoint = toPos - Offset(ux * edgeOffsetTo, uy * edgeOffsetTo);
-
-      final isBidirectional = bidirectionalKeys.contains(t.key);
-      final double baseOffset =
-          t.isBack ? 65.0 : (isBidirectional ? 45.0 : 30.0);
-      double curveOffset = baseOffset + (dist * 0.12);
-
-      // Determine bend direction: always bend outwards from the center line of the canvas
-      final double centerX = size.width / 2;
-      final double midX = (startPoint.dx + endPoint.dx) / 2;
-      if (midX < centerX) {
-        curveOffset = -curveOffset;
-      }
-
-      final double px = -uy;
-      final double py = ux;
-
-      final controlPoint = Offset(
-        (startPoint.dx + endPoint.dx) / 2 + px * curveOffset,
-        (startPoint.dy + endPoint.dy) / 2 + py * curveOffset,
+      final bool isSelf = t.from == t.to;
+      final bool isBidirectional = bidirectionalKeys.contains(t.key);
+      final path = _buildPath(
+        fromPos: fromPos,
+        toPos: toPos,
+        isBack: t.isBack,
+        isSelf: isSelf,
+        isBidirectional: isBidirectional,
+        size: size,
       );
 
-      final path = Path()
-        ..moveTo(startPoint.dx, startPoint.dy)
-        ..quadraticBezierTo(
-            controlPoint.dx, controlPoint.dy, endPoint.dx, endPoint.dy);
+      final String targetType = routeTypes[t.to] ?? '';
+      final bool isDialog = targetType == 'dialog' ||
+          targetType == 'sheet' ||
+          targetType == 'bottomSheet' ||
+          targetType == 'popup' ||
+          t.to.toLowerCase().contains('dialog') ||
+          t.to.toLowerCase().contains('bottomsheet');
+      final bool hasError = issueRoutes.contains(t.to);
+      final bool isFocused = focusedRoute != null &&
+          (t.from == focusedRoute || t.to == focusedRoute);
 
-      final color = t.isBack
-          ? const Color(0xFFF59E0B).withValues(alpha: 0.85)
-          : const Color(0xFF6366F1).withValues(alpha: 0.85);
-      linePaint.color = color;
-      arrowPaint.color = color;
+      final double alphaMultiplier =
+          hasFocusActive ? (isFocused ? 1.0 : 0.12) : 0.88;
 
-      canvas.drawPath(path, linePaint);
+      Color lineColor;
+      if (hasError) {
+        lineColor = const Color(0xFFEF4444); // Red
+      } else if (t.isBack) {
+        lineColor = const Color(0xFFF59E0B); // Amber
+      } else if (isDialog) {
+        lineColor = const Color(0xFFA855F7); // Magenta / Purple
+      } else {
+        lineColor = const Color(0xFF6366F1); // Indigo
+      }
 
-      final pathMetrics = path.computeMetrics();
+      final strokeW = isFocused
+          ? 3.2
+          : (t.count > 1 ? math.min(3.2, 1.8 + t.count * 0.35) : 2.0);
+
+      // Glow effect if focused
+      if (isFocused) {
+        final glowPaint = Paint()
+          ..color = lineColor.withValues(alpha: 0.35 * alphaMultiplier)
+          ..strokeWidth = strokeW + 5.0
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round;
+        canvas.drawPath(path, glowPaint);
+      }
+
+      linePaint.color = lineColor.withValues(alpha: alphaMultiplier);
+      linePaint.strokeWidth = strokeW;
+      linePaint.strokeCap = StrokeCap.round;
+
+      if (isDialog) {
+        _drawDashedPath(canvas, path, linePaint, const [7.0, 4.0]);
+      } else if (t.isBack) {
+        _drawDashedPath(canvas, path, linePaint, const [3.0, 4.0]);
+      } else {
+        canvas.drawPath(path, linePaint);
+      }
+
+      final pathMetrics = path.computeMetrics().toList();
       for (final metric in pathMetrics) {
-        final tangent = metric.getTangentForOffset(metric.length - 8);
-        if (tangent != null) {
-          final angle = -tangent.angle;
+        if (metric.length < 10) continue;
+
+        // 1. Sleek Arrowhead at end
+        final tangentEnd = metric.getTangentForOffset(metric.length - 3);
+        if (tangentEnd != null) {
+          final angle = -tangentEnd.angle;
+          final pEnd = tangentEnd.position;
+          final double arrowSize = isFocused ? 9.5 : 8.0;
           final arrowPath = Path()
-            ..moveTo(endPoint.dx, endPoint.dy)
-            ..lineTo(endPoint.dx - 8 * math.cos(angle - 0.5),
-                endPoint.dy - 8 * math.sin(angle - 0.5))
-            ..lineTo(endPoint.dx - 8 * math.cos(angle + 0.5),
-                endPoint.dy - 8 * math.sin(angle + 0.5))
+            ..moveTo(pEnd.dx, pEnd.dy)
+            ..lineTo(
+              pEnd.dx - arrowSize * math.cos(angle - 0.45),
+              pEnd.dy - arrowSize * math.sin(angle - 0.45),
+            )
+            ..lineTo(
+              pEnd.dx - (arrowSize * 0.6) * math.cos(angle),
+              pEnd.dy - (arrowSize * 0.6) * math.sin(angle),
+            )
+            ..lineTo(
+              pEnd.dx - arrowSize * math.cos(angle + 0.45),
+              pEnd.dy - arrowSize * math.sin(angle + 0.45),
+            )
             ..close();
+
+          arrowPaint.color = lineColor.withValues(alpha: alphaMultiplier);
           canvas.drawPath(arrowPath, arrowPaint);
         }
+
+        // 2. Animated Flow Wave / Particle
+        if (pulseProgress >= 0.0 && (!hasFocusActive || isFocused)) {
+          final double phase = (t.key.hashCode.abs() % 100) / 100.0;
+          final double particleOffset =
+              metric.length * ((pulseProgress + phase) % 1.0);
+          final particleTangent = metric.getTangentForOffset(particleOffset);
+          if (particleTangent != null) {
+            final particlePaint = Paint()
+              ..color = isDark
+                  ? Colors.white.withValues(alpha: 0.95)
+                  : lineColor.withValues(alpha: 0.95)
+              ..style = PaintingStyle.fill;
+            canvas.drawCircle(
+                particleTangent.position, isFocused ? 3.5 : 2.5, particlePaint);
+
+            final particleGlow = Paint()
+              ..color = lineColor.withValues(alpha: 0.45)
+              ..style = PaintingStyle.fill;
+            canvas.drawCircle(
+                particleTangent.position, isFocused ? 7.0 : 5.0, particleGlow);
+          }
+        }
+
+        // 3. Traffic Badge for count > 1
+        if (t.count > 1 && (!hasFocusActive || isFocused)) {
+          final midTangent = metric.getTangentForOffset(metric.length * 0.5);
+          if (midTangent != null) {
+            final midPos = midTangent.position;
+            final String countText = '×${t.count}';
+            final textSpan = TextSpan(
+              text: countText,
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.bold,
+                color: lineColor,
+              ),
+            );
+            final textPainter = TextPainter(
+              text: textSpan,
+              textDirection: TextDirection.ltr,
+            )..layout();
+
+            final badgeW = textPainter.width + 10.0;
+            const badgeH = 16.0;
+            final badgeRect = RRect.fromRectAndRadius(
+              Rect.fromCenter(center: midPos, width: badgeW, height: badgeH),
+              const Radius.circular(8.0),
+            );
+
+            final badgeBgPaint = Paint()
+              ..color = isDark ? const Color(0xFF0F172A) : Colors.white
+              ..style = PaintingStyle.fill;
+            final badgeBorderPaint = Paint()
+              ..color = lineColor.withValues(alpha: 0.6)
+              ..strokeWidth = 1.0
+              ..style = PaintingStyle.stroke;
+
+            canvas.drawRRect(badgeRect, badgeBgPaint);
+            canvas.drawRRect(badgeRect, badgeBorderPaint);
+
+            textPainter.paint(
+              canvas,
+              Offset(midPos.dx - textPainter.width / 2,
+                  midPos.dy - textPainter.height / 2),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  Path _buildPath({
+    required Offset fromPos,
+    required Offset toPos,
+    required bool isBack,
+    required bool isSelf,
+    required bool isBidirectional,
+    required Size size,
+  }) {
+    if (isSelf) {
+      final double topCenterY = fromPos.dy - cardHeight / 2;
+      final double startX = fromPos.dx + cardWidth * 0.22;
+      final double endX = fromPos.dx - cardWidth * 0.22;
+      final p = Path()..moveTo(startX, topCenterY);
+      p.cubicTo(
+        startX + 30.0,
+        topCenterY - 45.0,
+        endX - 30.0,
+        topCenterY - 45.0,
+        endX,
+        topCenterY,
+      );
+      return p;
+    }
+
+    final double dx = toPos.dx - fromPos.dx;
+    final double dy = toPos.dy - fromPos.dy;
+    final double dist = math.sqrt(dx * dx + dy * dy);
+
+    if (pathMode == MapPathMode.orthogonal) {
+      final bool isDown = dy >= 0;
+      final double trackShiftX = isBack
+          ? 26.0
+          : (isBidirectional ? -26.0 : 0.0);
+      final double trackShiftMidY = isBack
+          ? (isDown ? -18.0 : 18.0)
+          : (isBidirectional ? (isDown ? 18.0 : -18.0) : 0.0);
+
+      final Offset startPoint = isDown
+          ? Offset(fromPos.dx + trackShiftX, fromPos.dy + cardHeight / 2)
+          : Offset(fromPos.dx + trackShiftX, fromPos.dy - cardHeight / 2);
+      final Offset endPoint = isDown
+          ? Offset(toPos.dx + trackShiftX, toPos.dy - cardHeight / 2)
+          : Offset(toPos.dx + trackShiftX, toPos.dy + cardHeight / 2);
+
+      final double midY = (startPoint.dy + endPoint.dy) / 2 + trackShiftMidY;
+      const double radius = 16.0;
+
+      final p = Path()..moveTo(startPoint.dx, startPoint.dy);
+      if ((startPoint.dx - endPoint.dx).abs() < 10.0) {
+        p.lineTo(endPoint.dx, endPoint.dy);
+      } else {
+        final double dirY = (endPoint.dy - startPoint.dy).sign;
+        final double dirX = (endPoint.dx - startPoint.dx).sign;
+        final double r = math.min(
+            radius,
+            math.min((startPoint.dx - endPoint.dx).abs() / 2,
+                (startPoint.dy - endPoint.dy).abs() / 2));
+
+        p.lineTo(startPoint.dx, midY - dirY * r);
+        p.quadraticBezierTo(
+            startPoint.dx, midY, startPoint.dx + dirX * r, midY);
+        p.lineTo(endPoint.dx - dirX * r, midY);
+        p.quadraticBezierTo(endPoint.dx, midY, endPoint.dx, midY + dirY * r);
+        p.lineTo(endPoint.dx, endPoint.dy);
+      }
+      return p;
+    }
+
+    if (pathMode == MapPathMode.curved) {
+      Offset startPoint;
+      Offset endPoint;
+      Offset c1;
+      Offset c2;
+
+      final double lateralAnchorShift = isBack
+          ? 32.0
+          : (isBidirectional ? -24.0 : 0.0);
+
+      if (isBack) {
+        final bool bendLeft = fromPos.dx >= toPos.dx;
+        final double lateralOffset = bendLeft ? -75.0 : 75.0;
+        startPoint = Offset(
+            fromPos.dx + (bendLeft ? -cardWidth / 3 : cardWidth / 3) + lateralAnchorShift,
+            fromPos.dy - cardHeight / 2);
+        endPoint = Offset(
+            toPos.dx + (bendLeft ? -cardWidth / 3 : cardWidth / 3) + lateralAnchorShift,
+            toPos.dy + cardHeight / 2);
+        c1 = Offset(startPoint.dx + lateralOffset, startPoint.dy - 48.0);
+        c2 = Offset(endPoint.dx + lateralOffset, endPoint.dy + 48.0);
+      } else if (dy.abs() >= dx.abs()) {
+        final bool isDown = dy > 0;
+        startPoint = Offset(
+            fromPos.dx + lateralAnchorShift,
+            fromPos.dy + (isDown ? cardHeight / 2 : -cardHeight / 2));
+        endPoint = Offset(
+            toPos.dx + lateralAnchorShift,
+            toPos.dy + (isDown ? -cardHeight / 2 : cardHeight / 2));
+        final double handleY = (endPoint.dy - startPoint.dy) * 0.5;
+        c1 = Offset(startPoint.dx, startPoint.dy + handleY);
+        c2 = Offset(endPoint.dx, endPoint.dy - handleY);
+      } else {
+        final bool isRight = dx > 0;
+        startPoint = Offset(
+            fromPos.dx + (isRight ? cardWidth / 2 : -cardWidth / 2),
+            fromPos.dy + lateralAnchorShift * 0.5);
+        endPoint = Offset(
+            toPos.dx + (isRight ? -cardWidth / 2 : cardWidth / 2),
+            toPos.dy + lateralAnchorShift * 0.5);
+        final double handleX = (endPoint.dx - startPoint.dx) * 0.5;
+        c1 = Offset(startPoint.dx + handleX, startPoint.dy);
+        c2 = Offset(endPoint.dx - handleX, endPoint.dy);
+      }
+
+      final p = Path()..moveTo(startPoint.dx, startPoint.dy);
+      p.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, endPoint.dx, endPoint.dy);
+      return p;
+    }
+
+    // Default: MapPathMode.arc (Outward Quadratic Arc)
+    if (dist < 1.0) return Path()..moveTo(fromPos.dx, fromPos.dy);
+    final double ux = dx / dist;
+    final double uy = dy / dist;
+
+    final double edgeOffsetFrom = _getEdgeOffset(ux, uy);
+    final double edgeOffsetTo = _getEdgeOffset(-ux, -uy);
+
+    final startPoint =
+        fromPos + Offset(ux * edgeOffsetFrom, uy * edgeOffsetFrom);
+    final endPoint = toPos - Offset(ux * edgeOffsetTo, uy * edgeOffsetTo);
+
+    final double curveOffset = isBack
+        ? (-38.0 - dist * 0.045)
+        : (isBidirectional ? (30.0 + dist * 0.035) : (20.0 + dist * 0.025));
+
+    final double px = -uy;
+    final double py = ux;
+
+    final controlPoint = Offset(
+      (startPoint.dx + endPoint.dx) / 2 + px * curveOffset,
+      (startPoint.dy + endPoint.dy) / 2 + py * curveOffset,
+    );
+
+    return Path()
+      ..moveTo(startPoint.dx, startPoint.dy)
+      ..quadraticBezierTo(
+          controlPoint.dx, controlPoint.dy, endPoint.dx, endPoint.dy);
+  }
+
+  void _drawDashedPath(
+      Canvas canvas, Path path, Paint paint, List<double> dashArray) {
+    final pathMetrics = path.computeMetrics();
+    for (final metric in pathMetrics) {
+      double distance = 0.0;
+      int dashIndex = 0;
+      bool draw = true;
+      while (distance < metric.length) {
+        final double len = dashArray[dashIndex % dashArray.length];
+        final double nextDistance = math.min(distance + len, metric.length);
+        if (draw) {
+          final extract = metric.extractPath(distance, nextDistance);
+          canvas.drawPath(extract, paint);
+        }
+        distance = nextDistance;
+        dashIndex++;
+        draw = !draw;
       }
     }
   }

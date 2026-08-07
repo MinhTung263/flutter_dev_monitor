@@ -148,109 +148,123 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
         isFlutter ? MonitorColors.statusSlow : MonitorColors.statusError;
 
     if (widget.compact) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              onTap: () => setState(() => _expanded = !_expanded),
-              borderRadius: BorderRadius.circular(6),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 2.5),
+        decoration: BoxDecoration(
+          color: MonitorColors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: MonitorColors.statusError.withValues(alpha: 0.35),
+            width: 0.6,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(5.5),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Row 1: Type badge + Spacer + Timestamp + Copy button + Expand icon
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: typeColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(3),
-                            border: Border.all(color: typeColor.withValues(alpha: 0.30), width: 0.5),
-                          ),
-                          child: LabelText(e.type, typeColor, size: 7, spacing: 0.3),
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: MonoText(
-                            e.message,
-                            10.5,
-                            color: MonitorColors.statusError,
-                            weight: FontWeight.w500,
-                            maxLines: _expanded ? null : 1,
-                            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        MonoText(timeStr, 8.5),
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: () {
-                            Clipboard.setData(ClipboardData(
-                              text: 'Error: ${e.message}\n\nStacktrace:\n${e.stackTrace}',
-                            ));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(LocaleKeys.errorCopied.tr,
-                                    style: TextStyle(
-                                        color: MonitorColors.primaryText,
-                                        fontFamily: MonitorTextStyle.monoFontFamily,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold)),
-                                backgroundColor: MonitorColors.surface,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
-                                  side: BorderSide(color: MonitorColors.divider, width: 0.5),
-                                ),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
-                          },
-                          child: Icon(Icons.copy_rounded, color: MonitorColors.secondaryText, size: 12),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(_expanded ? Icons.expand_less : Icons.expand_more, color: MonitorColors.secondaryText, size: 14),
-                      ],
-                    ),
-                    if (!_expanded) ...[
-                      const SizedBox(height: 4),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4),
-                        child: MonoText(
-                          e.message,
-                          9.5,
-                          color: MonitorColors.secondaryText,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: typeColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(3),
+                        border: Border.all(color: typeColor.withValues(alpha: 0.30), width: 0.5),
                       ),
-                    ],
+                      child: LabelText(e.type, typeColor, size: 7.5, spacing: 0.3),
+                    ),
+                    const Spacer(),
+                    MonoText(
+                      timeStr,
+                      8.5,
+                      color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(
+                          text: 'Error: ${e.message}\n\nStacktrace:\n${e.stackTrace}',
+                        ));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(LocaleKeys.errorCopied.tr,
+                                style: TextStyle(
+                                    color: MonitorColors.primaryText,
+                                    fontFamily: MonitorTextStyle.monoFontFamily,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold)),
+                            backgroundColor: MonitorColors.surface,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              side: BorderSide(color: MonitorColors.divider, width: 0.5),
+                            ),
+                            duration: const Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: MonitorColors.expandedDetailBg,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: MonitorColors.border,
+                            width: 0.5,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(Icons.copy_rounded, color: MonitorColors.primaryText, size: 11),
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    GestureDetector(
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      child: Icon(_expanded ? Icons.expand_less : Icons.expand_more, color: MonitorColors.secondaryText, size: 13),
+                    ),
                   ],
                 ),
-              ),
-            ),
-            if (_expanded && e.stackTrace.isNotEmpty)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(top: 4, left: 4),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: MonitorColors.expandedDetailBg,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: MonitorColors.divider, width: 0.5),
-                ),
-                child: SelectionArea(
+                const SizedBox(height: 4),
+                // Row 2: Full-width error message
+                InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
                   child: MonoText(
-                    e.stackTrace.split('\n').take(20).join('\n'),
-                    9,
-                    height: 1.5,
+                    e.message,
+                    10.5,
+                    color: MonitorColors.statusError,
+                    weight: FontWeight.w500,
+                    maxLines: _expanded ? null : 2,
+                    overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-          ],
+                if (_expanded && e.stackTrace.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: MonitorColors.expandedDetailBg,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: MonitorColors.divider, width: 0.5),
+                    ),
+                    child: SelectionArea(
+                      child: MonoText(
+                        e.stackTrace.split('\n').take(20).join('\n'),
+                        9,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -677,6 +691,22 @@ List<_GitNode> _buildErrorCombinedGitNodes(List<ErrorLogItem> errorLogs, List<Ro
   return nodes;
 }
 
+class _ErrorScreenGroup {
+  final _GitNode routeNode;
+  final List<_GitNode> items;
+  final int stepNum;
+  final bool isCurrent;
+
+  _ErrorScreenGroup({
+    required this.routeNode,
+    required this.items,
+    required this.stepNum,
+    required this.isCurrent,
+  });
+
+  RouteLogItem get routeItem => routeNode.item as RouteLogItem;
+}
+
 class _ErrorFlowLogList extends StatefulWidget {
   const _ErrorFlowLogList();
 
@@ -686,8 +716,9 @@ class _ErrorFlowLogList extends StatefulWidget {
 
 class _ErrorFlowLogListState extends State<_ErrorFlowLogList> {
   bool _oldestFirst = false;
+  bool _expandAll = true;
 
-  List<_FlowTreeNode> _buildItems() {
+  List<_ErrorScreenGroup> _buildGroups() {
     final errorLogs = MonitorController.instance.errorLogs;
     final List<RouteLogItem> routeLogsCopy = List.from(MonitorController.instance.routeLogs);
     
@@ -713,103 +744,83 @@ class _ErrorFlowLogListState extends State<_ErrorFlowLogList> {
 
     final allCombinedNodes = _buildErrorCombinedGitNodes(errorLogs, routeLogsCopy);
     
-    final List<_GitNode> sortedNodes;
-    if (_oldestFirst) {
-      sortedNodes = allCombinedNodes;
-    } else {
-      final List<List<_GitNode>> groups = [];
-      List<_GitNode>? currentGroup;
+    final List<_ErrorScreenGroup> groups = [];
+    _GitNode? currentRouteNode;
+    List<_GitNode> currentItems = [];
 
-      for (final node in allCombinedNodes) {
-        if (node.item is RouteLogItem) {
-          currentGroup = [node];
-          groups.add(currentGroup);
-        } else {
-          if (currentGroup == null) {
-            currentGroup = [];
-            groups.add(currentGroup);
-          }
-          currentGroup.add(node);
+    for (final node in allCombinedNodes) {
+      if (node.item is RouteLogItem) {
+        if (currentRouteNode != null) {
+          groups.add(_ErrorScreenGroup(
+            routeNode: currentRouteNode,
+            items: List.from(currentItems),
+            stepNum: 0,
+            isCurrent: false,
+          ));
+          currentItems.clear();
         }
+        currentRouteNode = node;
+      } else {
+        currentItems.add(node);
       }
-
-      final List<_GitNode> result = [];
-      for (final group in groups.reversed) {
-        if (group.isEmpty) continue;
-        final hasHeader = group[0].item is RouteLogItem;
-        if (hasHeader) {
-          result.add(group[0]); // Header stays at the top of the group!
-          result.addAll(group.sublist(1).reversed); // Errors are reversed underneath
-        } else {
-          result.addAll(group.reversed);
-        }
-      }
-      sortedNodes = result;
     }
 
-    final n = sortedNodes.length;
-    final List<int> depths = sortedNodes.map((node) {
-      if (node.item is RouteLogItem) {
-        final route = node.item as RouteLogItem;
-        if (route.event == RouteLogItem.eventPop) {
-          return node.activeStack.length;
-        }
-        final d = node.activeStack.length - 1;
-        return d < 0 ? 0 : d;
-      } else {
-        return node.activeStack.length;
-      }
-    }).toList();
-
-    final List<_FlowTreeNode> treeNodes = [];
-    for (int i = 0; i < n; i++) {
-      final depth = depths[i];
-      
-      final List<bool> showVerticalLines = List.filled(depth, false);
-      for (int col = 0; col < depth; col++) {
-        for (int j = i + 1; j < n; j++) {
-          if (depths[j] < col) {
-            break;
-          }
-          if (depths[j] == col) {
-            showVerticalLines[col] = true;
-            break;
-          }
-        }
-      }
-
-      bool isLastSibling = true;
-      for (int j = i + 1; j < n; j++) {
-        if (depths[j] < depth) {
-          break;
-        }
-        if (depths[j] == depth) {
-          isLastSibling = false;
-          break;
-        }
-      }
-
-      treeNodes.add(_FlowTreeNode(
-        originalNode: sortedNodes[i],
-        depth: depth,
-        showVerticalLines: showVerticalLines,
-        isLastSibling: isLastSibling,
+    if (currentRouteNode != null) {
+      groups.add(_ErrorScreenGroup(
+        routeNode: currentRouteNode,
+        items: List.from(currentItems),
+        stepNum: 0,
+        isCurrent: false,
+      ));
+    } else if (currentItems.isNotEmpty) {
+      final virtualRoute = RouteLogItem(
+        id: 0,
+        event: RouteLogItem.eventPush,
+        route: 'App Launch',
+        timestamp: (currentItems.first.item as ErrorLogItem).timestamp,
+      );
+      groups.add(_ErrorScreenGroup(
+        routeNode: _GitNode(
+          item: virtualRoute,
+          lane: 0,
+          topLanes: {0},
+          bottomLanes: {0},
+          activeStack: ['App Launch'],
+        ),
+        items: List.from(currentItems),
+        stepNum: 0,
+        isCurrent: false,
       ));
     }
 
-    return treeNodes;
+    final orderedGroups = _oldestFirst ? groups : groups.reversed.toList();
+    final total = orderedGroups.length;
+
+    final List<_ErrorScreenGroup> result = [];
+    for (int i = 0; i < total; i++) {
+      final g = orderedGroups[i];
+      final step = _oldestFirst ? i + 1 : total - i;
+      final r = g.routeItem;
+      final isCurrent = r.route == topRoute && r.event != RouteLogItem.eventPop;
+      
+      result.add(_ErrorScreenGroup(
+        routeNode: g.routeNode,
+        items: _oldestFirst ? g.items : g.items.reversed.toList(),
+        stepNum: step,
+        isCurrent: isCurrent,
+      ));
+    }
+
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = _buildItems();
-    if (items.isEmpty) return const _EmptyErrorState();
+    final groups = _buildGroups();
+    if (groups.isEmpty) return const _EmptyErrorState();
 
-    final totalSteps = items.length;
-
-    final topRoute = MonitorNavigatorObserver.pageStack.isNotEmpty
-        ? MonitorNavigatorObserver.pageStack.last
-        : MonitorConstants.unknownRoute;
+    final maxLane = groups.fold(0, (m, g) => math.max(m, g.routeNode.maxLane));
+    final graphW = (maxLane + 1) * _GitLanePainter.laneW + 4.0;
 
     return Column(
       children: [
@@ -831,80 +842,95 @@ class _ErrorFlowLogListState extends State<_ErrorFlowLogList> {
                   ),
                 ],
               ),
-              GestureDetector(
-                onTap: () => setState(() => _oldestFirst = !_oldestFirst),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: MonitorColors.surface,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: MonitorColors.border),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _oldestFirst ? Icons.south_rounded : Icons.north_rounded,
-                        size: 11,
-                        color: MonitorColors.primaryText,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Expand/Collapse All
+                  GestureDetector(
+                    onTap: () => setState(() => _expandAll = !_expandAll),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: MonitorColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: MonitorColors.border),
                       ),
-                      const SizedBox(width: 4),
-                      LabelText(
-                        _oldestFirst ? 'CŨ NHẤT TRƯỚC' : 'MỚI NHẤT TRƯỚC',
-                        MonitorColors.primaryText,
-                        size: 8.5,
-                        spacing: 0.3,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _expandAll ? Icons.unfold_less_rounded : Icons.unfold_more_rounded,
+                            size: 10,
+                            color: MonitorColors.secondaryText,
+                          ),
+                          const SizedBox(width: 3.5),
+                          LabelText(
+                            _expandAll ? 'THU GỌN' : 'MỞ RỘNG',
+                            MonitorColors.secondaryText,
+                            size: 7.5,
+                            spacing: 0.2,
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                  // Sort button
+                  GestureDetector(
+                    onTap: () => setState(() => _oldestFirst = !_oldestFirst),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: MonitorColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: MonitorColors.border),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _oldestFirst ? Icons.south_rounded : Icons.north_rounded,
+                            size: 10,
+                            color: MonitorColors.primaryText,
+                          ),
+                          const SizedBox(width: 4),
+                          LabelText(
+                            _oldestFirst ? 'CŨ NHẤT' : 'MỚI NHẤT',
+                            MonitorColors.primaryText,
+                            size: 7.5,
+                            spacing: 0.2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-            itemCount: items.length,
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
+            itemCount: groups.length,
             itemBuilder: (_, i) {
-              final node = items[i];
-              final stepNum = _oldestFirst ? i + 1 : totalSteps - i;
-
-              final treeWidth = node.depth * _FlowTreePainter.indentW;
-
+              final group = groups[i];
               return IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (treeWidth > 0)
-                      SizedBox(
-                        width: treeWidth,
-                        child: CustomPaint(
-                          painter: _FlowTreePainter(
-                            depth: node.depth,
-                            showVerticalLines: node.showVerticalLines,
-                            isLastSibling: node.isLastSibling,
-                            isDark: MonitorColors.isDark,
-                          ),
-                        ),
+                    SizedBox(
+                      width: graphW,
+                      child: CustomPaint(
+                        painter: _GitLanePainter(group.routeNode),
                       ),
+                    ),
+                    const SizedBox(width: 4),
                     Expanded(
-                      child: node.item is RouteLogItem
-                          ? _GitRouteInfo(
-                              node: node.originalNode,
-                              isCurrent: (node.item as RouteLogItem).route == topRoute &&
-                                  (node.item as RouteLogItem).event != RouteLogItem.eventPop,
-                              stepNum: stepNum,
-                              compact: true,
-                              isErrorTrace: true,
-                            )
-                          : Padding(
-                              padding: const EdgeInsets.only(left: 14, top: 4, bottom: 4),
-                              child: _ErrorLogTile(
-                                error: node.item as ErrorLogItem,
-                                compact: true,
-                              ),
-                            ),
+                      child: _ErrorFlowGroupCard(
+                        group: group,
+                        initiallyExpanded: _expandAll,
+                      ),
                     ),
                   ],
                 ),
@@ -913,6 +939,339 @@ class _ErrorFlowLogListState extends State<_ErrorFlowLogList> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A tree branch painter (├── or └──) connecting a child item to its parent group.
+class _ErrorTreeBranchPainter extends CustomPainter {
+  final Color color;
+  final bool isLast;
+
+  const _ErrorTreeBranchPainter({
+    required this.color,
+    required this.isLast,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.5)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final startX = size.width / 2;
+    final midY = 14.0;
+
+    if (isLast) {
+      // L-shape
+      final path = Path()
+        ..moveTo(startX, 0)
+        ..lineTo(startX, midY - 3)
+        ..quadraticBezierTo(startX, midY, startX + 4, midY)
+        ..lineTo(size.width, midY);
+      canvas.drawPath(path, paint);
+    } else {
+      // T-shape
+      final path = Path()
+        ..moveTo(startX, 0)
+        ..lineTo(startX, size.height);
+      canvas.drawPath(path, paint);
+
+      final branchPath = Path()
+        ..moveTo(startX, midY)
+        ..lineTo(size.width, midY);
+      canvas.drawPath(branchPath, paint);
+    }
+
+    final dotPaint = Paint()..color = color.withValues(alpha: 0.85);
+    canvas.drawCircle(Offset(size.width - 1, midY), 1.3, dotPaint);
+  }
+
+  @override
+  bool shouldRepaint(_ErrorTreeBranchPainter old) =>
+      old.color != color || old.isLast != isLast;
+}
+
+/// Card container for a Screen Visit and its errors.
+class _ErrorFlowGroupCard extends StatefulWidget {
+  final _ErrorScreenGroup group;
+  final bool initiallyExpanded;
+
+  const _ErrorFlowGroupCard({
+    required this.group,
+    this.initiallyExpanded = true,
+  });
+
+  @override
+  State<_ErrorFlowGroupCard> createState() => _ErrorFlowGroupCardState();
+}
+
+class _ErrorFlowGroupCardState extends State<_ErrorFlowGroupCard> {
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+  }
+
+  @override
+  void didUpdateWidget(_ErrorFlowGroupCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initiallyExpanded != widget.initiallyExpanded) {
+      _expanded = widget.initiallyExpanded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final group = widget.group;
+    final item = group.routeItem;
+    final isCurrent = group.isCurrent;
+
+    final laneColor = _GitLanePainter._palette[group.routeNode.lane % _GitLanePainter._palette.length];
+    final hasChildren = group.items.isNotEmpty;
+
+    final bool isReturn = item.event == 'RETURN';
+    final bool isEnter = item.event == RouteLogItem.eventPush || isReturn;
+    final bool isBack  = item.event == RouteLogItem.eventPop;
+    final Color statusColor = isEnter
+        ? MonitorColors.statusSuccess
+        : isBack
+            ? MonitorColors.secondaryText
+            : MonitorColors.statusSlow;
+
+    final IconData dirIcon = isReturn
+        ? Icons.keyboard_return_rounded
+        : isEnter
+            ? Icons.arrow_forward_rounded
+            : isBack
+                ? Icons.arrow_back_rounded
+                : Icons.swap_horiz_rounded;
+
+    final durationStr = item.duration != null
+        ? RouteLogController.fmtDuration(item.duration!)
+        : null;
+
+    final ts = item.timestamp;
+    final timeStr =
+        '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 3.5),
+      decoration: BoxDecoration(
+        color: isCurrent
+            ? statusColor.withValues(alpha: 0.05)
+            : MonitorColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: hasChildren
+              ? MonitorColors.statusError.withValues(alpha: 0.4)
+              : isCurrent
+                  ? statusColor.withValues(alpha: 0.5)
+                  : MonitorColors.border.withValues(alpha: 0.5),
+          width: isCurrent || hasChildren ? 1.0 : 0.6,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Group Header (Tappable) ──────────────────────────────
+          InkWell(
+            onTap: hasChildren ? () => setState(() => _expanded = !_expanded) : null,
+            borderRadius: BorderRadius.vertical(
+              top: const Radius.circular(7.5),
+              bottom: Radius.circular(_expanded && hasChildren ? 0 : 7.5),
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: _expanded && hasChildren
+                    ? MonitorColors.pageBackground.withValues(alpha: 0.35)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.vertical(
+                  top: const Radius.circular(7.5),
+                  bottom: Radius.circular(_expanded && hasChildren ? 0 : 7.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Lane indicator bar
+                  Container(
+                    width: 3.5,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: laneColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Screen info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Row 1: Step # + Dir Icon + Duration + Current Badge + Timestamp
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: laneColor.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: MonoText(
+                                '#${group.stepNum}',
+                                8,
+                                color: laneColor,
+                                weight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Icon(dirIcon, size: 11, color: statusColor),
+                            if (durationStr != null) ...[
+                              const SizedBox(width: 5),
+                              MonoText(
+                                durationStr,
+                                8.5,
+                                color: statusColor,
+                                weight: FontWeight.w600,
+                              ),
+                            ],
+                            if (isCurrent) ...[
+                              const SizedBox(width: 5),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: MonitorColors.metricTotal
+                                      .withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: LabelText(
+                                  LocaleKeys.current.tr,
+                                  MonitorColors.metricTotal,
+                                  size: 7,
+                                  spacing: 0.3,
+                                ),
+                              ),
+                            ],
+                            const Spacer(),
+                            MonoText(
+                              timeStr,
+                              8.5,
+                              color: MonitorColors.secondaryText,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        // Row 2: Route Name
+                        MonoText(
+                          MonitorController.formatRouteName(item.route),
+                          11.5,
+                          color: isBack
+                              ? MonitorColors.secondaryText
+                              : MonitorColors.primaryText,
+                          weight: isCurrent ? FontWeight.w700 : FontWeight.w600,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Right side: Error stats badge + Expand chevron
+                  if (hasChildren) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: MonitorColors.statusError.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: MonitorColors.statusError.withValues(alpha: 0.35),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.bug_report_outlined,
+                            size: 9,
+                            color: MonitorColors.statusError,
+                          ),
+                          const SizedBox(width: 3),
+                          MonoText(
+                            '${group.items.length}',
+                            8.5,
+                            color: MonitorColors.statusError,
+                            weight: FontWeight.bold,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      _expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: MonitorColors.secondaryText,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          // ── Child Errors List ────────────────────────────────────
+          if (_expanded && hasChildren) ...[
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: MonitorColors.divider.withValues(alpha: 0.4),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(6, 6, 8, 8),
+              child: Column(
+                children: List.generate(group.items.length, (idx) {
+                  final node = group.items[idx];
+                  final isLast = idx == group.items.length - 1;
+
+                  return IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Tree branch line
+                        SizedBox(
+                          width: 10,
+                          child: CustomPaint(
+                            painter: _ErrorTreeBranchPainter(
+                              color: MonitorColors.statusError,
+                              isLast: isLast,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        // Error Tile
+                        Expanded(
+                          child: _ErrorLogTile(
+                            error: node.item as ErrorLogItem,
+                            compact: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -127,4 +127,12 @@ class LocaleKeys {
   static const statsErrors = MonitorLocaleKey('statsErrors');
   static const statsApiTraffic = MonitorLocaleKey('statsApiTraffic');
   static const statsErrorDistribution = MonitorLocaleKey('statsErrorDistribution');
+  static const resetConfirmTitle = MonitorLocaleKey('resetConfirmTitle');
+  static const resetConfirmMessage = MonitorLocaleKey('resetConfirmMessage');
+  static const resetFlowConfirmMessage = MonitorLocaleKey('resetFlowConfirmMessage');
+  static const resetErrorsConfirmMessage = MonitorLocaleKey('resetErrorsConfirmMessage');
+  static const resetStatsConfirmMessage = MonitorLocaleKey('resetStatsConfirmMessage');
+  static const resetLayoutConfirmMessage = MonitorLocaleKey('resetLayoutConfirmMessage');
+  static const confirm = MonitorLocaleKey('confirm');
+  static const cancel = MonitorLocaleKey('cancel');
 }

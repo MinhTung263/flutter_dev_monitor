@@ -1,3 +1,11 @@
+## 2.5.1
+
+* **Reset Confirmation Dialog Redesign**: Added a modern styled confirmation dialog (`MonitorConfirmDialog`) for DevMonitor reset actions with gradient icon badge, dual-layer elevation, and dark/light mode support.
+* **Extracted Dialog Widget**: Separated confirmation dialog into its own dedicated widget file (`lib/src/presentation/ui/widgets/monitor_confirm_dialog.dart`).
+* **Balanced Button Alignment**: Equalized height (`44.0px`) and alignment of cancel and confirm buttons for responsive dialogs.
+* **Exclude Internal Reset Dialog Logging**: Added `MonitorConstants.resetConfirmDialog` to bypass `MonitorNavigatorObserver` route logging, preventing dev monitor's own dialogs from leaking into host app route logs.
+* **Tablet Layout Optimization**: Constrained confirmation dialog max-width (400px) and responsive padding on tablet and desktop displays for improved UX.
+
 ## 2.5.0
 
 * **Overlay Configuration Options**: Added `enableSnapToEdge`, `tuckedByDefault`, and `alwaysHideToEdge` configuration options to `DevMonitor.builder()`.

@@ -86,4 +86,12 @@ const Map<String, String> enTranslations = {
   'statsErrorsOne': '1 error',
   'statsApiTraffic': 'API Call Traffic (72h)',
   'statsErrorDistribution': 'Error Distribution (72h)',
+  'resetConfirmTitle': 'Reset Confirmation',
+  'resetConfirmMessage': 'Are you sure you want to reset all monitor data? This action cannot be undone.',
+  'resetFlowConfirmMessage': 'Are you sure you want to clear all flow history?',
+  'resetErrorsConfirmMessage': 'Are you sure you want to clear all error logs?',
+  'resetStatsConfirmMessage': 'Are you sure you want to clear all 72h statistics?',
+  'resetLayoutConfirmMessage': 'Are you sure you want to reset screen positions and zoom to default?',
+  'confirm': 'Confirm',
+  'cancel': 'Cancel',
 };

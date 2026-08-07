@@ -379,6 +379,18 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
     .card.error {
       border: 2px solid var(--danger);
     }
+    .card.focused {
+      border: 2.2px solid #6366f1 !important;
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.4) !important;
+      z-index: 10;
+    }
+
+    .traffic-badge {
+      font-family: 'JetBrains Mono', monospace, sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      pointer-events: none;
+    }
 
     .card-header-row {
       display: flex;
@@ -726,6 +738,11 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
         <button class="layout-btn" id="layout-btn-stream" onclick="applyLayout('stream')" title="Dạng dòng">Stream</button>
         <button class="layout-btn" id="layout-btn-circle" onclick="applyLayout('circle')" title="Dạng vòng tròn">Circle</button>
       </div>
+      <div class="layout-selector" id="path-selector" style="margin-left: 6px;">
+        <button class="layout-btn active" id="path-btn-curved" onclick="setPathMode('curved')" title="Bézier mượt">Bézier</button>
+        <button class="layout-btn" id="path-btn-orthogonal" onclick="setPathMode('orthogonal')" title="Vuông góc Metro">Metro</button>
+        <button class="layout-btn" id="path-btn-arc" onclick="setPathMode('arc')" title="Vòng cung">Arc</button>
+      </div>
       <button class="btn" onclick="recenterWorkspace()" title="Định vị lại tâm bản đồ">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"></circle>
@@ -751,10 +768,16 @@ const String _kHtmlPrefix = '''<!DOCTYPE html>
       <svg id="svg-canvas" width="100%" height="100%" style="position:absolute; top:0; left:0; pointer-events:none; overflow:visible;">
         <defs>
           <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 2 L 8 5 L 0 8 z" fill="#2196f3"></path>
+            <path d="M 0 2 L 8 5 L 0 8 z" fill="#6366f1"></path>
           </marker>
           <marker id="arrow-orange" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 2 L 8 5 L 0 8 z" fill="#ff9800"></path>
+            <path d="M 0 2 L 8 5 L 0 8 z" fill="#f59e0b"></path>
+          </marker>
+          <marker id="arrow-purple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 2 L 8 5 L 0 8 z" fill="#a855f7"></path>
+          </marker>
+          <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 2 L 8 5 L 0 8 z" fill="#ef4444"></path>
           </marker>
         </defs>
         <!-- STATIC_PATHS -->
@@ -901,43 +924,216 @@ let globalViewportWidth = 0;
       isDragging = false;
     });
 
+    let currentPathMode = 'curved';
+    let focusedNodeRoute = null;
+
+    function setPathMode(mode) {
+      currentPathMode = mode;
+      document.querySelectorAll('#path-selector .layout-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      const activeBtn = document.getElementById('path-btn-' + mode);
+      if (activeBtn) activeBtn.classList.add('active');
+      drawConnections();
+    }
+
+    container.addEventListener('click', (e) => {
+      if (!e.target.closest('.card') && !e.target.closest('.modal') && !e.target.closest('.toolbar')) {
+        if (focusedNodeRoute !== null) {
+          focusedNodeRoute = null;
+          updateCardFocusStyles();
+          drawConnections();
+        }
+      }
+    });
+
+    function updateCardFocusStyles() {
+      document.querySelectorAll('.card').forEach(card => {
+        card.classList.remove('focused');
+      });
+      if (focusedNodeRoute) {
+        const activeCard = document.getElementById('node-' + focusedNodeRoute.replace(/[^a-zA-Z0-9]/g, '_'));
+        if (activeCard) activeCard.classList.add('focused');
+      }
+    }
+
     function drawConnections() {
       const svg = document.getElementById('svg-canvas');
-      const paths = svg.querySelectorAll('path');
-      paths.forEach(p => {
-        if (p.parentNode === svg) {
-          svg.removeChild(p);
+      const oldElements = svg.querySelectorAll('path, g.traffic-badge-group');
+      oldElements.forEach(el => {
+        if (el.parentNode === svg) {
+          svg.removeChild(el);
         }
       });
       
+      const hasFocus = focusedNodeRoute !== null;
+
       data.transitions.forEach(t => {
         const fromNode = data.nodes.find(n => n.route === t.from);
         const toNode = data.nodes.find(n => n.route === t.to);
         if (!fromNode || !toNode) return;
         
-        const fromX = fromNode.x + 90;
-        const fromY = fromNode.y + 65;
-        const toX = toNode.x + 90;
-        const toY = toNode.y;
-        
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        
-        let d;
-        if (t.isBack) {
-          const midX = (fromX + toX) / 2 - 80;
-          const midY = (fromY + toY) / 2;
-          d = "M " + fromX + " " + fromY + " Q " + midX + " " + midY + " " + toX + " " + toY;
-        } else {
-          const midY = (fromY + toY) / 2;
-          d = "M " + fromX + " " + fromY + " C " + fromX + " " + midY + ", " + toX + " " + midY + ", " + toX + " " + toY;
+        const cardW = 180;
+        const cardH = 65;
+
+        const isSelf = t.from === t.to;
+        const isBidirectional = data.transitions.some(other => other.from === t.to && other.to === t.from);
+        const isDialog = (toNode.route && (toNode.route.toLowerCase().includes('dialog') || toNode.route.toLowerCase().includes('bottomsheet')));
+        const toHasError = (toNode.errors && toNode.errors.length > 0) || (toNode.apis && toNode.apis.some(a => a.statusCode < 200 || a.statusCode >= 300));
+        const isFocusedLine = hasFocus && (t.from === focusedNodeRoute || t.to === focusedNodeRoute);
+        const opacity = hasFocus ? (isFocusedLine ? '1.0' : '0.12') : '0.85';
+
+        let strokeColor = '#6366f1';
+        let markerUrl = 'url(#arrow-blue)';
+        if (toHasError) {
+          strokeColor = '#ef4444';
+          markerUrl = 'url(#arrow-red)';
+        } else if (t.isBack) {
+          strokeColor = '#f59e0b';
+          markerUrl = 'url(#arrow-orange)';
+        } else if (isDialog) {
+          strokeColor = '#a855f7';
+          markerUrl = 'url(#arrow-purple)';
         }
-        
+
+        let d = '';
+        let midPoint = { x: 0, y: 0 };
+
+        if (isSelf) {
+          const sx = fromNode.x + cardW * 0.7;
+          const sy = fromNode.y;
+          const ex = fromNode.x + cardW * 0.3;
+          const ey = fromNode.y;
+          d = 'M ' + sx + ' ' + sy + ' C ' + (sx + 30) + ' ' + (sy - 45) + ', ' + (ex - 30) + ' ' + (sy - 45) + ', ' + ex + ' ' + ey;
+          midPoint = { x: fromNode.x + cardW * 0.5, y: fromNode.y - 35 };
+        } else if (currentPathMode === 'orthogonal') {
+          const dy = toNode.y - fromNode.y;
+          const isDown = dy >= 0;
+          const trackShiftX = t.isBack ? 26 : (isBidirectional ? -26 : 0);
+          const trackShiftMidY = t.isBack ? (isDown ? -18 : 18) : (isBidirectional ? (isDown ? 18 : -18) : 0);
+
+          const sx = fromNode.x + cardW / 2 + trackShiftX;
+          const sy = isDown ? fromNode.y + cardH : fromNode.y;
+          const ex = toNode.x + cardW / 2 + trackShiftX;
+          const ey = isDown ? toNode.y : toNode.y + cardH;
+          const midY = (sy + ey) / 2 + trackShiftMidY;
+          const r = Math.min(16, Math.abs(ex - sx) / 2, Math.abs(ey - sy) / 2);
+          const dirX = Math.sign(ex - sx) || 1;
+          const dirY = Math.sign(ey - sy) || 1;
+
+          if (Math.abs(ex - sx) < 10) {
+            d = 'M ' + sx + ' ' + sy + ' L ' + ex + ' ' + ey;
+          } else {
+            d = 'M ' + sx + ' ' + sy + ' L ' + sx + ' ' + (midY - dirY * r) + ' Q ' + sx + ' ' + midY + ' ' + (sx + dirX * r) + ' ' + midY + ' L ' + (ex - dirX * r) + ' ' + midY + ' Q ' + ex + ' ' + midY + ' ' + ex + ' ' + (midY + dirY * r) + ' L ' + ex + ' ' + ey;
+          }
+          midPoint = { x: (sx + ex) / 2, y: midY };
+        } else if (currentPathMode === 'curved') {
+          const dx = toNode.x - fromNode.x;
+          const dy = toNode.y - fromNode.y;
+          let sx, sy, ex, ey, c1x, c1y, c2x, c2y;
+
+          const lateralAnchorShift = t.isBack ? 32 : (isBidirectional ? -24 : 0);
+
+          if (t.isBack) {
+            const bendLeft = fromNode.x >= toNode.x;
+            const lateralOffset = bendLeft ? -75 : 75;
+            sx = fromNode.x + (bendLeft ? cardW * 0.2 : cardW * 0.8) + lateralAnchorShift;
+            sy = fromNode.y;
+            ex = toNode.x + (bendLeft ? cardW * 0.2 : cardW * 0.8) + lateralAnchorShift;
+            ey = toNode.y + cardH;
+            c1x = sx + lateralOffset;
+            c1y = sy - 48;
+            c2x = ex + lateralOffset;
+            c2y = ey + 48;
+          } else if (Math.abs(dy) >= Math.abs(dx)) {
+            const isDown = dy > 0;
+            sx = fromNode.x + cardW / 2 + lateralAnchorShift;
+            sy = isDown ? fromNode.y + cardH : fromNode.y;
+            ex = toNode.x + cardW / 2 + lateralAnchorShift;
+            ey = isDown ? toNode.y : toNode.y + cardH;
+            const handleY = Math.abs(ey - sy) * 0.5;
+            c1x = sx;
+            c1y = isDown ? sy + handleY : sy - handleY;
+            c2x = ex;
+            c2y = isDown ? ey - handleY : ey + handleY;
+          } else {
+            const isRight = dx > 0;
+            sx = isRight ? fromNode.x + cardW : fromNode.x;
+            sy = fromNode.y + cardH / 2 + lateralAnchorShift * 0.5;
+            ex = isRight ? toNode.x : toNode.x + cardW;
+            ey = toNode.y + cardH / 2 + lateralAnchorShift * 0.5;
+            const handleX = Math.abs(ex - sx) * 0.5;
+            c1x = isRight ? sx + handleX : sx - handleX;
+            c1y = sy;
+            c2x = isRight ? ex - handleX : ex + handleX;
+            c2y = ey;
+          }
+          d = 'M ' + sx + ' ' + sy + ' C ' + c1x + ' ' + c1y + ', ' + c2x + ' ' + c2y + ', ' + ex + ' ' + ey;
+          midPoint = { x: (sx + ex) / 2, y: (sy + ey) / 2 };
+        } else {
+          // Arc mode
+          const sx = fromNode.x + cardW / 2;
+          const sy = fromNode.y + cardH / 2;
+          const ex = toNode.x + cardW / 2;
+          const ey = toNode.y + cardH / 2;
+          const dist = Math.hypot(ex - sx, ey - sy);
+          const ux = (ex - sx) / (dist || 1);
+          const uy = (ey - sy) / (dist || 1);
+          const curveOffset = t.isBack
+            ? (-38 - dist * 0.045)
+            : (isBidirectional ? (30 + dist * 0.035) : (20 + dist * 0.025));
+          const px = -uy;
+          const py = ux;
+          const cx = (sx + ex) / 2 + px * curveOffset;
+          const cy = (sy + ey) / 2 + py * curveOffset;
+          d = 'M ' + sx + ' ' + sy + ' Q ' + cx + ' ' + cy + ' ' + ex + ' ' + ey;
+          midPoint = { x: (sx + ex + 2 * cx) / 4, y: (sy + ey + 2 * cy) / 4 };
+        }
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', d);
         path.setAttribute('fill', 'none');
-        path.setAttribute('stroke', t.isBack ? '#ff9800' : '#2196f3');
-        path.setAttribute('stroke-width', '2');
-        path.setAttribute('marker-end', t.isBack ? 'url(#arrow-orange)' : 'url(#arrow-blue)');
+        path.setAttribute('stroke', strokeColor);
+        path.setAttribute('stroke-width', isFocusedLine ? '3.2' : ((t.count && t.count > 1) ? Math.min(3.2, 1.8 + t.count * 0.3) : '2'));
+        path.setAttribute('opacity', opacity);
+        path.setAttribute('marker-end', markerUrl);
+
+        if (isDialog) {
+          path.setAttribute('stroke-dasharray', '6,4');
+        } else if (t.isBack) {
+          path.setAttribute('stroke-dasharray', '3,3');
+        }
+
         svg.appendChild(path);
+
+        if (t.count && t.count > 1 && (!hasFocus || isFocusedLine)) {
+          const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          g.setAttribute('class', 'traffic-badge-group');
+          
+          const countText = '×' + t.count;
+          const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          rect.setAttribute('x', midPoint.x - 14);
+          rect.setAttribute('y', midPoint.y - 8);
+          rect.setAttribute('width', 28);
+          rect.setAttribute('height', 16);
+          rect.setAttribute('rx', 8);
+          rect.setAttribute('fill', '#0f172a');
+          rect.setAttribute('stroke', strokeColor);
+          rect.setAttribute('stroke-width', '1');
+          
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('x', midPoint.x);
+          text.setAttribute('y', midPoint.y + 4);
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('fill', strokeColor);
+          text.setAttribute('font-size', '9.5');
+          text.setAttribute('font-weight', 'bold');
+          text.textContent = countText;
+
+          g.appendChild(rect);
+          g.appendChild(text);
+          svg.appendChild(g);
+        }
       });
     }
 
@@ -972,7 +1168,6 @@ function makeCardDraggable(cardEl, node) {
     dragging = false;
   };
 
-  // Mouse events
   cardEl.addEventListener('mousedown', (e) => {
     if (e.target.closest('button')) return;
     e.stopPropagation();
@@ -981,7 +1176,6 @@ function makeCardDraggable(cardEl, node) {
   window.addEventListener('mousemove', (e) => doDrag(e.clientX, e.clientY));
   window.addEventListener('mouseup', endDrag);
 
-  // Touch events
   cardEl.addEventListener('touchstart', (e) => {
     if (e.target.closest('button')) return;
     if (e.touches.length !== 1) return;
@@ -997,8 +1191,6 @@ function makeCardDraggable(cardEl, node) {
 }
 
 
-    // Render nodes
-    // Clear existing node cards to avoid duplication (preserve other UI elements)
     const existingCards = workspace.querySelectorAll('.card');
     existingCards.forEach(c => c.remove());
     data.nodes.forEach(node => {
@@ -1031,15 +1223,18 @@ function makeCardDraggable(cardEl, node) {
         '</div>' +
         (slowApis.length > 0 ? '<div class="slow-apis">Slow: ' + slowApis.map(api => api.url).join(', ') + '</div>' : '');
         
-      // Only open details if the card was not dragged
       card.addEventListener('click', (e) => {
-        // If a drag occurred, the dataset flag will be set to 'true'
         if (card.dataset.dragging === 'true') {
-          // Reset flag for future clicks
           card.dataset.dragging = 'false';
           return;
         }
-        showDetails(node);
+        if (focusedNodeRoute === node.route) {
+          showDetails(node);
+        } else {
+          focusedNodeRoute = node.route;
+          updateCardFocusStyles();
+          drawConnections();
+        }
       });
       workspace.appendChild(card);
       
@@ -1302,79 +1497,173 @@ globalViewportWidth = vpW;
       const nodes = data.nodes;
       if (nodes.length === 0) return;
 
-      const cardW = 200;
-      const cardH = 80;
-      const gapX = 80;
-      const gapY = 60;
+      const cardW = 175;
+      const cardH = 75;
+      const gapX = 24;
+      const gapY = 40;
 
       if (mode === 'tree') {
-        // Build parent→children from transitions
-        const children = {};
-        const hasParent = new Set();
-        nodes.forEach(n => { children[n.route] = []; });
+        const forwardAdj = {};
+        const reverseAdj = {};
+        nodes.forEach(n => { forwardAdj[n.route] = []; reverseAdj[n.route] = []; });
         data.transitions.forEach(t => {
-          if (!t.isBack && children[t.from] !== undefined) {
-            children[t.from].push(t.to);
-            hasParent.add(t.to);
+          if (!t.isBack && t.from !== t.to) {
+            if (forwardAdj[t.from] && forwardAdj[t.to]) {
+              if (!forwardAdj[t.from].includes(t.to)) forwardAdj[t.from].push(t.to);
+              if (!reverseAdj[t.to].includes(t.from)) reverseAdj[t.to].push(t.from);
+            }
           }
         });
-        const roots = nodes.filter(n => !hasParent.has(n.route));
-        if (roots.length === 0) roots.push(nodes[0]);
 
-        const positioned = new Set();
-        let maxDepth = 0;
+        const roots = nodes.filter(n => (reverseAdj[n.route] || []).length === 0).map(n => n.route);
+        if (roots.length === 0 && nodes.length > 0) roots.push(nodes[0].route);
 
-        function getSubtreeWidth(route, depth) {
-          const ch = (children[route] || []).filter(c => !positioned.has(c));
-          if (ch.length === 0) return cardW + gapX;
-          return ch.reduce((sum, c) => sum + getSubtreeWidth(c, depth + 1), 0);
-        }
+        const nodeLevels = {};
+        const bfsQueue = [...roots];
+        roots.forEach(r => { nodeLevels[r] = 0; });
+        const bfsVisited = new Set(roots);
 
-        function place(route, x, y, depth) {
-          if (positioned.has(route)) return x;
-          positioned.add(route);
-          if (depth > maxDepth) maxDepth = depth;
-
-          const node = nodes.find(n => n.route === route);
-          if (!node) return x;
-
-          const ch = (children[route] || []).filter(c => !positioned.has(c));
-          let childX = x;
-          ch.forEach(c => {
-            childX = place(c, childX, y + cardH + gapY, depth + 1);
+        while (bfsQueue.length > 0) {
+          const current = bfsQueue.shift();
+          const currentLvl = nodeLevels[current] || 0;
+          (forwardAdj[current] || []).forEach(next => {
+            const newLvl = currentLvl + 1;
+            if (nodeLevels[next] === undefined || newLvl > nodeLevels[next]) {
+              nodeLevels[next] = newLvl;
+            }
+            if (!bfsVisited.has(next)) {
+              bfsVisited.add(next);
+              bfsQueue.push(next);
+            }
           });
-
-          const totalW = ch.length > 0
-            ? ch.reduce((sum, c) => sum + getSubtreeWidth(c, depth + 1), 0)
-            : cardW + gapX;
-          node.x = x + (totalW - cardW) / 2;
-          node.y = y;
-
-          return x + totalW;
         }
 
-        let startX = 60;
-        roots.forEach(r => {
-          startX = place(r.route, startX, 60, 0) + gapX;
+        nodes.forEach(n => {
+          if (nodeLevels[n.route] === undefined) nodeLevels[n.route] = 0;
         });
 
-        // Place any unpositioned nodes in a row at the bottom
-        let extraX = 60;
-        const extraY = (maxDepth + 2) * (cardH + gapY);
-        nodes.filter(n => !positioned.has(n.route)).forEach(n => {
-          n.x = extraX;
-          n.y = extraY;
-          extraX += cardW + gapX;
+        function seededRnd(str, salt) {
+          let hash = 0;
+          for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash |= 0;
+          }
+          hash ^= (salt * 0x45d9f3b);
+          hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b);
+          hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b);
+          hash = hash ^ (hash >>> 16);
+          return ((hash & 0x7FFFFFFF) % 10000) / 10000.0;
+        }
+
+        const baseCenterX = 600;
+        const baseStartY = 200;
+        const tempPos = {};
+
+        roots.forEach((r, i) => {
+          const ox = (i - (roots.length - 1) / 2.0) * 240.0 + (seededRnd(r, 1) - 0.5) * 35.0;
+          const oy = (seededRnd(r, 2) - 0.5) * 20.0;
+          tempPos[r] = { x: baseCenterX + ox, y: baseStartY + oy };
+        });
+
+        const sortedNodes = [...nodes].sort((a, b) => (nodeLevels[a.route] || 0) - (nodeLevels[b.route] || 0));
+
+        sortedNodes.forEach(node => {
+          const r = node.route;
+          if (tempPos[r]) return;
+
+          const parents = (reverseAdj[r] || []).filter(p => tempPos[p]);
+          if (parents.length > 0) {
+            const p = parents[0];
+            const pPos = tempPos[p];
+            const children = forwardAdj[p] || [];
+            const sibIdx = Math.max(0, children.indexOf(r));
+            const k = Math.max(1, children.length);
+
+            const stepX = 245.0;
+            const stepY = 155.0;
+            const fanOutX = (sibIdx - (k - 1) / 2.0) * stepX;
+            const jitterX = (seededRnd(r, 11) - 0.5) * 45.0;
+            const jitterY = (seededRnd(r, 22) - 0.5) * 28.0;
+            const zigZag = k === 1 ? (((nodeLevels[r] || 1) % 2 === 1 ? 1.0 : -1.0) * (25.0 + seededRnd(r, 33) * 25.0)) : 0.0;
+
+            tempPos[r] = {
+              x: pPos.x + fanOutX + zigZag + jitterX,
+              y: pPos.y + stepY + jitterY
+            };
+          } else {
+            const angle = seededRnd(r, 41) * 2 * Math.PI;
+            const dist = 210.0 + seededRnd(r, 52) * 80.0;
+            tempPos[r] = {
+              x: baseCenterX + dist * Math.cos(angle),
+              y: baseStartY + dist * Math.sin(angle)
+            };
+          }
+        });
+
+        const minSepX = cardW + 48.0;
+        const minSepY = cardH + 42.0;
+
+        for (let iter = 0; iter < 25; iter++) {
+          for (let i = 0; i < nodes.length; i++) {
+            const rA = nodes[i].route;
+            const posA = tempPos[rA];
+            for (let j = i + 1; j < nodes.length; j++) {
+              const rB = nodes[j].route;
+              const posB = tempPos[rB];
+
+              const dx = posB.x - posA.x;
+              const dy = posB.y - posA.y;
+              const absDx = Math.abs(dx);
+              const absDy = Math.abs(dy);
+
+              if (absDx < minSepX && absDy < minSepY) {
+                const overlapX = minSepX - absDx;
+                const overlapY = minSepY - absDy;
+
+                let pushX = 0, pushY = 0;
+                if (overlapX / minSepX < overlapY / minSepY) {
+                  const signX = dx === 0 ? (rA > rB ? 1.0 : -1.0) : Math.sign(dx);
+                  pushX = signX * overlapX * 0.5;
+                } else {
+                  const signY = dy === 0 ? (rA > rB ? 1.0 : -1.0) : Math.sign(dy);
+                  pushY = signY * overlapY * 0.5;
+                }
+
+                posA.x -= pushX;
+                posA.y -= pushY;
+                posB.x += pushX;
+                posB.y += pushY;
+              }
+            }
+          }
+        }
+
+        let sumX = 0, sumY = 0;
+        nodes.forEach(n => {
+          sumX += tempPos[n.route].x;
+          sumY += tempPos[n.route].y;
+        });
+        const avgX = sumX / nodes.length;
+        const avgY = sumY / nodes.length;
+        const shiftX = baseCenterX - avgX;
+        const shiftY = baseStartY - avgY;
+
+        nodes.forEach(n => {
+          n.x = tempPos[n.route].x + shiftX;
+          n.y = tempPos[n.route].y + shiftY;
         });
 
       } else if (mode === 'grid') {
         const cols = Math.max(1, Math.ceil(Math.sqrt(nodes.length)));
+        const gridGapX = 48;
+        const gridGapY = 60;
         nodes.forEach((node, i) => {
-          node.x = 60 + (i % cols) * (cardW + gapX);
-          node.y = 60 + Math.floor(i / cols) * (cardH + gapY);
+          node.x = 60 + (i % cols) * (cardW + gridGapX);
+          node.y = 60 + Math.floor(i / cols) * (cardH + gridGapY);
         });
 
       } else if (mode === 'stream') {
+        const streamGapY = 55;
         // Topological order following transitions
         const inDegree = {};
         const adj = {};
@@ -1405,13 +1694,13 @@ globalViewportWidth = vpW;
           const node = nodes.find(n => n.route === route);
           if (node) {
             node.x = 60;
-            node.y = 60 + i * (cardH + gapY);
+            node.y = 60 + i * (cardH + streamGapY);
           }
         });
 
       } else if (mode === 'circle') {
         const count = nodes.length;
-        const radius = Math.max(220, count * (cardW + gapX) / (2 * Math.PI));
+        const radius = Math.max(140, Math.min(450, count * (cardW + 50) / (2 * Math.PI)));
         const cx = radius + cardW;
         const cy = radius + cardH;
         nodes.forEach((node, i) => {

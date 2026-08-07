@@ -86,4 +86,12 @@ const Map<String, String> viTranslations = {
   'statsErrorsOne': '1 lỗi',
   'statsApiTraffic': 'Tần suất gọi API (72h)',
   'statsErrorDistribution': 'Phân bổ lỗi theo màn hình (72h)',
+  'resetConfirmTitle': 'Xác nhận đặt lại',
+  'resetConfirmMessage': 'Bạn có chắc chắn muốn đặt lại toàn bộ dữ liệu theo dõi? Thao tác này không thể hoàn tác.',
+  'resetFlowConfirmMessage': 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử luồng (Flow)?',
+  'resetErrorsConfirmMessage': 'Bạn có chắc chắn muốn xóa toàn bộ danh sách lỗi?',
+  'resetStatsConfirmMessage': 'Bạn có chắc chắn muốn xóa toàn bộ dữ liệu thống kê (72h)?',
+  'resetLayoutConfirmMessage': 'Bạn có chắc chắn muốn đặt lại vị trí các màn hình và thu phóng bản đồ về mặc định?',
+  'confirm': 'Xác nhận',
+  'cancel': 'Hủy',
 };
