@@ -1,3 +1,13 @@
+## 2.6.0
+
+* **Zero-Overhead Architecture**: Replaced continuous `Ticker` with passive `SchedulerBinding.addTimingsCallback`, achieving 0% CPU consumption when the app is idle.
+* **RepaintBoundary Isolation**: Wrapped floating overlay and pill badge in `RepaintBoundary` to isolate GPU rasterization layers and eliminate host app repainting cascades.
+* **Flutter DevTools-Compliant Frame Metrics**: Mathematically accurate per-frame effective FPS, UI Thread (Build ms), GPU Thread (Raster ms), and Jank frame detection (`⚡`).
+* **Virtualized Full API Data Inspection**: Implemented `ListView.builder` line-by-line virtualization with line numbers, pretty/raw toggles, and instant line search. Inspect 100% full API payloads of any size with O(1) constant memory and rendering cost. Removed `TRUNCATED FOR PERFORMANCE` limits.
+* **Removed Legacy 72h Stats & Disk Persistence**: Deleted `DailyStatsStorage` and periodic main-thread JSON disk I/O for pure zero-latency in-memory performance. Streamlined dashboard to 3 core tabs (FLOW MAP, FLOW LOGS, ERRORS).
+* **Release Mode Optimization**: Added `kDebugMode` fast-path guards in `MonitorInterceptor` to bypass stack trace analysis and payload cloning in production builds.
+* **Bug Fixes**: Fixed recursive timer frame scheduling loop that caused FPS oscillation and resolved `RenderFlex` overflow in the API details header bar.
+
 ## 2.5.1
 
 * **Reset Confirmation Dialog Redesign**: Added a modern styled confirmation dialog (`MonitorConfirmDialog`) for DevMonitor reset actions with gradient icon badge, dual-layer elevation, and dark/light mode support.
