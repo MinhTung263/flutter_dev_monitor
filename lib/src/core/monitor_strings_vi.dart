@@ -94,4 +94,5 @@ const Map<String, String> viTranslations = {
   'resetLayoutConfirmMessage': 'Bạn có chắc chắn muốn đặt lại vị trí các màn hình và thu phóng bản đồ về mặc định?',
   'confirm': 'Xác nhận',
   'cancel': 'Hủy',
+  'collapse': 'Thu gọn',
 };

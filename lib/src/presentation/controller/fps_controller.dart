@@ -1,7 +1,7 @@
 import '../../core/monitor_constants.dart';
 
 class FpsController {
-  double currentFps = 0.0;
+  double currentFps = 60.0;
   double currentBuildMs = 0.0;
   double currentGpuMs = 0.0;
   int jankFrameCount = 0;
@@ -57,6 +57,7 @@ class FpsController {
   void clearAll() {
     fpsHistoryMap = {};
     jankFrameCount = 0;
+    currentFps = 60.0;
     clearOverlayHistory();
   }
 }

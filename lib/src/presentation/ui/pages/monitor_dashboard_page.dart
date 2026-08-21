@@ -19,7 +19,6 @@ import '../widgets/api_log_tile.dart';
 import '../../../domain/api_log_item.dart';
 import '../../../domain/error_log_item.dart';
 import '../../../domain/route_log_item.dart';
-import '../../../domain/daily_stat_item.dart';
 import '../../controller/route_log_controller.dart';
 import '../widgets/fps_chart.dart';
 import '../widgets/hardware_grid.dart';
@@ -35,7 +34,6 @@ part 'api_log_section.dart';
 part 'error_log_section.dart';
 part 'route_log_section.dart';
 part 'flow_map_section.dart';
-part 'stats_section.dart';
 
 class MonitorDashboardPage extends StatefulWidget {
   /// The route name of the initial screen to view in the dashboard.
@@ -509,7 +507,7 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
   void initState() {
     super.initState();
     _tabController =
-        TabController(length: 4, vsync: this, initialIndex: widget.initialTab);
+        TabController(length: 3, vsync: this, initialIndex: widget.initialTab.clamp(0, 2));
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -689,20 +687,7 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
                     ),
                   ),
                 ),
-                Tab(
-                  height: 30,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.bar_chart_rounded, size: 12.5),
-                        const SizedBox(width: 5),
-                        Text(LocaleKeys.tabStats.tr),
-                      ],
-                    ),
-                  ),
-                ),
+
               ],
             ),
           ),
@@ -718,12 +703,9 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
               if (idx == 0 || idx == 1) {
                 message = LocaleKeys.resetFlowConfirmMessage.tr;
                 action = _ctrl.clearFlow;
-              } else if (idx == 2) {
+              } else {
                 message = LocaleKeys.resetErrorsConfirmMessage.tr;
                 action = _ctrl.clearErrors;
-              } else {
-                message = LocaleKeys.resetStatsConfirmMessage.tr;
-                action = _ctrl.clearDailyStats;
               }
               _showResetConfirmDialog(context, message: message, onConfirm: action);
             },
@@ -743,7 +725,6 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
           flutterErrors.isEmpty
               ? const _EmptyErrorState()
               : const _ErrorFlowLogList(),
-          const _StatsSection(),
         ],
       ),
     );

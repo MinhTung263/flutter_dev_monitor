@@ -1,6 +1,5 @@
 // ignore_for_file: unnecessary_getters_setters
 
-import 'dart:ui' show FramePhase;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -43,21 +42,12 @@ class FpsOverlay extends StatefulWidget {
   State<FpsOverlay> createState() => _FpsOverlayState();
 }
 
-class _FpsOverlayState extends State<FpsOverlay>
-    with SingleTickerProviderStateMixin {
+class _FpsOverlayState extends State<FpsOverlay> {
   // ── Frame timing ──────────────────────────────────────────────────────
-  final List<Duration> _vsyncHistory = [];
-  double _buildAccumMs = 0.0;
-  double _gpuAccumMs = 0.0;
-  int _timingBatchCount = 0;
   bool _isListening = false;
   bool _isDragging = false;
 
-  double _pendingFps = 0.0;
-  double _pendingBuild = 0.0;
-  double _pendingGpu = 0.0;
-  Ticker? _ticker;
-  Duration _lastPublish = Duration.zero;
+  DateTime _lastPublishTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   OverlayController get _overlayCtrl => OverlayController.instance;
   MonitorController get _ctrl => MonitorController.instance;
@@ -78,7 +68,6 @@ class _FpsOverlayState extends State<FpsOverlay>
   @override
   void dispose() {
     _ctrl.removeListener(_onMonitorControllerChanged);
-    _ticker?.dispose();
     if (_isListening) {
       SchedulerBinding.instance.removeTimingsCallback(_onTimings);
     }
@@ -94,11 +83,6 @@ class _FpsOverlayState extends State<FpsOverlay>
     if (shouldListen && !_isListening) {
       _isListening = true;
       SchedulerBinding.instance.addTimingsCallback(_onTimings);
-      if (_ticker == null) {
-        _ticker = createTicker(_onTick)..start();
-      } else {
-        _ticker!.start();
-      }
     } else if (!shouldListen && _isListening) {
       _isListening = false;
       if (!widget.isShowing) {
@@ -109,73 +93,70 @@ class _FpsOverlayState extends State<FpsOverlay>
         );
       }
       SchedulerBinding.instance.removeTimingsCallback(_onTimings);
-      _ticker?.stop();
-      _vsyncHistory.clear();
-      _buildAccumMs = 0.0;
-      _gpuAccumMs = 0.0;
-      _timingBatchCount = 0;
-      _pendingFps = 0.0;
-      _pendingBuild = 0.0;
-      _pendingGpu = 0.0;
-      _lastPublish = Duration.zero;
+      _lastPublishTime = DateTime.fromMillisecondsSinceEpoch(0);
     }
-  }
-
-  void _onTick(Duration elapsed) {
-    if (!mounted || _pendingFps <= 0) return;
-    if ((elapsed - _lastPublish).inMilliseconds < 100) return;
-    _lastPublish = elapsed;
-
-    final route = MonitorNavigatorObserver.currentRoute;
-    _ctrl.addFpsSample(route.isEmpty ? '/init' : route, _pendingFps);
-    _ctrl.notifyFpsUpdate(_pendingFps, _pendingBuild, _pendingGpu);
   }
 
   void _onTimings(List<FrameTiming> timings) {
-    if (!mounted) return;
+    if (!mounted || timings.isEmpty) return;
+
+    // 1. Lấy tần số quét phần cứng chuẩn của màn hình (60Hz / 90Hz / 120Hz)
+    double targetFps = 60.0;
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+      if (view != null && view.display.refreshRate > 0) {
+        targetFps = view.display.refreshRate.clamp(30.0, 144.0);
+      }
+    } catch (_) {}
+
+    // 2. Ngân sách chuẩn của 1 Frame theo Flutter DevTools
+    // 60Hz  -> 16.67ms (16,667 µs)
+    // 120Hz -> 8.33ms  (8,333 µs)
+    final targetBudgetUs = (1000000.0 / targetFps).round();
+
+    double totalBuildMs = 0.0;
+    double totalRasterMs = 0.0;
+    double totalEffectiveFps = 0.0;
+    int count = 0;
 
     for (final t in timings) {
-      _vsyncHistory.add(Duration(
-          microseconds: t.timestampInMicroseconds(FramePhase.buildStart)));
       final buildUs = t.buildDuration.inMicroseconds;
       final rasterUs = t.rasterDuration.inMicroseconds;
-      if (buildUs + rasterUs > 16667) {
+      final totalUs = buildUs + rasterUs;
+
+      // Chuẩn DevTools: Frame được tính là Jank khi Build hoặc Raster hoặc Total vượt ngân sách
+      if (buildUs > targetBudgetUs || rasterUs > targetBudgetUs || totalUs > targetBudgetUs) {
         _ctrl.recordJankFrame();
       }
-      final buildMs = buildUs / 1000.0;
-      if (buildMs >= 0.5) {
-        _buildAccumMs += buildMs;
-        _gpuAccumMs += rasterUs / 1000.0;
-        _timingBatchCount++;
+
+      totalBuildMs += buildUs / 1000.0;
+      totalRasterMs += rasterUs / 1000.0;
+
+      // Tính FPS hiệu dụng cho từng frame riêng lẻ
+      final double frameFps;
+      if (totalUs <= targetBudgetUs) {
+        frameFps = targetFps;
+      } else {
+        frameFps = (1000000.0 / totalUs).clamp(1.0, targetFps);
       }
+      totalEffectiveFps += frameFps;
+      count++;
     }
 
-    if (_vsyncHistory.length > 90) {
-      _vsyncHistory.removeRange(0, _vsyncHistory.length - 90);
+    if (count == 0) return;
+
+    final avgBuildMs = totalBuildMs / count;
+    final avgRasterMs = totalRasterMs / count;
+    final calculatedFps = totalEffectiveFps / count;
+
+    final now = DateTime.now();
+    if (now.difference(_lastPublishTime).inMilliseconds >= 300) {
+      _lastPublishTime = now;
+      final route = MonitorNavigatorObserver.currentRoute;
+      _ctrl.addFpsSample(route.isEmpty ? '/init' : route, calculatedFps);
+      _ctrl.notifyFpsUpdate(calculatedFps, avgBuildMs, avgRasterMs);
+      _ctrl.addOverlaySamples(calculatedFps, avgRasterMs, avgBuildMs);
     }
-
-    if (_vsyncHistory.length < 3) return;
-
-    final spanUs =
-        (_vsyncHistory.last - _vsyncHistory.first).inMicroseconds.toDouble();
-    if (spanUs < 120000) return;
-
-    final fps = ((_vsyncHistory.length - 1) * 1e6 / spanUs).clamp(0.0, 120.0);
-    final avgBuild =
-        _timingBatchCount > 0 ? _buildAccumMs / _timingBatchCount : 0.0;
-    final avgGpu =
-        _timingBatchCount > 0 ? _gpuAccumMs / _timingBatchCount : 0.0;
-
-    if (fps >= 1.0) {
-      _pendingFps = fps;
-      _pendingBuild = avgBuild;
-      _pendingGpu = avgGpu;
-      _ctrl.addOverlaySamples(fps, avgGpu, avgBuild);
-    }
-
-    _buildAccumMs = 0.0;
-    _gpuAccumMs = 0.0;
-    _timingBatchCount = 0;
   }
 
   void _onExpandPanel() => _overlayCtrl.expand();
@@ -315,7 +296,8 @@ class _FpsOverlayState extends State<FpsOverlay>
                     Positioned(
                       top: currentTop,
                       left: currentLeft,
-                      child: GestureDetector(
+                      child: RepaintBoundary(
+                        child: GestureDetector(
                         onPanStart: (_) {
                           setState(() {
                             _isDragging = true;
@@ -424,6 +406,7 @@ class _FpsOverlayState extends State<FpsOverlay>
                             : isTucked
                                 ? FpsOverlayTuckedHandle(tuckedLeft: tuckedLeft)
                                 : const FpsOverlayPillBadge(),
+                        ),
                       ),
                     ),
                   ],

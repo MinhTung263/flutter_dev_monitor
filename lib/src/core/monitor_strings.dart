@@ -135,4 +135,5 @@ class LocaleKeys {
   static const resetLayoutConfirmMessage = MonitorLocaleKey('resetLayoutConfirmMessage');
   static const confirm = MonitorLocaleKey('confirm');
   static const cancel = MonitorLocaleKey('cancel');
+  static const collapse = MonitorLocaleKey('collapse');
 }

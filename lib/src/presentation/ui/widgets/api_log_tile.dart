@@ -310,29 +310,57 @@ class _ApiLogTileState extends State<ApiLogTile> {
     final statusColor = _statusColor(log);
     final laneColor = widget.lane != null ? _palette[widget.lane! % _palette.length] : null;
 
-    return Container(
-      margin: widget.compact ? const EdgeInsets.symmetric(vertical: 2.5) : const EdgeInsets.only(bottom: 5),
+    final isExpanded = _expanded;
+    final radius = widget.compact ? 6.0 : 8.0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      margin: widget.compact
+          ? EdgeInsets.symmetric(vertical: isExpanded ? 5.0 : 2.5)
+          : EdgeInsets.only(
+              top: isExpanded ? 6.0 : 0.0,
+              bottom: isExpanded ? 10.0 : 5.0,
+            ),
       decoration: BoxDecoration(
         color: MonitorColors.surface,
-        borderRadius: BorderRadius.circular(widget.compact ? 6 : 8),
+        borderRadius: BorderRadius.circular(radius),
         border: Border.all(
-          color: log.isSlow
-              ? MonitorColors.statusSlow.withValues(alpha: widget.compact ? 0.35 : 0.4)
-              : (log.isSuccess
-                  ? MonitorColors.border.withValues(alpha: widget.compact ? 0.45 : 1.0)
-                  : MonitorColors.statusError.withValues(alpha: 0.35)),
-          width: widget.compact ? 0.6 : 1.0,
+          color: isExpanded
+              ? (log.isSlow
+                  ? MonitorColors.statusSlow.withValues(alpha: 0.8)
+                  : (!log.isSuccess
+                      ? MonitorColors.statusError.withValues(alpha: 0.8)
+                      : MonitorColors.metricTotal.withValues(alpha: 0.65)))
+              : (log.isSlow
+                  ? MonitorColors.statusSlow.withValues(alpha: widget.compact ? 0.35 : 0.4)
+                  : (log.isSuccess
+                      ? MonitorColors.border.withValues(alpha: widget.compact ? 0.45 : 1.0)
+                      : MonitorColors.statusError.withValues(alpha: 0.35))),
+          width: isExpanded
+              ? (widget.compact ? 1.0 : 1.2)
+              : (widget.compact ? 0.6 : 1.0),
         ),
+        boxShadow: isExpanded
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: MonitorColors.isDark ? 0.40 : 0.08),
+                  blurRadius: 10,
+                  spreadRadius: 0.5,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : null,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(widget.compact ? 5.5 : 7),
+        borderRadius: BorderRadius.circular(radius - 0.5),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (laneColor != null && !widget.compact)
                 Container(
-                  width: 4.5,
+                  width: isExpanded ? 5.0 : 4.5,
                   color: laneColor,
                 ),
               Expanded(
@@ -356,7 +384,11 @@ class _ApiLogTileState extends State<ApiLogTile> {
                             showFullUrl: widget.showFullUrl,
                             onTap: () => setState(() => _expanded = !_expanded),
                           ),
-                    if (_expanded) _ExpandedDetail(log: log),
+                    if (_expanded)
+                      _ExpandedDetail(
+                        log: log,
+                        onCollapse: () => setState(() => _expanded = false),
+                      ),
                   ],
                 ),
               ),
@@ -415,7 +447,12 @@ class _CollapsedRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
-      child: Padding(
+      child: Container(
+        color: expanded
+            ? (MonitorColors.isDark
+                ? Colors.white.withValues(alpha: 0.025)
+                : Colors.black.withValues(alpha: 0.018))
+            : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,7 +604,12 @@ class _CompactCollapsedRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
-      child: Padding(
+      child: Container(
+        color: expanded
+            ? (MonitorColors.isDark
+                ? Colors.white.withValues(alpha: 0.025)
+                : Colors.black.withValues(alpha: 0.018))
+            : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -735,7 +777,8 @@ class _ScreenBadge extends StatelessWidget {
 
 class _ExpandedDetail extends StatefulWidget {
   final ApiLogItem log;
-  const _ExpandedDetail({required this.log});
+  final VoidCallback? onCollapse;
+  const _ExpandedDetail({required this.log, this.onCollapse});
 
   @override
   State<_ExpandedDetail> createState() => _ExpandedDetailState();
@@ -793,12 +836,13 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
         Container(
           decoration: BoxDecoration(
             color: MonitorColors.expandedDetailBg,
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(8),
-              bottomRight: Radius.circular(8),
-            ),
           ),
           child: _buildContent(log),
+        ),
+        Container(color: MonitorColors.border, height: 1),
+        _ExpandedDetailFooter(
+          log: log,
+          onCollapse: widget.onCollapse,
         ),
       ],
     );
@@ -827,6 +871,138 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
       default:
         return const SizedBox();
     }
+  }
+}
+
+// ─── Expanded detail footer ──────────────────────────────────────────────────
+
+class _ExpandedDetailFooter extends StatelessWidget {
+  final ApiLogItem log;
+  final VoidCallback? onCollapse;
+
+  const _ExpandedDetailFooter({
+    required this.log,
+    this.onCollapse,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = _ApiLogTileState._statusColor(log);
+    final ts = log.timestamp;
+    final timeStr =
+        '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: MonitorColors.expandedDetailBg,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(8),
+          bottomRight: Radius.circular(8),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Mini status badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: statusColor.withValues(alpha: 0.35), width: 0.5),
+            ),
+            child: MonoText(
+              '${log.statusCode}',
+              10,
+              color: statusColor,
+              weight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 6),
+          MonoText(
+            '${log.duration}ms',
+            10,
+            color: log.isSlow ? MonitorColors.statusSlow : MonitorColors.secondaryText,
+            weight: FontWeight.w600,
+          ),
+          if (log.hasResponseSize) ...[
+            const SizedBox(width: 6),
+            MonoText(
+              '·  ${log.responseSizeFormatted}',
+              10,
+              color: MonitorColors.secondaryText,
+            ),
+          ],
+          const SizedBox(width: 6),
+          MonoText(
+            '·  $timeStr',
+            9.5,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.7),
+          ),
+          const Spacer(),
+          // Fullscreen Detail button
+          InkWell(
+            borderRadius: BorderRadius.circular(5),
+            onTap: () {
+              Navigator.of(context).push(
+                MonitorResponsiveRoute(
+                  builder: (_) => MonitorApiDetailPage(log: log),
+                  settings: const RouteSettings(name: MonitorConstants.apiDetailPage),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+              decoration: BoxDecoration(
+                color: MonitorColors.surface,
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: MonitorColors.border, width: 0.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.open_in_new_rounded, size: 11, color: MonitorColors.primaryText),
+                  const SizedBox(width: 4),
+                  BodyText('Detail', 9.5, color: MonitorColors.primaryText, weight: FontWeight.w500),
+                ],
+              ),
+            ),
+          ),
+          if (onCollapse != null) ...[
+            const SizedBox(width: 6),
+            // Quick collapse button
+            InkWell(
+              borderRadius: BorderRadius.circular(5),
+              onTap: onCollapse,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                decoration: BoxDecoration(
+                  color: MonitorColors.surface,
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(
+                    color: MonitorColors.metricTotal.withValues(alpha: 0.4),
+                    width: 0.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.keyboard_arrow_up_rounded, size: 13, color: MonitorColors.metricTotal),
+                    const SizedBox(width: 3),
+                    BodyText(
+                      LocaleKeys.collapse.tr,
+                      9.5,
+                      color: MonitorColors.metricTotal,
+                      weight: FontWeight.bold,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -964,7 +1140,8 @@ String _buildCurl(ApiLogItem log) {
 
 class _RequestContent extends StatelessWidget {
   final ApiLogItem log;
-  const _RequestContent({required this.log});
+  final bool isFullPage;
+  const _RequestContent({required this.log, this.isFullPage = false});
 
   @override
   Widget build(BuildContext context) {
@@ -972,47 +1149,78 @@ class _RequestContent extends StatelessWidget {
     final hasBody = log.requestBody != null && log.requestBody!.isNotEmpty;
     final curl = _buildCurl(log);
 
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
+    final topContent = [
+      // URL row: label + copy url + copy cURL
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _SectionLabel('URL'),
+          const Spacer(),
+          _InlineCopyBtn(text: log.url),
+          const SizedBox(width: 6),
+          _CurlCopyButton(curl: curl),
+        ],
+      ),
+      const SizedBox(height: 6),
+      Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // URL row: label + copy url + copy cURL
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _SectionLabel('URL'),
-              const Spacer(),
-              _InlineCopyBtn(text: log.url),
-              const SizedBox(width: 6),
-              _CurlCopyButton(curl: curl),
-            ],
+          _MethodBadge(method: log.method),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SelectionArea(
+              child: MonoText(log.url, 11, color: MonitorColors.primaryText, height: 1.4),
+            ),
           ),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _MethodBadge(method: log.method),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SelectionArea(
-                  child: MonoText(log.url, 11, color: MonitorColors.primaryText, height: 1.4),
-                ),
-              ),
+        ],
+      ),
+      if (hasQuery) ...[
+        const SizedBox(height: 12),
+        _SectionRow(
+            label: 'QUERY PARAMS', copyText: _fmtParams(log.queryParams)),
+        const SizedBox(height: 6),
+        _KVTable(entries: log.queryParams.entries.toList()),
+      ],
+    ];
+
+    if (!isFullPage) {
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...topContent,
+            if (hasBody) ...[
+              const SizedBox(height: 14),
+              _SectionLabel('BODY'),
+              const SizedBox(height: 6),
+              _BodyBlock(text: log.requestBody!),
             ],
-          ),
-          if (hasQuery) ...[
-            const SizedBox(height: 14),
-            _SectionRow(
-                label: 'QUERY PARAMS', copyText: _fmtParams(log.queryParams)),
-            const SizedBox(height: 6),
-            _KVTable(entries: log.queryParams.entries.toList()),
+            if (!hasQuery && !hasBody) ...[
+              const SizedBox(height: 8),
+              BodyText('No query params or body.', 11, color: MonitorColors.secondaryText),
+            ],
           ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...topContent,
           if (hasBody) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             _SectionLabel('BODY'),
             const SizedBox(height: 6),
-            _BodyBlock(text: log.requestBody!),
+            Expanded(
+              child: _BodyBlock(
+                text: log.requestBody!,
+                fillHeight: true,
+              ),
+            ),
           ],
           if (!hasQuery && !hasBody) ...[
             const SizedBox(height: 8),
@@ -1085,7 +1293,8 @@ class _CurlCopyButtonState extends State<_CurlCopyButton> {
 
 class _ResponseContent extends StatelessWidget {
   final ApiLogItem log;
-  const _ResponseContent({required this.log});
+  final bool isFullPage;
+  const _ResponseContent({required this.log, this.isFullPage = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1094,7 +1303,7 @@ class _ResponseContent extends StatelessWidget {
         log.isSuccess ? MonitorColors.statusSuccess : MonitorColors.statusError;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Status summary bar
         Container(
@@ -1126,12 +1335,26 @@ class _ResponseContent extends StatelessWidget {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: hasBody
-              ? _BodyBlock(text: log.responseBody!)
-              : BodyText('No response body.', 11, color: MonitorColors.secondaryText),
-        ),
+        if (hasBody)
+          isFullPage
+              ? Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: _BodyBlock(
+                      text: log.responseBody!,
+                      fillHeight: true,
+                    ),
+                  ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: _BodyBlock(text: log.responseBody!),
+                )
+        else
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: BodyText('No response body.', 11, color: MonitorColors.secondaryText),
+          ),
       ],
     );
   }
@@ -1507,139 +1730,157 @@ class _KVTable extends StatelessWidget {
 
 class _BodyBlock extends StatefulWidget {
   final String text;
-  const _BodyBlock({required this.text});
+  final bool fillHeight;
+  const _BodyBlock({required this.text, this.fillHeight = false});
 
   @override
   State<_BodyBlock> createState() => _BodyBlockState();
 }
 
 class _BodyBlockState extends State<_BodyBlock> {
-  bool _showAll = false;
+  bool _prettyJson = true;
   bool _searchMode = false;
   String _searchQuery = '';
-  late final ScrollController _localScrollController;
-  final List<int> _matchIndices = [];
+  late final ScrollController _scrollController;
+  late final ScrollController _horizontalScrollController;
+
+  late String _formattedText;
+  late List<String> _lines;
+  final List<int> _matchingLineIndices = [];
   int _currentMatchIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _localScrollController = ScrollController();
+    _scrollController = ScrollController();
+    _horizontalScrollController = ScrollController();
+    _processText();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BodyBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _processText();
+    }
   }
 
   @override
   void dispose() {
-    _localScrollController.dispose();
+    _scrollController.dispose();
+    _horizontalScrollController.dispose();
     super.dispose();
   }
 
-  String _formatText(String input) {
-    final trimmed = input.trim();
-    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-      try {
-        final decoded = jsonDecode(trimmed);
-        return const JsonEncoder.withIndent('  ').convert(decoded);
-      } catch (_) {
-        return input;
+  void _processText() {
+    final raw = widget.text;
+    if (_prettyJson) {
+      final trimmed = raw.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          final decoded = jsonDecode(trimmed);
+          _formattedText = const JsonEncoder.withIndent('  ').convert(decoded);
+        } catch (_) {
+          _formattedText = raw;
+        }
+      } else {
+        _formattedText = raw;
       }
+    } else {
+      _formattedText = raw;
     }
-    return input;
+    _lines = _formattedText.split('\n');
+    if (_searchQuery.isNotEmpty) {
+      _performSearch(_searchQuery);
+    }
   }
 
-  void _findMatches(String text, String query) {
-    _matchIndices.clear();
+  void _performSearch(String query) {
+    _matchingLineIndices.clear();
     _currentMatchIndex = 0;
     if (query.isEmpty) return;
 
-    final lowerText = text.toLowerCase();
     final lowerQuery = query.toLowerCase();
-    int start = 0;
-    while (true) {
-      final index = lowerText.indexOf(lowerQuery, start);
-      if (index == -1) break;
-      _matchIndices.add(index);
-      start = index + query.length;
+    for (int i = 0; i < _lines.length; i++) {
+      if (_lines[i].toLowerCase().contains(lowerQuery)) {
+        _matchingLineIndices.add(i);
+      }
     }
   }
 
-  void _scrollToCurrentMatch(String text) {
-    if (_matchIndices.isEmpty || _currentMatchIndex >= _matchIndices.length) return;
-    final activeIndex = _matchIndices[_currentMatchIndex];
-
-    final preText = text.substring(0, activeIndex);
-    final lineIndex = preText.split('\n').length - 1;
-
-    final double targetOffset = (lineIndex * 15.5) - 80.0;
-    if (_localScrollController.hasClients) {
-      final double clampedOffset = targetOffset.clamp(0.0, _localScrollController.position.maxScrollExtent);
-      _localScrollController.animateTo(
-        clampedOffset,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
+  void _scrollToMatch(int matchIndex) {
+    if (_matchingLineIndices.isEmpty || matchIndex >= _matchingLineIndices.length) return;
+    final lineIdx = _matchingLineIndices[matchIndex];
+    const double lineH = 18.5;
+    final targetY = (lineIdx * lineH) - 60.0;
+    if (_scrollController.hasClients) {
+      final clamped = targetY.clamp(0.0, _scrollController.position.maxScrollExtent);
+      _scrollController.animateTo(
+        clamped,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
       );
     }
   }
 
-  void _goToNextMatch(String text) {
-    if (_matchIndices.isEmpty) return;
+  void _nextMatch() {
+    if (_matchingLineIndices.isEmpty) return;
     setState(() {
-      _currentMatchIndex = (_currentMatchIndex + 1) % _matchIndices.length;
-      _scrollToCurrentMatch(text);
+      _currentMatchIndex = (_currentMatchIndex + 1) % _matchingLineIndices.length;
+      _scrollToMatch(_currentMatchIndex);
     });
   }
 
-  void _goToPrevMatch(String text) {
-    if (_matchIndices.isEmpty) return;
+  void _prevMatch() {
+    if (_matchingLineIndices.isEmpty) return;
     setState(() {
-      _currentMatchIndex = (_currentMatchIndex - 1 + _matchIndices.length) % _matchIndices.length;
-      _scrollToCurrentMatch(text);
+      _currentMatchIndex =
+          (_currentMatchIndex - 1 + _matchingLineIndices.length) % _matchingLineIndices.length;
+      _scrollToMatch(_currentMatchIndex);
     });
   }
 
-  TextSpan _highlightSearch(String text, String query, TextStyle defaultStyle) {
+  TextSpan _buildHighlightedLine(String line, String query, TextStyle baseStyle) {
     if (query.isEmpty) {
-      return TextSpan(text: text, style: defaultStyle);
+      return TextSpan(text: line, style: baseStyle);
     }
 
-    final List<InlineSpan> spans = [];
-    final lowerText = text.toLowerCase();
+    final lowerLine = line.toLowerCase();
     final lowerQuery = query.toLowerCase();
-    
+    final spans = <InlineSpan>[];
     int start = 0;
-    int matchCounter = 0;
-    
+
     while (true) {
-      final index = lowerText.indexOf(lowerQuery, start);
+      final index = lowerLine.indexOf(lowerQuery, start);
       if (index == -1) {
-        spans.add(TextSpan(text: text.substring(start)));
+        spans.add(TextSpan(text: line.substring(start), style: baseStyle));
         break;
       }
-      
+
       if (index > start) {
-        spans.add(TextSpan(text: text.substring(start, index)));
+        spans.add(TextSpan(text: line.substring(start, index), style: baseStyle));
       }
-      
-      final isActive = _matchIndices.isNotEmpty && 
-          matchCounter == _currentMatchIndex &&
-          index == _matchIndices[_currentMatchIndex];
-      
+
       spans.add(TextSpan(
-        text: text.substring(index, index + query.length),
-        style: TextStyle(
-          backgroundColor: isActive 
-              ? Colors.orange.withValues(alpha: 0.9) 
-              : Colors.yellow.withValues(alpha: 0.85),
+        text: line.substring(index, index + query.length),
+        style: baseStyle.copyWith(
+          backgroundColor: Colors.orange.withValues(alpha: 0.85),
           color: Colors.black,
           fontWeight: FontWeight.bold,
         ),
       ));
-      
-      matchCounter++;
+
       start = index + query.length;
     }
-    
-    return TextSpan(style: defaultStyle, children: spans);
+
+    return TextSpan(children: spans);
+  }
+
+  String _formatSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 
   @override
@@ -1648,18 +1889,103 @@ class _BodyBlockState extends State<_BodyBlock> {
     final headerBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
     final bodyBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
     final borderCol = MonitorColors.border.withValues(alpha: 0.8);
+    final lineNumCol = MonitorColors.secondaryText.withValues(alpha: 0.5);
 
-    final rawText = widget.text;
-    final bool isHuge = rawText.length > 15000;
-    
-    final String textToFormat = (isHuge && !_showAll) 
-        ? rawText.substring(0, 15000) 
-        : rawText;
-        
-    String formattedText = _formatText(textToFormat);
-    if (isHuge && !_showAll) {
-      formattedText += '\n\n... [TRUNCATED FOR PERFORMANCE. Total: ${rawText.length} characters]';
-    }
+    final isJson = widget.text.trim().startsWith('{') || widget.text.trim().startsWith('[');
+    final sizeStr = _formatSize(widget.text.length);
+    final lineCount = _lines.length;
+
+    final double linesHeight = (_lines.length * 18.5) + 16.0;
+    final double boxHeight = linesHeight.clamp(80.0, 360.0);
+
+    final Widget codeContent = Container(
+      decoration: BoxDecoration(
+        color: bodyBg,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(7.2),
+          bottomRight: Radius.circular(7.2),
+        ),
+      ),
+      child: SelectionArea(
+        child: Scrollbar(
+          controller: _scrollController,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalScrollController,
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: 1200,
+              child: ListView.builder(
+                controller: _scrollController,
+                itemCount: _lines.length,
+                itemExtent: 18.5,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemBuilder: (context, index) {
+                  final line = _lines[index];
+                  final isMatchedLine = _searchQuery.isNotEmpty &&
+                      _matchingLineIndices.contains(index);
+                  final isCurrentActiveMatch = _matchingLineIndices.isNotEmpty &&
+                      _currentMatchIndex < _matchingLineIndices.length &&
+                      _matchingLineIndices[_currentMatchIndex] == index;
+
+                  final lineNumWidth = (_lines.length.toString().length * 7.5 + 16.0).clamp(32.0, 64.0);
+
+                  return Container(
+                    color: isCurrentActiveMatch
+                        ? Colors.orange.withValues(alpha: 0.18)
+                        : isMatchedLine
+                            ? Colors.yellow.withValues(alpha: 0.08)
+                            : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: lineNumWidth,
+                          child: Text(
+                            '${index + 1}',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontFamily: MonitorTextStyle.monoFontFamily,
+                              fontSize: 9,
+                              color: lineNumCol,
+                              height: 1.0,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 1,
+                          height: 14,
+                          color: borderCol.withValues(alpha: 0.3),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: RichText(
+                            maxLines: 1,
+                            overflow: TextOverflow.visible,
+                            text: _buildHighlightedLine(
+                              line,
+                              _searchQuery,
+                              TextStyle(
+                                fontFamily: MonitorTextStyle.monoFontFamily,
+                                fontSize: 10,
+                                color: MonitorColors.primaryText,
+                                height: 1.0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -1669,10 +1995,11 @@ class _BodyBlockState extends State<_BodyBlock> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: widget.fillHeight ? MainAxisSize.max : MainAxisSize.min,
         children: [
-          // Header Bar
+          // ── Header Bar ──────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
               color: headerBg,
               borderRadius: const BorderRadius.only(
@@ -1686,77 +2013,123 @@ class _BodyBlockState extends State<_BodyBlock> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                MonoText(
-                  formattedText.trim().startsWith('{') || formattedText.trim().startsWith('[')
-                      ? 'JSON'
-                      : 'TEXT',
-                  9,
-                  color: MonitorColors.secondaryText,
-                  weight: FontWeight.bold,
-                ),
-                Row(
-                  children: [
-                    if (isHuge && !_showAll) ...[
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                Expanded(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: isJson
+                              ? MonitorColors.statusSuccess.withValues(alpha: 0.15)
+                              : MonitorColors.secondaryText.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        onPressed: () => setState(() => _showAll = true),
+                        child: MonoText(
+                          isJson ? 'JSON' : 'TEXT',
+                          8.0,
+                          color: isJson ? MonitorColors.statusSuccess : MonitorColors.secondaryText,
+                          weight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
                         child: Text(
-                          'SHOW ALL',
+                          '$lineCount lines • $sizeStr',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontFamily: MonitorTextStyle.monoFontFamily,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: MonitorColors.metricTotal,
+                            fontSize: 8.0,
+                            color: MonitorColors.secondaryText,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isJson) ...[
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _prettyJson = !_prettyJson;
+                            _processText();
+                          });
+                        },
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: _prettyJson
+                                ? MonitorColors.metricTotal.withValues(alpha: 0.15)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: _prettyJson
+                                  ? MonitorColors.metricTotal.withValues(alpha: 0.4)
+                                  : borderCol,
+                              width: 0.6,
+                            ),
+                          ),
+                          child: MonoText(
+                            _prettyJson ? 'PRETTY' : 'RAW',
+                            7.5,
+                            color: _prettyJson
+                                ? MonitorColors.metricTotal
+                                : MonitorColors.secondaryText,
+                            weight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
                     ],
                     IconButton(
                       icon: Icon(
-                        _searchMode ? Icons.close : Icons.search, 
-                        size: 13, 
-                        color: MonitorColors.secondaryText,
+                        _searchMode ? Icons.close : Icons.search,
+                        size: 13,
+                        color: _searchMode ? MonitorColors.statusError : MonitorColors.secondaryText,
                       ),
                       onPressed: () {
                         setState(() {
                           _searchMode = !_searchMode;
                           if (!_searchMode) {
                             _searchQuery = '';
-                            _matchIndices.clear();
+                            _matchingLineIndices.clear();
                           }
                         });
                       },
-                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
                       padding: EdgeInsets.zero,
                       style: IconButton.styleFrom(
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
+                      tooltip: 'Search',
                     ),
-                    const SizedBox(width: 8),
-                    _CopyButton(text: rawText),
+                    const SizedBox(width: 4),
+                    _CopyButton(text: _formattedText),
                   ],
                 ),
               ],
             ),
           ),
+
+          // ── Search Sub-Bar ──────────────────────────────────────────
           if (_searchMode)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: headerBg,
-                border: Border(
-                  bottom: BorderSide(color: borderCol, width: 0.8),
-                ),
+                color: MonitorColors.pageBackground,
+                border: Border(bottom: BorderSide(color: borderCol, width: 0.5)),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
+                      autofocus: true,
                       style: TextStyle(
                         fontFamily: MonitorTextStyle.monoFontFamily,
                         fontSize: 10,
@@ -1764,32 +2137,21 @@ class _BodyBlockState extends State<_BodyBlock> {
                       ),
                       decoration: InputDecoration(
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                         hintText: LocaleKeys.searchResponsePlaceholder.tr,
                         hintStyle: TextStyle(
                           fontFamily: MonitorTextStyle.monoFontFamily,
-                          fontSize: 10,
+                          fontSize: 9.5,
                           color: MonitorColors.secondaryText.withValues(alpha: 0.5),
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
-                          borderSide: BorderSide(color: borderCol, width: 0.5),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
-                          borderSide: BorderSide(color: borderCol, width: 0.5),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
-                          borderSide: BorderSide(color: MonitorColors.primaryText, width: 0.8),
-                        ),
+                        border: InputBorder.none,
                       ),
                       onChanged: (val) {
                         setState(() {
                           _searchQuery = val;
-                          _findMatches(formattedText, val);
-                          if (_matchIndices.isNotEmpty) {
-                            _scrollToCurrentMatch(formattedText);
+                          _performSearch(val);
+                          if (_matchingLineIndices.isNotEmpty) {
+                            _scrollToMatch(0);
                           }
                         });
                       },
@@ -1798,17 +2160,18 @@ class _BodyBlockState extends State<_BodyBlock> {
                   if (_searchQuery.isNotEmpty) ...[
                     const SizedBox(width: 8),
                     MonoText(
-                      _matchIndices.isEmpty 
-                          ? '0/0' 
-                          : '${_currentMatchIndex + 1}/${_matchIndices.length}',
+                      _matchingLineIndices.isEmpty
+                          ? '0/0'
+                          : '${_currentMatchIndex + 1}/${_matchingLineIndices.length}',
                       8,
                       color: MonitorColors.secondaryText,
                       weight: FontWeight.bold,
                     ),
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: Icon(Icons.keyboard_arrow_up_rounded, size: 14, color: MonitorColors.primaryText),
-                      onPressed: () => _goToPrevMatch(formattedText),
+                      icon: Icon(Icons.keyboard_arrow_up_rounded,
+                          size: 14, color: MonitorColors.primaryText),
+                      onPressed: _prevMatch,
                       constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
                       padding: EdgeInsets.zero,
                       style: IconButton.styleFrom(
@@ -1817,8 +2180,9 @@ class _BodyBlockState extends State<_BodyBlock> {
                       tooltip: LocaleKeys.previousMatch.tr,
                     ),
                     IconButton(
-                      icon: Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: MonitorColors.primaryText),
-                      onPressed: () => _goToNextMatch(formattedText),
+                      icon: Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 14, color: MonitorColors.primaryText),
+                      onPressed: _nextMatch,
                       constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
                       padding: EdgeInsets.zero,
                       style: IconButton.styleFrom(
@@ -1830,41 +2194,20 @@ class _BodyBlockState extends State<_BodyBlock> {
                 ],
               ),
             ),
-          // Code Content with Local Scroll Controller
-          Container(
-            constraints: const BoxConstraints(maxHeight: 350),
-            decoration: BoxDecoration(
-              color: bodyBg,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(7.2),
-                bottomRight: Radius.circular(7.2),
-              ),
+
+          // ── Virtualized Code Content (O(1) Memory & Rendering) ───────
+          if (widget.fillHeight)
+            Expanded(child: codeContent)
+          else
+            SizedBox(
+              height: boxHeight,
+              child: codeContent,
             ),
-            child: SingleChildScrollView(
-              controller: _localScrollController,
-              padding: const EdgeInsets.all(12),
-              child: SelectionArea(
-                child: RichText(
-                  text: _highlightSearch(
-                    formattedText,
-                    _searchQuery,
-                    TextStyle(
-                      fontFamily: MonitorTextStyle.monoFontFamily,
-                      fontSize: 10,
-                      color: MonitorColors.primaryText,
-                      height: 1.55,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 }
-
 class _CopyButton extends StatefulWidget {
   final String text;
   const _CopyButton({required this.text});
@@ -2121,31 +2464,6 @@ class MonitorApiDetailPage extends StatefulWidget {
 }
 
 class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
-  late final ScrollController _scrollController;
-  bool _showUrlInAppBar = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController = ScrollController();
-    _scrollController.addListener(_onScroll);
-  }
-
-  void _onScroll() {
-    final showUrl = _scrollController.offset > 60.0;
-    if (showUrl != _showUrlInAppBar) {
-      setState(() {
-        _showUrlInAppBar = showUrl;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final log = widget.log;
@@ -2169,59 +2487,53 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
                         color: MonitorColors.primaryText, size: 18),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-            title: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              transitionBuilder: (child, animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: child,
-                );
-              },
-              child: _showUrlInAppBar
-                  ? Column(
-                      key: const ValueKey('url_title'),
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        MonoText(
-                          displayUrl,
-                          11.5,
-                          color: MonitorColors.primaryText,
-                          weight: FontWeight.bold,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        MonoText(
-                          log.method,
-                          9,
-                          color: log.isSuccess
-                              ? MonitorColors.statusSuccess
-                              : MonitorColors.statusError,
-                          weight: FontWeight.bold,
-                        ),
-                      ],
-                    )
-                  : Column(
-                      key: const ValueKey('default_title'),
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        MonoText(
-                          'API Detail',
-                          14,
-                          color: MonitorColors.primaryText,
-                          weight: FontWeight.bold,
-                        ),
-                        const SizedBox(height: 2),
-                        MonoText(
-                          log.method,
-                          9.5,
-                          color: log.isSuccess
-                              ? MonitorColors.statusSuccess
-                              : MonitorColors.statusError,
-                          weight: FontWeight.bold,
-                        ),
-                      ],
-                    ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MonoText(
+                        displayUrl,
+                        12,
+                        color: MonitorColors.primaryText,
+                        weight: FontWeight.bold,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          MonoText(
+                            log.method,
+                            9.5,
+                            color: log.isSuccess
+                                ? MonitorColors.statusSuccess
+                                : MonitorColors.statusError,
+                            weight: FontWeight.bold,
+                          ),
+                          const SizedBox(width: 8),
+                          MonoText(
+                            '${log.statusCode}  ·  ${log.duration}ms',
+                            9.5,
+                            color: statusColor,
+                            weight: FontWeight.w600,
+                          ),
+                          if (log.hasResponseSize) ...[
+                            const SizedBox(width: 8),
+                            MonoText(
+                              '·  ${log.responseSizeFormatted}',
+                              9.5,
+                              color: MonitorColors.secondaryText,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(1),
@@ -2232,83 +2544,46 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
             ),
           ),
           child: SafeArea(
-            bottom: false,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // API Main Info Card
+            bottom: true,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // API Caller & Multiple Calls metadata card (if present)
+                  if (log.hasCallerName || log.hasMultipleCalls) ...[
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
                         color: MonitorColors.surface,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: log.isSlow
-                              ? MonitorColors.statusSlow.withValues(alpha: 0.4)
-                              : (log.isSuccess
-                                  ? MonitorColors.border
-                                  : MonitorColors.statusError.withValues(alpha: 0.35)),
-                          width: 1.0,
+                          color: MonitorColors.border,
+                          width: 0.8,
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _MethodBadge(method: log.method),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: SelectionArea(
-                                  child: MonoText(
-                                    log.url,
-                                    11.5,
-                                    color: MonitorColors.primaryText,
-                                    weight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              _DurationLabel(
-                                duration: log.duration,
-                                isSlow: log.isSlow,
-                                color: statusColor,
-                              ),
-                            ],
-                          ),
-                          if (log.hasCallerName || log.hasMultipleCalls) ...[
-                            const SizedBox(height: 10),
-                            Container(color: MonitorColors.divider, height: 0.8),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                if (log.hasMultipleCalls) ...[
-                                  _CallCountBadge(count: log.callCount),
-                                  const SizedBox(width: 8),
-                                ],
-                                if (log.hasCallerName)
-                                  Expanded(
-                                    child: _CallerRow(
-                                      callerName: log.callerName,
-                                      color: MonitorColors.secondaryText.withValues(alpha: 0.8),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                          if (log.hasMultipleCalls) ...[
+                            _CallCountBadge(count: log.callCount),
+                            const SizedBox(width: 8),
                           ],
+                          if (log.hasCallerName)
+                            Expanded(
+                              child: _CallerRow(
+                                callerName: log.callerName,
+                                color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+                              ),
+                            ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // Detail Tabs Section
-                    Container(
+                  ],
+                  // Detail Tabs Section filling the entire remaining height!
+                  Expanded(
+                    child: Container(
                       decoration: BoxDecoration(
                         color: MonitorColors.surface,
                         borderRadius: BorderRadius.circular(8),
@@ -2319,11 +2594,11 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: _DetailTabsSection(log: log),
+                        child: _DetailTabsSection(log: log, isFullPage: true),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -2335,7 +2610,8 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
 
 class _DetailTabsSection extends StatefulWidget {
   final ApiLogItem log;
-  const _DetailTabsSection({required this.log});
+  final bool isFullPage;
+  const _DetailTabsSection({required this.log, this.isFullPage = false});
 
   @override
   State<_DetailTabsSection> createState() => _DetailTabsSectionState();
@@ -2349,7 +2625,7 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
   Widget build(BuildContext context) {
     final log = widget.log;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (log.isSlow) _SlowBanner(duration: log.duration),
         // Tab bar + copy-all button
@@ -2388,12 +2664,20 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
           ),
         ),
         Container(color: MonitorColors.border, height: 1),
-        Container(
-          decoration: BoxDecoration(
-            color: MonitorColors.expandedDetailBg,
+        if (widget.isFullPage)
+          Expanded(
+            child: Container(
+              color: MonitorColors.expandedDetailBg,
+              child: _buildContent(log, isFullPage: true),
+            ),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              color: MonitorColors.expandedDetailBg,
+            ),
+            child: _buildContent(log, isFullPage: false),
           ),
-          child: _buildContent(log),
-        ),
       ],
     );
   }
@@ -2408,16 +2692,20 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
     );
   }
 
-  Widget _buildContent(ApiLogItem log) {
+  Widget _buildContent(ApiLogItem log, {bool isFullPage = false}) {
     switch (_tab) {
       case 0:
-        return _RequestContent(log: log);
+        return _RequestContent(log: log, isFullPage: isFullPage);
       case 1:
-        return _ResponseContent(log: log);
+        return _ResponseContent(log: log, isFullPage: isFullPage);
       case 2:
-        return _TimelineContent(log: log);
+        return isFullPage
+            ? SingleChildScrollView(child: _TimelineContent(log: log))
+            : _TimelineContent(log: log);
       case 3:
-        return _HeadersContent(log: log);
+        return isFullPage
+            ? SingleChildScrollView(child: _HeadersContent(log: log))
+            : _HeadersContent(log: log);
       default:
         return const SizedBox();
     }

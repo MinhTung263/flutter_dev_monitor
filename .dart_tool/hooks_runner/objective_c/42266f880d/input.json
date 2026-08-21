@@ -1,0 +1,29 @@
+{
+  "assets": {},
+  "config": {
+    "build_asset_types": [
+      "code_assets/code"
+    ],
+    "extensions": {
+      "code_assets": {
+        "c_compiler": {
+          "ar": "/Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar",
+          "cc": "/Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+          "ld": "/Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld"
+        },
+        "link_mode_preference": "dynamic",
+        "macos": {
+          "target_version": 13
+        },
+        "target_architecture": "arm64",
+        "target_os": "macos"
+      }
+    },
+    "linking_enabled": false
+  },
+  "out_dir_shared": "/Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/",
+  "out_file": "/Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/objective_c/42266f880d/output.json",
+  "package_name": "objective_c",
+  "package_root": "/Users/pine/.pub-cache/hosted/pub.dev/objective_c-9.4.1/",
+  "user_defines": {}
+}

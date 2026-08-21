@@ -148,15 +148,27 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
         isFlutter ? MonitorColors.statusSlow : MonitorColors.statusError;
 
     if (widget.compact) {
-      return Container(
-        margin: const EdgeInsets.symmetric(vertical: 2.5),
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        margin: EdgeInsets.symmetric(vertical: _expanded ? 5.0 : 2.5),
         decoration: BoxDecoration(
           color: MonitorColors.surface,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: MonitorColors.statusError.withValues(alpha: 0.35),
-            width: 0.6,
+            color: MonitorColors.statusError.withValues(alpha: _expanded ? 0.75 : 0.35),
+            width: _expanded ? 1.0 : 0.6,
           ),
+          boxShadow: _expanded
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: MonitorColors.isDark ? 0.40 : 0.08),
+                    blurRadius: 10,
+                    spreadRadius: 0.5,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(5.5),
@@ -258,6 +270,7 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
                         e.stackTrace.split('\n').take(20).join('\n'),
                         9,
                         height: 1.5,
+                        color: MonitorColors.primaryText.withValues(alpha: 0.85),
                       ),
                     ),
                   ),
@@ -269,13 +282,30 @@ class _ErrorLogTileState extends State<_ErrorLogTile> {
       );
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      margin: EdgeInsets.only(
+        top: _expanded ? 6.0 : 0.0,
+        bottom: _expanded ? 12.0 : 8.0,
+      ),
       decoration: BoxDecoration(
         color: MonitorColors.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-            color: MonitorColors.statusError.withValues(alpha: 0.22)),
+          color: MonitorColors.statusError.withValues(alpha: _expanded ? 0.75 : 0.22),
+          width: _expanded ? 1.2 : 1.0,
+        ),
+        boxShadow: _expanded
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: MonitorColors.isDark ? 0.40 : 0.08),
+                  blurRadius: 10,
+                  spreadRadius: 0.5,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         children: [

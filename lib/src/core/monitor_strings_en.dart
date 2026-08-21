@@ -94,4 +94,5 @@ const Map<String, String> enTranslations = {
   'resetLayoutConfirmMessage': 'Are you sure you want to reset screen positions and zoom to default?',
   'confirm': 'Confirm',
   'cancel': 'Cancel',
+  'collapse': 'Collapse',
 };

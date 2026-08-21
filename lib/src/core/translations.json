@@ -345,5 +345,41 @@
   "statsErrorDistribution": {
     "en": "Error Distribution (72h)",
     "vi": "Phân bổ lỗi theo màn hình (72h)"
+  },
+  "resetConfirmTitle": {
+    "en": "Reset Confirmation",
+    "vi": "Xác nhận đặt lại"
+  },
+  "resetConfirmMessage": {
+    "en": "Are you sure you want to reset all monitor data? This action cannot be undone.",
+    "vi": "Bạn có chắc chắn muốn đặt lại toàn bộ dữ liệu theo dõi? Thao tác này không thể hoàn tác."
+  },
+  "resetFlowConfirmMessage": {
+    "en": "Are you sure you want to clear all flow history?",
+    "vi": "Bạn có chắc chắn muốn xóa toàn bộ lịch sử luồng (Flow)?"
+  },
+  "resetErrorsConfirmMessage": {
+    "en": "Are you sure you want to clear all error logs?",
+    "vi": "Bạn có chắc chắn muốn xóa toàn bộ danh sách lỗi?"
+  },
+  "resetStatsConfirmMessage": {
+    "en": "Are you sure you want to clear all 72h statistics?",
+    "vi": "Bạn có chắc chắn muốn xóa toàn bộ dữ liệu thống kê (72h)?"
+  },
+  "resetLayoutConfirmMessage": {
+    "en": "Are you sure you want to reset screen positions and zoom to default?",
+    "vi": "Bạn có chắc chắn muốn đặt lại vị trí các màn hình và thu phóng bản đồ về mặc định?"
+  },
+  "confirm": {
+    "en": "Confirm",
+    "vi": "Xác nhận"
+  },
+  "cancel": {
+    "en": "Cancel",
+    "vi": "Hủy"
+  },
+  "collapse": {
+    "en": "Collapse",
+    "vi": "Thu gọn"
   }
 }

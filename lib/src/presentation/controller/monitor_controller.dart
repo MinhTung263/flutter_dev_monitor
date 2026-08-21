@@ -9,8 +9,6 @@ import '../../data/hardware_datasource.dart';
 import '../../domain/api_log_item.dart';
 import '../../domain/error_log_item.dart';
 import '../../domain/route_log_item.dart';
-import '../../domain/daily_stat_item.dart';
-import '../../data/daily_stats_storage.dart';
 import '../navigation/monitor_navigator_observer.dart';
 import 'api_log_controller.dart';
 import 'error_log_controller.dart';
@@ -30,7 +28,7 @@ class MonitorController extends ChangeNotifier {
   static MonitorController get instance => _instance ??= MonitorController._();
 
   final _apiLog = ApiLogController();
-  final _statsStorage = DailyStatsStorage();
+
   final _fps = FpsController();
   final _hardware = HardwareController();
   final _errorLog = ErrorLogController();
@@ -174,20 +172,10 @@ class MonitorController extends ChangeNotifier {
   // ── Expose daily stats ────────────────────────────────────────────────
 
   /// Fetches daily statistics from the rolling persistent storage.
-  Future<List<DailyStatItem>> getDailyStats() => _statsStorage.loadAndPrune();
-
-  /// Clears the daily statistics persistent storage.
-  Future<void> clearDailyStats() => _statsStorage.clearAll();
 
   void logRoutePush(String route, String? from, {String routeType = 'page'}) {
     _routeLog.logPush(route, from, routeType: routeType);
-    if (routeType == 'page') {
-      _statsStorage.saveItem(DailyStatItem(
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-        type: 'route',
-        route: route,
-      ));
-    }
+
     notifyListeners();
   }
 
@@ -199,13 +187,7 @@ class MonitorController extends ChangeNotifier {
   void logRouteReplace(String oldRoute, String newRoute,
       {String routeType = 'page'}) {
     _routeLog.logReplace(oldRoute, newRoute, routeType: routeType);
-    if (routeType == 'page') {
-      _statsStorage.saveItem(DailyStatItem(
-        timestamp: DateTime.now().millisecondsSinceEpoch,
-        type: 'route',
-        route: newRoute,
-      ));
-    }
+
     notifyListeners();
   }
 
@@ -275,12 +257,7 @@ class MonitorController extends ChangeNotifier {
             ErrorLogItem.typeFlutter,
             errorRoute,
           );
-          _statsStorage.saveItem(DailyStatItem(
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-            type: 'error',
-            route: errorRoute,
-            error: exceptionStr,
-          ));
+
           if (!_disposed) {
             scheduleMicrotask(() {
               if (!_disposed) {
@@ -315,12 +292,7 @@ class MonitorController extends ChangeNotifier {
             ErrorLogItem.typeDart,
             errorRoute,
           );
-          _statsStorage.saveItem(DailyStatItem(
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-            type: 'error',
-            route: errorRoute,
-            error: exceptionStr,
-          ));
+
           if (!_disposed) {
             scheduleMicrotask(() {
               if (!_disposed) {
@@ -351,9 +323,8 @@ class MonitorController extends ChangeNotifier {
     if (screenName.isNotEmpty &&
         screenName != MonitorConstants.dashboardRoute &&
         screenName != MonitorConstants.unknownRoute) {
-      final String baseName = screenName.contains('#')
-          ? screenName.split('#')[0]
-          : screenName;
+      final String baseName =
+          screenName.contains('#') ? screenName.split('#')[0] : screenName;
 
       // Remove any existing screen that matches the base route or is a sub/parent route.
       // E.g. we want to replace the raw parent route /home with the resolved nested tab /home/home.
@@ -438,19 +409,8 @@ class MonitorController extends ChangeNotifier {
 
     _apiLog.addLog(item, screen, popupSuffix);
 
-    _statsStorage.saveItem(DailyStatItem(
-      timestamp: item.timestamp.millisecondsSinceEpoch,
-      type: 'api',
-      route: screen,
-      url: item.url,
-      method: item.method,
-      duration: item.duration,
-      status: item.statusCode,
-    ));
-
     notifyListeners();
   }
-
 
   void updateDashboardView(String screen) {
     _apiLog.updateView(screen);
@@ -470,7 +430,6 @@ class MonitorController extends ChangeNotifier {
     _routeLog.clearAll();
     _visitedScreens.clear();
     _alertsDismissed = false;
-    _statsStorage.clearAll();
     notifyListeners();
   }
 
@@ -510,6 +469,11 @@ class MonitorController extends ChangeNotifier {
   }
 
   void notifyFpsUpdate(double fps, double buildMs, double gpuMs) {
+    if ((_fps.currentFps - fps).abs() < 0.2 &&
+        (_fps.currentBuildMs - buildMs).abs() < 0.2 &&
+        (_fps.currentGpuMs - gpuMs).abs() < 0.2) {
+      return;
+    }
     _fps.update(fps, buildMs, gpuMs);
     notifyListeners();
   }
@@ -534,12 +498,12 @@ class MonitorController extends ChangeNotifier {
   }
 
   void _startHardwareMonitoring() {
-    if (_hardwareTimer != null) return;
+    _hardwareTimer?.cancel();
     _fetchHardware();
-    _hardwareTimer = Timer.periodic(
-      const Duration(seconds: 3),
-      (_) => _fetchHardware(),
-    );
+    final interval = _isDashboardOpen
+        ? const Duration(seconds: 3)
+        : const Duration(seconds: 15);
+    _hardwareTimer = Timer.periodic(interval, (_) => _fetchHardware());
   }
 
   void _stopHardwareMonitoring() {
@@ -560,14 +524,16 @@ class MonitorController extends ChangeNotifier {
   }
 
   void _startPingMonitoring() {
-    if (_pingTimer != null) return;
-    Future.delayed(const Duration(seconds: 5), () {
+    _pingTimer?.cancel();
+    Future.delayed(const Duration(seconds: 3), () {
       if (_disposed) return;
       final shouldPing = _isDashboardOpen || _isOverlayVisible;
       if (!shouldPing) return;
       _fetchPing();
-      _pingTimer =
-          Timer.periodic(const Duration(seconds: 20), (_) => _fetchPing());
+      final interval = _isDashboardOpen
+          ? const Duration(seconds: 15)
+          : const Duration(seconds: 30);
+      _pingTimer = Timer.periodic(interval, (_) => _fetchPing());
     });
   }
 
