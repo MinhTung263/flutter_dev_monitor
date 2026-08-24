@@ -131,8 +131,11 @@ class MonitorController extends ChangeNotifier {
     int actionCycles
   }) screenStats(String screen) => _apiLog.statsForScreen(screen);
 
-  bool get isCurrentScreenInRefresh =>
-      _apiLog.isInRefresh(MonitorNavigatorObserver.currentRoute);
+  bool get isCurrentScreenInRefresh {
+    final contentRoute = MonitorNavigatorObserver.currentContentRoute;
+    if (_apiLog.isInRefresh(contentRoute)) return true;
+    return _apiLog.isInRefresh(MonitorNavigatorObserver.currentRoute);
+  }
 
   int get currentPhaseApiCount {
     if (isDashboardOpen) {

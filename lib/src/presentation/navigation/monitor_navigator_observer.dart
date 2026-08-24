@@ -75,7 +75,45 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   static String _currentContentRoute = MonitorConstants.unknownRoute;
   static String _cachedCurrentContentRoute = MonitorConstants.unknownRoute;
 
+  static void _syncResolveTabFast() {
+    final nav = navigatorState;
+    if (nav == null) return;
+    if (_cachedBottomBarElement != null && _cachedBottomBarElement!.mounted) {
+      try {
+        final dynamic w = _cachedBottomBarElement!.widget;
+        final int? index = w.currentIndex as int?;
+        if (index != null) {
+          final resolvedContent = _resolveNestedTabRoute(_currentContentRoute);
+          final resolvedCurrent = _resolveNestedTabRoute(_currentRoute);
+          if (resolvedContent != MonitorConstants.unknownRoute) {
+            _cachedCurrentContentRoute = resolvedContent;
+          }
+          if (resolvedCurrent != MonitorConstants.unknownRoute) {
+            _cachedCurrentRoute = resolvedCurrent;
+          }
+          final resolved = _cachedCurrentContentRoute;
+          if (resolved != MonitorConstants.unknownRoute &&
+              resolved != _lastResolvedRoute) {
+            final oldRoute = _lastResolvedRoute;
+            _lastResolvedRoute = resolved;
+            final ctrl = MonitorController.instance;
+            ctrl.startSession(resolved);
+            if (oldRoute != MonitorConstants.unknownRoute &&
+                oldRoute != resolved &&
+                !resolved.startsWith('$oldRoute/')) {
+              ctrl.logRouteReplace(oldRoute, resolved);
+            }
+            if (_lastResolvedTabName != null && _lastTabTitle != null) {
+              _renameActiveRouteSession(resolved, _lastTabTitle!);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
   static String get currentContentRoute {
+    _syncResolveTabFast();
     _scheduleTabRouteResolution();
     return _cachedCurrentContentRoute;
   }
@@ -99,6 +137,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   static DateTime _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   static String get currentRoute {
+    _syncResolveTabFast();
     _scheduleTabRouteResolution();
     return _cachedCurrentRoute;
   }
@@ -154,7 +193,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
     if (nav == null) return;
 
     final now = DateTime.now();
-    if (now.difference(_lastResolveTime).inMilliseconds < 1500) return;
+    if (now.difference(_lastResolveTime).inMilliseconds < 300) return;
 
     _tabResolutionScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -1,3 +1,11 @@
+## 2.6.1
+
+* **Release Mode API Tracking**: Enabled `MonitorInterceptor` to capture requests in Release and Profile modes, allowing DevMonitor overlay to accurately log API calls when activated in production/release builds.
+* **Instant Tab Route Resolution**: Added fast synchronous tab resolution (`_syncResolveTabFast`) in `MonitorNavigatorObserver` to immediately capture BottomNavigationBar tab switching without throttling delay.
+* **Smart Query Parameter Diffing**: Cleaned up URL endpoint path display on collapsed cards. Parameter rows are hidden by default when calls have identical parameters, and only differing parameters (`diffKeys`) are highlighted with `⚡` when parameters vary between calls.
+* **Accurate Phase-based Metrics**: Synchronized `updateView(screen)` in `addLog` and normalized route keys in `isInRefresh` to accurately track Init and Action/Refresh API counts.
+* **Cleaned Up Duplicate Badges**: Ensured call count badge (`×N`) appears once prominently beside the HTTP method badge.
+
 ## 2.6.0
 
 * **Zero-Overhead Architecture**: Replaced continuous `Ticker` with passive `SchedulerBinding.addTimingsCallback`, achieving 0% CPU consumption when the app is idle.

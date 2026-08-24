@@ -12,6 +12,53 @@ import '../theme/monitor_theme.dart';
 import 'monitor_text.dart';
 import 'responsive_dialog_wrapper.dart';
 
+String _extractCleanPath(String rawUrl) {
+  try {
+    final uri = Uri.parse(rawUrl);
+    return uri.path.isNotEmpty ? uri.path : rawUrl;
+  } catch (_) {
+    final idx = rawUrl.indexOf('?');
+    return idx >= 0 ? rawUrl.substring(0, idx) : rawUrl;
+  }
+}
+
+Set<String> _findDiffQueryKeys(ApiLogItem log) {
+  final pathToCheck = _extractCleanPath(log.url);
+  final allLogs = MonitorController.instance.apiLogs.isNotEmpty
+      ? MonitorController.instance.apiLogs
+      : MonitorController.instance.globalApiLogs;
+
+  final siblingLogs = allLogs.where((l) {
+    return l.method == log.method && _extractCleanPath(l.url) == pathToCheck;
+  }).toList();
+
+  final Set<String> diffKeys = {};
+  if (siblingLogs.length > 1) {
+    final Map<String, Set<String>> keyToValues = {};
+    for (final sib in siblingLogs) {
+      for (final entry in sib.queryParams.entries) {
+        keyToValues
+            .putIfAbsent(entry.key, () => {})
+            .add(entry.value.toString());
+      }
+    }
+    final allKeys = keyToValues.keys.toSet();
+    for (final sib in siblingLogs) {
+      for (final k in allKeys) {
+        if (!sib.queryParams.containsKey(k)) {
+          diffKeys.add(k);
+        }
+      }
+    }
+    keyToValues.forEach((key, values) {
+      if (values.length > 1) {
+        diffKeys.add(key);
+      }
+    });
+  }
+  return diffKeys;
+}
+
 Widget? _buildPayloadRow(BuildContext context, ApiLogItem log) {
   final requestBody = log.requestBody;
   if (requestBody != null && requestBody.isNotEmpty) {
@@ -43,72 +90,44 @@ Widget? _buildPayloadRow(BuildContext context, ApiLogItem log) {
   }
 
   if (log.queryParams.isNotEmpty) {
-    String path = log.url;
-    try {
-      final uri = Uri.parse(log.url);
-      path = uri.path;
-    } catch (_) {
-      final idx = log.url.indexOf('?');
-      if (idx >= 0) path = log.url.substring(0, idx);
+    final diffKeys = _findDiffQueryKeys(log);
+    // If there is only 1 call or all sibling calls have identical query parameters, do NOT show params row!
+    if (diffKeys.isEmpty) {
+      return null;
     }
 
-    final allLogs = MonitorController.instance.globalApiLogs;
-    final pathToCheck = path;
-    final siblingLogs = allLogs.where((l) {
-      String subPath = l.url;
-      try {
-        final uri = Uri.parse(l.url);
-        subPath = uri.path;
-      } catch (_) {
-        final idx = l.url.indexOf('?');
-        if (idx >= 0) subPath = l.url.substring(0, idx);
-      }
-      return l.method == log.method && subPath == pathToCheck;
-    }).toList();
+    final diffEntries = log.queryParams.entries
+        .where((e) => diffKeys.contains(e.key))
+        .toList();
 
-    final Set<String> diffKeys = {};
-    if (siblingLogs.length > 1) {
-      final Map<String, Set<String>> keyToValues = {};
-      for (final sib in siblingLogs) {
-        for (final entry in sib.queryParams.entries) {
-          keyToValues.putIfAbsent(entry.key, () => {}).add(entry.value.toString());
-        }
-      }
-      keyToValues.forEach((key, values) {
-        if (values.length > 1) {
-          diffKeys.add(key);
-        }
-      });
+    if (diffEntries.isEmpty) {
+      return null;
     }
 
     final List<InlineSpan> spans = [];
     spans.add(TextSpan(
-      text: 'Params: ',
+      text: 'Params diff: ',
       style: TextStyle(
         fontFamily: 'monospace',
         fontSize: 9.5,
-        color: MonitorColors.secondaryText.withValues(alpha: 0.8),
-        fontWeight: FontWeight.bold,
+        color: MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+        fontWeight: FontWeight.w700,
       ),
     ));
 
-    final entries = log.queryParams.entries.toList();
-    for (int i = 0; i < entries.length; i++) {
-      final entry = entries[i];
-      final isDiff = diffKeys.contains(entry.key);
-      
-      final paramColor = isDiff
-          ? (MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706))
-          : MonitorColors.secondaryText.withValues(alpha: 0.8);
-      final paramWeight = isDiff ? FontWeight.bold : FontWeight.normal;
+    for (int i = 0; i < diffEntries.length; i++) {
+      final entry = diffEntries[i];
+      final paramColor = MonitorColors.isDark
+          ? const Color(0xFFFBBF24)
+          : const Color(0xFFD97706);
 
       spans.add(TextSpan(
-        text: '${entry.key}=',
+        text: '⚡ ${entry.key}=',
         style: TextStyle(
           fontFamily: 'monospace',
           fontSize: 9.5,
           color: paramColor,
-          fontWeight: paramWeight,
+          fontWeight: FontWeight.w700,
         ),
       ));
       spans.add(TextSpan(
@@ -117,34 +136,46 @@ Widget? _buildPayloadRow(BuildContext context, ApiLogItem log) {
           fontFamily: 'monospace',
           fontSize: 9.5,
           color: paramColor,
-          fontWeight: isDiff ? FontWeight.bold : FontWeight.w500,
+          fontWeight: FontWeight.w800,
         ),
       ));
 
-      if (i < entries.length - 1) {
+      if (i < diffEntries.length - 1) {
         spans.add(TextSpan(
-          text: ', ',
+          text: ',  ',
           style: TextStyle(
             fontFamily: 'monospace',
             fontSize: 9.5,
-            color: MonitorColors.secondaryText.withValues(alpha: 0.6),
+            color: MonitorColors.secondaryText.withValues(alpha: 0.5),
           ),
         ));
       }
     }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.subdirectory_arrow_right_rounded,
-            size: 11, color: MonitorColors.secondaryText.withValues(alpha: 0.6)),
-        const SizedBox(width: 3),
-        Expanded(
-          child: RichText(
-            text: TextSpan(children: spans),
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      margin: const EdgeInsets.only(top: 2),
+      decoration: BoxDecoration(
+        color: (MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: (MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)).withValues(alpha: 0.25),
+          width: 0.6,
         ),
-      ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.difference_rounded,
+              size: 11, color: MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)),
+          const SizedBox(width: 4),
+          Expanded(
+            child: RichText(
+              text: TextSpan(children: spans),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -173,91 +204,53 @@ Widget? _buildCompactPayloadRow(ApiLogItem log) {
   }
 
   if (log.queryParams.isNotEmpty) {
-    String path = log.url;
-    try {
-      final uri = Uri.parse(log.url);
-      path = uri.path;
-    } catch (_) {
-      final idx = log.url.indexOf('?');
-      if (idx >= 0) path = log.url.substring(0, idx);
+    final diffKeys = _findDiffQueryKeys(log);
+    if (diffKeys.isEmpty) {
+      return null;
     }
 
-    final allLogs = MonitorController.instance.globalApiLogs;
-    final pathToCheck = path;
-    final siblingLogs = allLogs.where((l) {
-      String subPath = l.url;
-      try {
-        final uri = Uri.parse(l.url);
-        subPath = uri.path;
-      } catch (_) {
-        final idx = l.url.indexOf('?');
-        if (idx >= 0) subPath = l.url.substring(0, idx);
-      }
-      return l.method == log.method && subPath == pathToCheck;
-    }).toList();
+    final diffEntries = log.queryParams.entries
+        .where((e) => diffKeys.contains(e.key))
+        .toList();
 
-    final Set<String> diffKeys = {};
-    if (siblingLogs.length > 1) {
-      final Map<String, Set<String>> keyToValues = {};
-      for (final sib in siblingLogs) {
-        for (final entry in sib.queryParams.entries) {
-          keyToValues.putIfAbsent(entry.key, () => {}).add(entry.value.toString());
-        }
-      }
-      keyToValues.forEach((key, values) {
-        if (values.length > 1) {
-          diffKeys.add(key);
-        }
-      });
+    if (diffEntries.isEmpty) {
+      return null;
     }
 
     final List<InlineSpan> spans = [];
     spans.add(TextSpan(
-      text: 'Params: ',
+      text: 'Diff: ',
       style: TextStyle(
         fontFamily: 'monospace',
         fontSize: 8.5,
-        color: MonitorColors.secondaryText.withValues(alpha: 0.7),
-        fontWeight: FontWeight.bold,
+        color: MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+        fontWeight: FontWeight.w700,
       ),
     ));
 
-    final entries = log.queryParams.entries.toList();
-    for (int i = 0; i < entries.length; i++) {
-      final entry = entries[i];
-      final isDiff = diffKeys.contains(entry.key);
-      
-      final paramColor = isDiff
-          ? (MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706))
-          : MonitorColors.secondaryText.withValues(alpha: 0.7);
-      final paramWeight = isDiff ? FontWeight.bold : FontWeight.normal;
+    for (int i = 0; i < diffEntries.length; i++) {
+      final entry = diffEntries[i];
+      final paramColor = MonitorColors.isDark
+          ? const Color(0xFFFBBF24)
+          : const Color(0xFFD97706);
 
       spans.add(TextSpan(
-        text: '${entry.key}=',
+        text: '${entry.key}=${entry.value}',
         style: TextStyle(
           fontFamily: 'monospace',
           fontSize: 8.5,
           color: paramColor,
-          fontWeight: paramWeight,
-        ),
-      ));
-      spans.add(TextSpan(
-        text: entry.value.toString(),
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 8.5,
-          color: paramColor,
-          fontWeight: isDiff ? FontWeight.bold : FontWeight.w500,
+          fontWeight: FontWeight.bold,
         ),
       ));
 
-      if (i < entries.length - 1) {
+      if (i < diffEntries.length - 1) {
         spans.add(TextSpan(
           text: ', ',
           style: TextStyle(
             fontFamily: 'monospace',
             fontSize: 8.5,
-            color: MonitorColors.secondaryText.withValues(alpha: 0.5),
+            color: MonitorColors.secondaryText.withValues(alpha: 0.4),
           ),
         ));
       }
@@ -432,16 +425,10 @@ class _CollapsedRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final payloadRow = _buildPayloadRow(context, log);
-    // Shorten URL path
+    // Shorten URL path (clean endpoint path without query string)
     String displayUrl = log.url;
     if (!showFullUrl) {
-      try {
-        final uri = Uri.parse(log.url);
-        displayUrl = uri.path;
-        if (uri.query.isNotEmpty) {
-          displayUrl += '?${uri.query}';
-        }
-      } catch (_) {}
+      displayUrl = _extractCleanPath(log.url);
     }
 
     return InkWell(
@@ -457,7 +444,7 @@ class _CollapsedRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Row 1: Primary API signature (Method + URL path + Duration)
+            // Row 1: Primary API signature (Method + Call Count + URL path + Duration)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -465,6 +452,13 @@ class _CollapsedRow extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 2),
                   child: _MethodBadge(method: log.method),
                 ),
+                if (log.hasMultipleCalls) ...[
+                  const SizedBox(width: 5),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: _CallCountBadge(count: log.callCount),
+                  ),
+                ],
                 const SizedBox(width: 6),
                 Expanded(
                   child: Padding(
@@ -533,17 +527,13 @@ class _CollapsedRow extends StatelessWidget {
               const SizedBox(height: 4),
               payloadRow,
             ],
-            // Row 2: Screen, Caller, and Call Count Metadata
-            if (showScreenBadge || log.hasCallerName || log.hasMultipleCalls) ...[
+            // Row 2: Screen and Caller Metadata
+            if (showScreenBadge || log.hasCallerName) ...[
               const SizedBox(height: 5),
               Row(
                 children: [
                   if (showScreenBadge) ...[
                     _ScreenBadge(screen: log.screen, lane: lane),
-                    const SizedBox(width: 6),
-                  ],
-                  if (log.hasMultipleCalls) ...[
-                    _CallCountBadge(count: log.callCount),
                     const SizedBox(width: 6),
                   ],
                   if (log.hasCallerName)
@@ -589,16 +579,10 @@ class _CompactCollapsedRow extends StatelessWidget {
     final timeStr =
         '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
 
-    // Shorten URL path
+    // Shorten URL path (clean endpoint path without query string)
     String displayUrl = log.url;
     if (!showFullUrl) {
-      try {
-        final uri = Uri.parse(log.url);
-        displayUrl = uri.path;
-        if (uri.query.isNotEmpty) {
-          displayUrl += '?${uri.query}';
-        }
-      } catch (_) {}
+      displayUrl = _extractCleanPath(log.url);
     }
 
     return InkWell(

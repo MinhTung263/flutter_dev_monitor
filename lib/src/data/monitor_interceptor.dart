@@ -13,10 +13,6 @@ class MonitorInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    if (!kDebugMode) {
-      super.onRequest(options, handler);
-      return;
-    }
     options.extra['caller_name'] = _extractCallerName(StackTrace.current.toString());
     options.extra['request_time'] = DateTime.now().millisecondsSinceEpoch;
     options.extra['req_headers'] = _flattenHeaders(options.headers);
@@ -28,10 +24,6 @@ class MonitorInterceptor extends Interceptor {
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    if (!kDebugMode) {
-      super.onResponse(response, handler);
-      return;
-    }
     _sendToMonitor(
       response.requestOptions,
       response.statusCode ?? 200,
@@ -44,10 +36,6 @@ class MonitorInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    if (!kDebugMode) {
-      super.onError(err, handler);
-      return;
-    }
     _sendToMonitor(
       err.requestOptions,
       err.response?.statusCode ?? 500,

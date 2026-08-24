@@ -52,7 +52,17 @@ class ApiLogController {
     return count;
   }
 
-  bool isInRefresh(String screen) => _screenInRefreshMode[screen] == true;
+  bool isInRefresh(String screen) {
+    if (_screenInRefreshMode[screen] == true) return true;
+    final String cleanScreen =
+        screen.contains('#') ? screen.split('#').first : screen;
+    for (final entry in _screenInRefreshMode.entries) {
+      final String entryClean =
+          entry.key.contains('#') ? entry.key.split('#').first : entry.key;
+      if (entryClean == cleanScreen && entry.value == true) return true;
+    }
+    return false;
+  }
 
   DateTime? sessionStartTime(String screen) => _sessionStartTime[screen];
 
@@ -253,7 +263,7 @@ class ApiLogController {
       }
     }
 
-    updateView(currentViewedScreen);
+    updateView(screen);
   }
 
   List<ApiLogItem> _groupDuplicateApis(List<ApiLogItem> rawLogs) {
