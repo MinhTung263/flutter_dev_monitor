@@ -1,3 +1,14 @@
+## 2.7.0
+
+* **Expanded HTTP Methods Support**: Full support for `PUT` and `DELETE` requests with distinct color badges, dedicated filter chips in dashboard, and interceptor telemetry.
+* **Stable Log Identity & Detail Tile Persistence**: Assigned immutable unique `id` to `ApiLogItem` and bound `ValueKey(item.id)` to `ApiLogTile`. Inspecting an open API log will no longer unexpectedly jump or swap to background requests when new logs arrive.
+* **Smart API Search Matching**: Added `matchesQuery` to filter APIs by exact HTTP methods (e.g., searching `get` only returns `GET` requests and excludes `POST` even if the endpoint URL contains "get"), compound queries (e.g. `get /orders`), status codes (e.g. `200`, `404`), and endpoint keywords.
+* **Flow Map Quick-Open API Badge**: Added interactive 1-tap `[ API ↗ ]` action badge on map node cards to instantly inspect screen API logs without needing to double-tap or deselect path transitions.
+* **Font & Theme Isolation (`MonitorThemeScope`)**: Isolated typography and scaling via `TextScaler.noScaling` and `boldText: false`. Host app accessibility or font size customizations (e.g. `AppTextScalingWrapper`) no longer distort DevMonitor overlays and dialogs.
+* **Resolved Black Screen Issue**: Fixed theme race condition where asynchronous SharedPreferences loading overwrote dashboard themes; modernized dark mode palette to clean slate gray tones (`#161B22` / `#21262D`).
+* **RAM Measurement Fix & Anti-Jank Threading**: Implemented multi-tier memory metrics fallback (PSS -> Debug.getMemoryInfo -> Runtime heap + Native heap) and offloaded hardware sampling to native background thread pool (`backgroundExecutor`) to eliminate UI thread stutter.
+* **Redesigned Modern Reset Confirmation Dialog**: Premium glassmorphism design with ambient glow, callout message container, action badge, tactile haptic feedback, and non-destructive styling for map resets.
+
 ## 2.6.1
 
 * **Release Mode API Tracking**: Enabled `MonitorInterceptor` to capture requests in Release and Profile modes, allowing DevMonitor overlay to accurately log API calls when activated in production/release builds.
