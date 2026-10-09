@@ -30,6 +30,7 @@ class _GroupedLogList extends StatelessWidget {
       itemBuilder: (_, i) {
         final item = items[i];
         return ApiLogTile(
+          key: ValueKey(item.id),
           log: item,
           showOrder: false,
           showScreenBadge: selectedScreen == MonitorConstants.allScreensKey,
@@ -68,6 +69,8 @@ class _FilterBar extends StatelessWidget {
     final errCount = allLogs.where((l) => !l.isSuccess).length;
     final getCount = allLogs.where((l) => l.method == MonitorFilterKeys.get).length;
     final postCount = allLogs.where((l) => l.method == MonitorFilterKeys.post).length;
+    final putCount = allLogs.where((l) => l.method == MonitorFilterKeys.put).length;
+    final deleteCount = allLogs.where((l) => l.method == MonitorFilterKeys.delete).length;
 
     return Container(
       color: MonitorColors.pageBackground,
@@ -124,6 +127,26 @@ class _FilterBar extends StatelessWidget {
                       active: activeFilter == MonitorFilterKeys.post,
                       color: MonitorColors.methodPost,
                       onTap: () => onChanged(MonitorFilterKeys.post),
+                    ),
+                  ],
+                  if (putCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _FilterChip(
+                      label: MonitorFilterKeys.put,
+                      count: putCount,
+                      active: activeFilter == MonitorFilterKeys.put,
+                      color: MonitorColors.methodPut,
+                      onTap: () => onChanged(MonitorFilterKeys.put),
+                    ),
+                  ],
+                  if (deleteCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _FilterChip(
+                      label: MonitorFilterKeys.delete,
+                      count: deleteCount,
+                      active: activeFilter == MonitorFilterKeys.delete,
+                      color: MonitorColors.methodDelete,
+                      onTap: () => onChanged(MonitorFilterKeys.delete),
                     ),
                   ],
                 ],
@@ -1166,6 +1189,7 @@ class _FlowGroupCardState extends State<_FlowGroupCard> {
                         // API Tile
                         Expanded(
                           child: ApiLogTile(
+                            key: ValueKey((node.item as ApiLogItem).id),
                             log: node.item as ApiLogItem,
                             showOrder: false,
                             showScreenBadge: false,

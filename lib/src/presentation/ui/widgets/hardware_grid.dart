@@ -28,6 +28,15 @@ class MonitorHardwareGrid extends StatelessWidget {
         const storageWarnCeil = 500.0;
         final storageRatio = (appStorage / storageWarnCeil).clamp(0.0, 1.0);
 
+        final ramValue = ramTotal > 0
+            ? '${ramUsed.toStringAsFixed(0)} / ${ramTotal.toStringAsFixed(0)} MB'
+            : '${ramUsed.toStringAsFixed(0)} MB';
+
+        final totalDisk = ctrl.totalDisk;
+        final storageValue = totalDisk > 0
+            ? '${appStorage.toStringAsFixed(1)}MB / ${totalDisk >= 1 ? '${totalDisk.toStringAsFixed(0)}GB' : '${(totalDisk * 1024).toStringAsFixed(0)}MB'}'
+            : '${appStorage.toStringAsFixed(1)} MB';
+
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
@@ -37,8 +46,7 @@ class MonitorHardwareGrid extends StatelessWidget {
                   icon: Icons.memory_outlined,
                   iconColor: const Color(0xFF2DD4BF),
                   label: 'RAM',
-                  value:
-                      '${ramUsed.toStringAsFixed(0)} / ${ramTotal.toStringAsFixed(0)} MB',
+                  value: ramValue,
                   ratio: ramRatio,
                   barColor: ramRatio > 0.8
                       ? MonitorColors.statusError
@@ -56,7 +64,7 @@ class MonitorHardwareGrid extends StatelessWidget {
                   icon: Icons.storage_outlined,
                   iconColor: const Color(0xFF818CF8),
                   label: 'STORAGE',
-                  value: '${appStorage.toStringAsFixed(1)} MB',
+                  value: storageValue,
                   ratio: storageRatio,
                   barColor: storageRatio > 0.8
                       ? MonitorColors.statusError

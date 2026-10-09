@@ -23,6 +23,7 @@ import '../../controller/route_log_controller.dart';
 import '../widgets/fps_chart.dart';
 import '../widgets/hardware_grid.dart';
 import '../widgets/metrics_bar.dart';
+import '../widgets/monitor_theme_scope.dart';
 import '../widgets/monitor_text.dart';
 import '../widgets/ram_chart.dart';
 import '../widgets/responsive_dialog_wrapper.dart';
@@ -108,6 +109,9 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         message: message,
         confirmLabel: LocaleKeys.confirm.tr,
         cancelLabel: LocaleKeys.cancel.tr,
+        icon: Icons.delete_sweep_rounded,
+        isDestructive: true,
+        badgeLabel: 'RESET DATA',
       ),
     );
     if (confirmed == true && context.mounted) {
@@ -125,27 +129,27 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
       filtered = logs.where((l) => l.method == MonitorFilterKeys.get).toList();
     } else if (_filterMode == MonitorFilterKeys.post) {
       filtered = logs.where((l) => l.method == MonitorFilterKeys.post).toList();
+    } else if (_filterMode == MonitorFilterKeys.put) {
+      filtered = logs.where((l) => l.method == MonitorFilterKeys.put).toList();
+    } else if (_filterMode == MonitorFilterKeys.delete) {
+      filtered = logs.where((l) => l.method == MonitorFilterKeys.delete).toList();
     } else {
       filtered = logs.toList();
     }
 
     if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
-      filtered = filtered.where((l) {
-        final urlMatch = l.url.toLowerCase().contains(q);
-        final methodMatch = l.method.toLowerCase().contains(q);
-        final statusMatch = l.statusCode.toString().contains(q);
-        return urlMatch || methodMatch || statusMatch;
-      }).toList();
+      filtered = filtered.where((l) => l.matchesQuery(_searchQuery)).toList();
     }
     return filtered;
   }
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: MonitorColors.isDarkNotifier,
-      builder: (context, _, __) => _buildPage(context),
+    return MonitorThemeScope(
+      child: ValueListenableBuilder<bool>(
+        valueListenable: MonitorColors.isDarkNotifier,
+        builder: (context, _, __) => _buildPage(context),
+      ),
     );
   }
 
@@ -258,31 +262,33 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
         context: context,
         routeSettings: const RouteSettings(name: MonitorConstants.filterDialog),
         barrierColor: Colors.black.withValues(alpha: 0.4),
-        builder: (_) => Center(
-          child: Container(
-            width: 480, // Constrain width of filter dialog on tablet
-            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 15,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Material(
-                color: Colors.transparent,
-                child: _ScreenPickerSheet(
-                  screens: screens,
-                  selected: _selectedScreen,
-                  onSelected: (s) {
-                    _onScreenChanged(s);
-                    Navigator.of(context).pop();
-                  },
-                  isDialog: true,
+        builder: (_) => MonitorThemeScope(
+          child: Center(
+            child: Container(
+              width: 480, // Constrain width of filter dialog on tablet
+              margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Material(
+                  color: Colors.transparent,
+                  child: _ScreenPickerSheet(
+                    screens: screens,
+                    selected: _selectedScreen,
+                    onSelected: (s) {
+                      _onScreenChanged(s);
+                      Navigator.of(context).pop();
+                    },
+                    isDialog: true,
+                  ),
                 ),
               ),
             ),
@@ -298,13 +304,15 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
       isScrollControlled: true,
       routeSettings:
           const RouteSettings(name: MonitorConstants.screenPickerSheet),
-      builder: (_) => _ScreenPickerSheet(
-        screens: screens,
-        selected: _selectedScreen,
-        onSelected: (s) {
-          _onScreenChanged(s);
-          Navigator.of(context).pop();
-        },
+      builder: (_) => MonitorThemeScope(
+        child: _ScreenPickerSheet(
+          screens: screens,
+          selected: _selectedScreen,
+          onSelected: (s) {
+            _onScreenChanged(s);
+            Navigator.of(context).pop();
+          },
+        ),
       ),
     );
   }
@@ -539,6 +547,9 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
         message: message,
         confirmLabel: LocaleKeys.confirm.tr,
         cancelLabel: LocaleKeys.cancel.tr,
+        icon: Icons.delete_sweep_rounded,
+        isDestructive: true,
+        badgeLabel: 'RESET ALL',
       ),
     );
     if (confirmed == true && context.mounted) {

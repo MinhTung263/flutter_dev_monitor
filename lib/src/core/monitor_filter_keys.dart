@@ -5,4 +5,6 @@ abstract class MonitorFilterKeys {
   static const String error = 'ERR';
   static const String get = 'GET';
   static const String post = 'POST';
+  static const String put = 'PUT';
+  static const String delete = 'DELETE';
 }

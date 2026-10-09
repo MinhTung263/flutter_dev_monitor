@@ -142,10 +142,13 @@ class FpsOverlayPillBadge extends StatelessWidget {
                       ],
                       const SizedBox(height: 1.0),
                       // ── ROW 2: FPS + JANK ────────────────────────────
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
                         children: [
                           Container(
                             width: 4,
@@ -189,11 +192,15 @@ class FpsOverlayPillBadge extends StatelessWidget {
                             ),
                           ],
                         ],
+                        ),
                       ),
                       const SizedBox(height: 1.0),
                       // ── ROW 3: API + MEM (Grouped together) ─────────
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(LocaleKeys.overlayApiLabel.tr,
                               style: lblStyle.copyWith(
@@ -209,17 +216,22 @@ class FpsOverlayPillBadge extends StatelessWidget {
                               style: valStyle.copyWith(
                                   color: MonitorColors.overlayMem)),
                         ],
+                        ),
                       ),
                       const SizedBox(height: 1.0),
                       // ── ROW 4: NET PING ──────────────────────────────
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(LocaleKeys.overlayNetLabel.tr,
                               style: lblStyle.copyWith(color: pingColor)),
                           Text(pingMs == null ? '--' : '${pingMs}ms',
                               style: valStyle.copyWith(color: pingColor)),
                         ],
+                        ),
                       ),
                     ],
                   ),

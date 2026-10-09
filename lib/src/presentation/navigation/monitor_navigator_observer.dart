@@ -83,6 +83,16 @@ class MonitorNavigatorObserver extends NavigatorObserver {
         final dynamic w = _cachedBottomBarElement!.widget;
         final int? index = w.currentIndex as int?;
         if (index != null) {
+          // If the tab index has changed since last time, force an immediate
+          // re-resolution so onRequest() captures the correct screen name even
+          // when the 300ms _scheduleTabRouteResolution throttle is still active.
+          final bool tabIndexChanged =
+              _lastKnownTabIndex != null && index != _lastKnownTabIndex;
+          _lastKnownTabIndex = index;
+          if (tabIndexChanged) {
+            // Reset throttle so the full resolution runs on the next frame.
+            _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
+          }
           final resolvedContent = _resolveNestedTabRoute(_currentContentRoute);
           final resolvedCurrent = _resolveNestedTabRoute(_currentRoute);
           if (resolvedContent != MonitorConstants.unknownRoute) {
@@ -135,6 +145,20 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   static String? _lastTabTitle;
   static bool _tabResolutionScheduled = false;
   static DateTime _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
+  // Tracks the last seen bottom-bar index to detect tab switches instantly.
+  static int? _lastKnownTabIndex;
+
+  /// Manually sets the current active screen/route. Useful for PageView / Tab navigation.
+  static void setCurrentScreen(String screenName) {
+    if (screenName.isEmpty) return;
+    _currentContentRoute = screenName;
+    _cachedCurrentContentRoute = screenName;
+    _currentRoute = screenName;
+    _cachedCurrentRoute = screenName;
+    _lastResolvedRoute = screenName;
+    _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
+    MonitorController.instance.startSession(screenName);
+  }
 
   static String get currentRoute {
     _syncResolveTabFast();
@@ -345,6 +369,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _cachedBottomBarElement = null;
+    _lastKnownTabIndex = null;
     super.didPush(route, previousRoute);
     _actualTopRoute = route.settings.name ?? _popupFallbackName(route);
     if (isMonitorRoute(route)) return;
@@ -402,6 +427,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _cachedBottomBarElement = null;
+    _lastKnownTabIndex = null;
     super.didPop(route, previousRoute);
     if (previousRoute != null) {
       _actualTopRoute = previousRoute.settings.name ?? _popupFallbackName(previousRoute);
@@ -473,6 +499,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _cachedBottomBarElement = null;
+    _lastKnownTabIndex = null;
     super.didRemove(route, previousRoute);
     if (previousRoute != null) {
       _actualTopRoute = previousRoute.settings.name ?? _popupFallbackName(previousRoute);
@@ -504,6 +531,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     _lastResolveTime = DateTime.fromMillisecondsSinceEpoch(0);
     _cachedBottomBarElement = null;
+    _lastKnownTabIndex = null;
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
     if (newRoute != null) {
       _actualTopRoute = newRoute.settings.name ?? _popupFallbackName(newRoute);
@@ -564,16 +592,18 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       // Stop if user navigated away or route was already renamed with a title.
       if (currentRoute != capturedRoute) return;
 
-      final title = _findAppBarTitle();
-      if (title != null && title.isNotEmpty) {
-        _renameActiveRouteSession(currentRoute, title);
-      } else if (withRetry && attempt + 1 < _titleRetryDelays.length) {
-        // Title not ready yet (e.g. async controller state) — retry after delay.
-        final nextDelay = _titleRetryDelays[attempt + 1];
-        Future.delayed(Duration(milliseconds: nextDelay), () {
-          _tryFindTitle(capturedRoute, attempt: attempt + 1, withRetry: true);
-        });
-      }
+      try {
+        final title = _findAppBarTitle();
+        if (title != null && title.isNotEmpty) {
+          _renameActiveRouteSession(currentRoute, title);
+        } else if (withRetry && attempt + 1 < _titleRetryDelays.length) {
+          // Title not ready yet (e.g. async controller state) — retry after delay.
+          final nextDelay = _titleRetryDelays[attempt + 1];
+          Future.delayed(Duration(milliseconds: nextDelay), () {
+            _tryFindTitle(capturedRoute, attempt: attempt + 1, withRetry: true);
+          });
+        }
+      } catch (_) {}
     });
   }
 
@@ -733,6 +763,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
       } catch (_) {}
       if (foundBottomBarWidget == null) {
         _cachedBottomBarElement = null;
+    _lastKnownTabIndex = null;
       }
     }
 

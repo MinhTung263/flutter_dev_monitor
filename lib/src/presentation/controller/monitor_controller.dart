@@ -204,6 +204,7 @@ class MonitorController extends ChangeNotifier {
   double get totalRam => _hardware.totalRam;
   double get appDiskUsed => _hardware.appDiskUsed;
   double get totalDisk => _hardware.totalDisk;
+  double get freeDisk => _hardware.freeDisk;
   Map<String, List<double>> get ramHistoryMap => _hardware.ramHistoryMap;
   List<double> get globalRamHistory => _hardware.globalRamHistory;
   String get deviceModel => _hardware.deviceModel;
@@ -380,13 +381,20 @@ class MonitorController extends ChangeNotifier {
     // Reconcile item.screen with the canonical (possibly renamed) session name.
     // The session may have been renamed with a "#Title" suffix AFTER the API
     // request was created (e.g. /PRODDETAIL → /PRODDETAIL#Tạo sản phẩm mới).
-    // We use currentContentRoute as the source of truth because it always
-    // reflects the CURRENT active visit — not a historical one with the same path.
+    //
+    // IMPORTANT: Only override when currentContent is the SAME base route as
+    // item.screen (e.g. item.screen = "home/invoice", currentContent =
+    // "home/invoice#Hóa đơn"). This prevents APIs captured on tab A from
+    // being wrongly attributed to tab B when the response arrives later
+    // (after the user has already switched tabs).
     final String screenBase =
         screen.contains('#') ? screen.split('#')[0] : screen;
     final String contentBase = currentContent.contains('#')
         ? currentContent.split('#')[0]
         : currentContent;
+    // Only allow override when the bases are identical — NOT just a prefix match.
+    // A stale item.screen = "home" must NOT be overridden by currentContent =
+    // "home/invoice" (different tab), even though "home/invoice".startsWith("home").
     if (contentBase == screenBase && currentContent.isNotEmpty) {
       screen = currentContent;
     }
@@ -548,15 +556,20 @@ class MonitorController extends ChangeNotifier {
   }
 
   Future<void> _fetchPing() async {
-    final ms = await _datasource.measurePing();
-    _currentPingMs = ms;
-    notifyListeners();
+    try {
+      final ms = await _datasource.measurePing();
+      if (_disposed) return;
+      _currentPingMs = ms;
+      notifyListeners();
+    } catch (_) {}
   }
 
   Future<void> _fetchHardware() async {
-    final snapshot = await _datasource.fetch();
-    if (snapshot == null) return;
-    _hardware.update(snapshot, MonitorNavigatorObserver.currentRoute);
-    notifyListeners();
+    try {
+      final snapshot = await _datasource.fetch();
+      if (_disposed || snapshot == null) return;
+      _hardware.update(snapshot, MonitorNavigatorObserver.currentRoute);
+      notifyListeners();
+    } catch (_) {}
   }
 }

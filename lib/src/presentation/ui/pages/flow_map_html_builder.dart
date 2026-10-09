@@ -90,8 +90,14 @@ String buildFlowMapHtml({required String jsonData}) {
             final url = api['url'] ?? '';
             final statusCode = api['statusCode'] ?? 200;
             final duration = api['duration'] ?? 0;
-            final methodColor = method == 'GET' ? '#10b981' : '#3b82f6';
             final statusColor = statusCode == 200 ? '#10b981' : '#ef4444';
+            final methodColor = method == 'GET'
+                ? '#10b981'
+                : (method == 'POST'
+                    ? '#3b82f6'
+                    : (method == 'PUT'
+                        ? '#f59e0b'
+                        : (method == 'DELETE' ? '#ef4444' : '#64748b')));
 
             apisListHtml += '''
             <div style="font-size: 13px; padding: 8px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px;">

@@ -6,9 +6,11 @@ abstract class MonitorColors {
   static const _channel = MethodChannel('flutter_dev_monitor/system_monitor');
 
   static final ValueNotifier<bool> isDarkNotifier = ValueNotifier<bool>(false);
+  static bool _userExplicitlySetTheme = false;
 
   static bool get isDark => isDarkNotifier.value;
   static set isDark(bool v) {
+    _userExplicitlySetTheme = true;
     isDarkNotifier.value = v;
     _channel.invokeMethod<void>('setTheme', v).catchError((_) {});
   }
@@ -18,25 +20,27 @@ abstract class MonitorColors {
   static Future<void> load() async {
     try {
       final saved = await _channel.invokeMethod<bool>('getTheme');
-      if (saved != null) isDarkNotifier.value = saved;
+      if (saved != null && !_userExplicitlySetTheme) {
+        isDarkNotifier.value = saved;
+      }
     } catch (_) {}
   }
 
   // ── Backgrounds ───────────────────────────────────────────────────────
   static Color get pageBackground =>
-      isDark ? const Color(0xFF0D1117) : const Color(0xFFF4F6F9);
-  static Color get surface => isDark ? const Color(0xFF161B22) : Colors.white;
+      isDark ? const Color(0xFF161B22) : const Color(0xFFF4F6F9);
+  static Color get surface => isDark ? const Color(0xFF21262D) : Colors.white;
   static Color get expandedDetailBg =>
-      isDark ? const Color(0xFF1C2128) : const Color(0xFFF8FAFC);
+      isDark ? const Color(0xFF262C36) : const Color(0xFFF8FAFC);
   static Color get metricsBarBg =>
-      isDark ? const Color(0xFF0D1117) : const Color(0xFFEBF0F5);
+      isDark ? const Color(0xFF161B22) : const Color(0xFFEBF0F5);
   static Color get dropdownBg =>
-      isDark ? const Color(0xFF21262D) : const Color(0xFFF0F2F5);
+      isDark ? const Color(0xFF2D333B) : const Color(0xFFF0F2F5);
   static Color get border =>
-      isDark ? const Color(0xFF30363D) : const Color(0xFFE2E8F0);
+      isDark ? const Color(0xFF38404B) : const Color(0xFFE2E8F0);
   // Subtle separator lines (thinner visual weight than border)
   static Color get divider =>
-      isDark ? const Color(0xFF30363D) : const Color(0xFFF1F4F9);
+      isDark ? const Color(0xFF38404B) : const Color(0xFFF1F4F9);
 
   // ── Text ─────────────────────────────────────────────────────────────
   static Color get primaryText =>
@@ -63,6 +67,25 @@ abstract class MonitorColors {
       isDark ? const Color(0xFF58A6FF) : const Color(0xFF1976D2);
   static Color get methodPost =>
       isDark ? const Color(0xFF3FB950) : const Color(0xFF388E3C);
+  static Color get methodPut =>
+      isDark ? const Color(0xFFFFA657) : const Color(0xFFD97706);
+  static Color get methodDelete =>
+      isDark ? const Color(0xFFF85149) : const Color(0xFFD32F2F);
+
+  static Color methodColor(String method) {
+    switch (method.toUpperCase()) {
+      case 'GET':
+        return methodGet;
+      case 'POST':
+        return methodPost;
+      case 'PUT':
+        return methodPut;
+      case 'DELETE':
+        return methodDelete;
+      default:
+        return methodPost;
+    }
+  }
 
   // ── Metrics ───────────────────────────────────────────────────────────
   static Color get metricTotal =>
@@ -107,6 +130,15 @@ abstract class MonitorColors {
 
 abstract class MonitorTextStyle {
   static const String monoFontFamily = 'monospace';
+  static const List<String> standardFontFallback = [
+    '-apple-system',
+    'BlinkMacSystemFont',
+    'Segoe UI',
+    'Roboto',
+    'Helvetica Neue',
+    'Arial',
+    'sans-serif',
+  ];
 
   /// Monospace — values, timestamps, route names, JSON.
   /// [color] defaults to [MonitorColors.secondaryText].
@@ -117,11 +149,14 @@ abstract class MonitorTextStyle {
     double? height,
   }) =>
       TextStyle(
+        inherit: false,
         color: color ?? MonitorColors.secondaryText,
         fontSize: size,
         fontFamily: monoFontFamily,
+        fontFamilyFallback: const ['Courier', 'Courier New', 'monospace'],
         fontWeight: weight,
         height: height,
+        decoration: TextDecoration.none,
       );
 
   /// Uppercase bold label — section headers, event badges, chip labels.
@@ -132,10 +167,13 @@ abstract class MonitorTextStyle {
     double spacing = 0.4,
   }) =>
       TextStyle(
+        inherit: false,
         color: color,
         fontSize: size,
         fontWeight: FontWeight.bold,
         letterSpacing: spacing,
+        fontFamilyFallback: standardFontFallback,
+        decoration: TextDecoration.none,
       );
 
   /// Regular (non-monospace) body text.
@@ -146,9 +184,12 @@ abstract class MonitorTextStyle {
     FontWeight weight = FontWeight.normal,
   }) =>
       TextStyle(
+        inherit: false,
         color: color ?? MonitorColors.primaryText,
         fontSize: size,
         fontWeight: weight,
+        fontFamilyFallback: standardFontFallback,
+        decoration: TextDecoration.none,
       );
 }
 

@@ -192,28 +192,17 @@ class ApiLogController {
       if (idx >= 0) {
         final existing = refreshLogs[idx];
         refreshLogs[idx] = item.copyWith(
+          id: existing.id,
           callCount: existing.callCount + 1,
           screen: screenLabel,
           phase: newPhase,
           refreshCycle: cycle,
         );
       } else {
-        refreshLogs.add(ApiLogItem(
-          url: item.url,
-          method: item.method,
-          duration: item.duration,
-          statusCode: item.statusCode,
-          timestamp: item.timestamp,
+        refreshLogs.add(item.copyWith(
           screen: screenLabel,
-          callerName: item.callerName,
           phase: newPhase,
           refreshCycle: cycle,
-          responseBytes: item.responseBytes,
-          queryParams: item.queryParams,
-          requestHeaders: item.requestHeaders,
-          requestBody: item.requestBody,
-          responseHeaders: item.responseHeaders,
-          responseBody: item.responseBody,
         ));
         if (refreshLogs.length > _maxLogsPerScreen) {
           refreshLogs.removeAt(0);
@@ -233,28 +222,17 @@ class ApiLogController {
       if (idx >= 0) {
         final existing = initLogs[idx];
         initLogs[idx] = item.copyWith(
+          id: existing.id,
           callCount: existing.callCount + 1,
           screen: screenLabel,
           phase: newPhase,
           refreshCycle: initCycle,
         );
       } else {
-        initLogs.add(ApiLogItem(
-          url: item.url,
-          method: item.method,
-          duration: item.duration,
-          statusCode: item.statusCode,
-          timestamp: item.timestamp,
+        initLogs.add(item.copyWith(
           screen: screenLabel,
-          callerName: item.callerName,
           phase: newPhase,
           refreshCycle: initCycle,
-          responseBytes: item.responseBytes,
-          queryParams: item.queryParams,
-          requestHeaders: item.requestHeaders,
-          requestBody: item.requestBody,
-          responseHeaders: item.responseHeaders,
-          responseBody: item.responseBody,
         ));
 
         if (initLogs.length > _maxLogsPerScreen) {
@@ -277,6 +255,7 @@ class ApiLogController {
         final isLatest = log.timestamp.isAfter(existing.timestamp);
         if (isLatest) {
           grouped[key] = log.copyWith(
+            id: existing.id,
             callCount: existing.callCount + log.callCount,
           );
         } else {

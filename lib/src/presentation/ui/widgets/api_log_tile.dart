@@ -6,10 +6,10 @@ import 'package:flutter/services.dart';
 import '../../../domain/api_log_item.dart';
 import '../../../core/monitor_strings.dart';
 import '../../../core/monitor_constants.dart';
-import '../../../core/monitor_filter_keys.dart';
 import '../../controller/monitor_controller.dart';
 import '../theme/monitor_theme.dart';
 import 'monitor_text.dart';
+import 'monitor_theme_scope.dart';
 import 'responsive_dialog_wrapper.dart';
 
 String _extractCleanPath(String rawUrl) {
@@ -298,6 +298,14 @@ class _ApiLogTileState extends State<ApiLogTile> {
   ];
 
   @override
+  void didUpdateWidget(covariant ApiLogTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.log.id != widget.log.id) {
+      _expanded = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final log = widget.log;
     final statusColor = _statusColor(log);
@@ -571,9 +579,7 @@ class _CompactCollapsedRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final compactPayloadRow = _buildCompactPayloadRow(log);
-    final isGet = log.method == MonitorFilterKeys.get;
-    final methodColor =
-        isGet ? MonitorColors.methodGet : MonitorColors.methodPost;
+    final methodColor = MonitorColors.methodColor(log.method);
 
     final ts = log.timestamp;
     final timeStr =
@@ -1474,11 +1480,12 @@ class _CopyActionsSheetState extends State<_CopyActionsSheet> {
         ),
     ];
 
-    return Container(
-      decoration: BoxDecoration(
-        color: MonitorColors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+    return MonitorThemeScope(
+      child: Container(
+        decoration: BoxDecoration(
+          color: MonitorColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1575,6 +1582,7 @@ class _CopyActionsSheetState extends State<_CopyActionsSheet> {
               height: MediaQuery.of(context).padding.bottom + 8),
         ],
       ),
+    ),
     );
   }
 }
@@ -2260,8 +2268,7 @@ class _MethodBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isGet = method == MonitorFilterKeys.get;
-    final color = isGet ? MonitorColors.methodGet : MonitorColors.methodPost;
+    final color = MonitorColors.methodColor(method);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(

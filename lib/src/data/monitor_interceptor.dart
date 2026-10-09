@@ -13,39 +13,47 @@ class MonitorInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    options.extra['caller_name'] = _extractCallerName(StackTrace.current.toString());
-    options.extra['request_time'] = DateTime.now().millisecondsSinceEpoch;
-    options.extra['req_headers'] = _flattenHeaders(options.headers);
-    options.extra['query_params'] = _flattenMap(options.queryParameters);
-    options.extra['req_body'] = _encodeBody(options.data);
-    options.extra['request_screen'] = MonitorNavigatorObserver.currentRoute;
+    try {
+      options.extra['caller_name'] = _extractCallerName(StackTrace.current.toString());
+      options.extra['request_time'] = DateTime.now().millisecondsSinceEpoch;
+      options.extra['req_headers'] = _flattenHeaders(options.headers);
+      options.extra['query_params'] = _flattenMap(options.queryParameters);
+      options.extra['req_body'] = _encodeBody(options.data);
+
+      final explicitScreen = options.extra['_dev_screen_origin'] ?? options.extra['screen'];
+      options.extra['request_screen'] = explicitScreen ?? MonitorNavigatorObserver.currentRoute;
+    } catch (_) {}
     super.onRequest(options, handler);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    _sendToMonitor(
-      response.requestOptions,
-      response.statusCode ?? 200,
-      responseBytes: _estimateBytes(response),
-      responseHeaders: _flattenListHeaders(response.headers.map),
-      responseBody: _encodeBody(response.data),
-    );
+    try {
+      _sendToMonitor(
+        response.requestOptions,
+        response.statusCode ?? 200,
+        responseBytes: _estimateBytes(response),
+        responseHeaders: _flattenListHeaders(response.headers.map),
+        responseBody: _encodeBody(response.data),
+      );
+    } catch (_) {}
     super.onResponse(response, handler);
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    _sendToMonitor(
-      err.requestOptions,
-      err.response?.statusCode ?? 500,
-      responseHeaders: err.response != null
-          ? _flattenListHeaders(err.response!.headers.map)
-          : const {},
-      responseBody: err.response != null
-          ? _encodeBody(err.response!.data)
-          : null,
-    );
+    try {
+      _sendToMonitor(
+        err.requestOptions,
+        err.response?.statusCode ?? 500,
+        responseHeaders: err.response != null
+            ? _flattenListHeaders(err.response!.headers.map)
+            : const {},
+        responseBody: err.response != null
+            ? _encodeBody(err.response!.data)
+            : null,
+      );
+    } catch (_) {}
     super.onError(err, handler);
   }
 
@@ -63,7 +71,7 @@ class MonitorInterceptor extends Interceptor {
 
     MonitorController.instance.addLog(ApiLogItem(
       url: options.uri.toString(),
-      method: options.method,
+      method: options.method.toUpperCase(),
       statusCode: statusCode,
       duration: DateTime.now().millisecondsSinceEpoch - startTime,
       responseBytes: responseBytes,

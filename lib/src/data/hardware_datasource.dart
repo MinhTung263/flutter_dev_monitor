@@ -10,12 +10,14 @@ class HardwareSnapshot {
   final double ramTotal;
   final double appDiskUsed;
   final double diskTotal;
+  final double diskFree;
 
   const HardwareSnapshot({
     required this.ramUsed,
     required this.ramTotal,
     required this.appDiskUsed,
     required this.diskTotal,
+    this.diskFree = 0.0,
   });
 }
 
@@ -28,10 +30,11 @@ class HardwareDatasource {
           await _channel.invokeMethod<Map<dynamic, dynamic>>('getSystemHardware');
       if (data == null) return null;
       return HardwareSnapshot(
-        ramUsed: (data['ramUsed'] as num).toDouble(),
-        ramTotal: (data['ramTotal'] as num).toDouble(),
-        appDiskUsed: (data['appDiskUsed'] as num).toDouble(),
-        diskTotal: (data['diskTotal'] as num).toDouble(),
+        ramUsed: (data['ramUsed'] as num?)?.toDouble() ?? 0.0,
+        ramTotal: (data['ramTotal'] as num?)?.toDouble() ?? 0.0,
+        appDiskUsed: (data['appDiskUsed'] as num?)?.toDouble() ?? 0.0,
+        diskTotal: (data['diskTotal'] as num?)?.toDouble() ?? 0.0,
+        diskFree: (data['diskFree'] as num?)?.toDouble() ?? 0.0,
       );
     } catch (_) {
       return null;

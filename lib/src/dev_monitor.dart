@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'core/monitor_constants.dart';
 import 'data/monitor_interceptor.dart';
 import 'presentation/controller/monitor_controller.dart';
 import 'presentation/navigation/monitor_navigator_observer.dart';
+import 'presentation/ui/pages/monitor_dashboard_page.dart';
 import 'presentation/ui/widgets/fps_overlay.dart';
+import 'presentation/ui/widgets/responsive_dialog_wrapper.dart';
 
 /// The main interface for configuring and managing the in-app developer monitor.
 abstract final class DevMonitor {
@@ -36,6 +39,31 @@ abstract final class DevMonitor {
 
   /// Whether the overlay is currently visible.
   static bool get isOverlayVisible => _overlayEnabled.value;
+
+  /// Opens the DevMonitor dashboard page directly.
+  static void openDashboard([BuildContext? context]) {
+    final nav = context != null
+        ? Navigator.of(context)
+        : MonitorNavigatorObserver.navigatorState;
+    if (nav == null) return;
+    if (MonitorController.instance.isDashboardOpen) return;
+    final route = MonitorNavigatorObserver.currentRoute;
+    nav.push(MonitorResponsiveRoute(
+      builder: (_) => MonitorDashboardPage(
+        initialScreen:
+            route.isEmpty ? MonitorConstants.unknownRoute : route,
+      ),
+      settings: const RouteSettings(name: MonitorConstants.dashboardRoute),
+    ));
+  }
+
+  /// Sets or tracks the current active screen directly (useful for PageView / TabBar).
+  static void setCurrentScreen(String screenName) {
+    MonitorNavigatorObserver.setCurrentScreen(screenName);
+  }
+
+  /// Alias for [setCurrentScreen].
+  static void trackScreen(String screenName) => setCurrentScreen(screenName);
 
   /// Returns a [TransitionBuilder] for [MaterialApp.builder].
   ///

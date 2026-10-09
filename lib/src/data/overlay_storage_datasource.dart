@@ -37,11 +37,11 @@ class OverlayConfig {
 
   factory OverlayConfig.fromMap(Map<dynamic, dynamic> map) {
     return OverlayConfig(
-      top: map['top'] as double?,
-      left: map['left'] as double?,
+      top: (map['top'] as num?)?.toDouble(),
+      left: (map['left'] as num?)?.toDouble(),
       positionInit: map['positionInit'] as bool? ?? false,
       isExpanded: map['isExpanded'] as bool?,
-      gridModeIndex: map['gridMode'] as int?,
+      gridModeIndex: (map['gridMode'] as num?)?.toInt(),
       isTucked: map['isTucked'] as bool? ?? false,
       tuckedLeft: map['tuckedLeft'] as bool? ?? false,
       wasExpandedBeforeTuck: map['wasExpandedBeforeTuck'] as bool? ?? false,

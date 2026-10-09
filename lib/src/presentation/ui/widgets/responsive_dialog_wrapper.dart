@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/monitor_theme.dart';
+import 'monitor_theme_scope.dart';
 
 /// A wrapper widget that displays its content as a centered card layout
 /// on large screens (e.g. tablet, desktop) and full-screen on mobile.
@@ -15,8 +16,11 @@ class MonitorResponsiveDialogWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isLargeScreen = screenWidth > 640;
+    return MonitorThemeScope(
+      child: Builder(
+        builder: (context) {
+          final double screenWidth = MediaQuery.of(context).size.width;
+          final bool isLargeScreen = screenWidth > 640;
 
     if (isLargeScreen) {
       return Scaffold(
@@ -97,6 +101,9 @@ class MonitorResponsiveDialogWrapper extends StatelessWidget {
         body: child,
       ),
     );
+        },
+      ),
+    );
   }
 }
 
@@ -119,6 +126,7 @@ class MonitorResponsiveRoute<T> extends PageRouteBuilder<T> {
               child: child,
             );
           },
-          pageBuilder: (context, _, __) => builder(context),
+          pageBuilder: (context, _, __) =>
+              MonitorThemeScope(child: builder(context)),
         );
 }

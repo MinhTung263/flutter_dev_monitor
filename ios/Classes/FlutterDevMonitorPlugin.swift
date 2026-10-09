@@ -83,16 +83,22 @@ public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
         }
 
         var diskTotal: Double = 0.0
-        if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
-           let space = attrs[.systemSize] as? Int64 {
-            diskTotal = Double(space) / (1024.0 * 1024.0 * 1024.0)
+        var diskFree: Double = 0.0
+        if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()) {
+            if let space = attrs[.systemSize] as? Int64 {
+                diskTotal = Double(space) / (1024.0 * 1024.0 * 1024.0)
+            }
+            if let freeSpace = attrs[.systemFreeSize] as? Int64 {
+                diskFree = Double(freeSpace) / (1024.0 * 1024.0 * 1024.0)
+            }
         }
 
         return [
             "ramUsed": ramUsed,
             "ramTotal": ramTotal,
             "appDiskUsed": cachedAppDiskUsed,
-            "diskTotal": diskTotal
+            "diskTotal": diskTotal,
+            "diskFree": diskFree
         ]
     }
 

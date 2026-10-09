@@ -3,9 +3,10 @@ import '../../data/hardware_datasource.dart';
 
 class HardwareController {
   double currentRam = 0.0;
-  double totalRam = 4096.0;
+  double totalRam = 0.0;
   double appDiskUsed = 0.0;
   double totalDisk = 0.0;
+  double freeDisk = 0.0;
   String deviceModel = '';
 
   Map<String, List<double>> ramHistoryMap = {};
@@ -15,9 +16,14 @@ class HardwareController {
 
   void update(HardwareSnapshot snapshot, String currentScreen) {
     currentRam = snapshot.ramUsed;
-    totalRam = snapshot.ramTotal;
+    if (snapshot.ramTotal > 0) {
+      totalRam = snapshot.ramTotal;
+    }
     appDiskUsed = snapshot.appDiskUsed;
-    totalDisk = snapshot.diskTotal;
+    if (snapshot.diskTotal > 0) {
+      totalDisk = snapshot.diskTotal;
+    }
+    freeDisk = snapshot.diskFree;
 
     globalRamHistory.add(currentRam);
     if (globalRamHistory.length > _maxHistory) {
@@ -42,8 +48,9 @@ class HardwareController {
     ramHistoryMap = {};
     globalRamHistory.clear();
     currentRam = 0.0;
-    totalRam = 4096.0;
+    totalRam = 0.0;
     appDiskUsed = 0.0;
     totalDisk = 0.0;
+    freeDisk = 0.0;
   }
 }

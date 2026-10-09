@@ -1,5 +1,10 @@
 /// Represents a single captured API request and response log.
 class ApiLogItem {
+  static int _nextId = 1;
+
+  /// Unique identifier for this log item, stable across deduping and updates.
+  final int id;
+
   /// Label for request triggered during screen initialization.
   static const String phaseInit = 'OPEN';
 
@@ -57,7 +62,8 @@ class ApiLogItem {
   final String? responseBody;
 
   /// Creates a new [ApiLogItem] log entry.
-  const ApiLogItem({
+  ApiLogItem({
+    int? id,
     required this.url,
     required this.method,
     required this.statusCode,
@@ -74,7 +80,7 @@ class ApiLogItem {
     this.requestBody,
     this.responseHeaders = const {},
     this.responseBody,
-  });
+  }) : id = id ?? _nextId++;
 
   /// Whether the request completed successfully (status 200-299).
   bool get isSuccess => statusCode >= 200 && statusCode < 300;
@@ -106,6 +112,7 @@ class ApiLogItem {
 
   /// Returns a copy of this log with updated fields.
   ApiLogItem copyWith({
+    int? id,
     int? statusCode,
     int? duration,
     int? responseBytes,
@@ -114,8 +121,14 @@ class ApiLogItem {
     int? refreshCycle,
     DateTime? timestamp,
     String? screen,
+    Map<String, String>? queryParams,
+    Map<String, String>? requestHeaders,
+    String? requestBody,
+    Map<String, String>? responseHeaders,
+    String? responseBody,
   }) {
     return ApiLogItem(
+      id: id ?? this.id,
       url: url,
       method: method,
       statusCode: statusCode ?? this.statusCode,
@@ -127,11 +140,72 @@ class ApiLogItem {
       phase: phase ?? this.phase,
       callCount: callCount ?? this.callCount,
       refreshCycle: refreshCycle ?? this.refreshCycle,
-      queryParams: queryParams,
-      requestHeaders: requestHeaders,
-      requestBody: requestBody,
-      responseHeaders: responseHeaders,
-      responseBody: responseBody,
+      queryParams: queryParams ?? this.queryParams,
+      requestHeaders: requestHeaders ?? this.requestHeaders,
+      requestBody: requestBody ?? this.requestBody,
+      responseHeaders: responseHeaders ?? this.responseHeaders,
+      responseBody: responseBody ?? this.responseBody,
     );
   }
+
+  /// Checks whether this log matches a given search query string.
+  /// Handles HTTP method filtering (e.g. searching 'get' only matches GET requests),
+  /// status code filtering (e.g. '200', '404'), and URL/caller text search.
+  bool matchesQuery(String rawQuery) {
+    final query = rawQuery.trim().toLowerCase();
+    if (query.isEmpty) return true;
+
+    const httpMethods = {
+      'get',
+      'post',
+      'put',
+      'delete',
+      'patch',
+      'head',
+      'options',
+    };
+
+    final itemMethod = method.toLowerCase();
+
+    // 1. If query is an exact HTTP method (e.g. "get", "post", "put", "delete")
+    // User intends to filter by HTTP method only!
+    if (httpMethods.contains(query)) {
+      return itemMethod == query;
+    }
+
+    // 2. If query starts with an HTTP method followed by a space (e.g. "get /orders", "post auth")
+    final spaceIdx = query.indexOf(' ');
+    if (spaceIdx > 0) {
+      final firstWord = query.substring(0, spaceIdx);
+      if (httpMethods.contains(firstWord)) {
+        if (itemMethod != firstWord) return false;
+        final restQuery = query.substring(spaceIdx + 1).trim();
+        if (restQuery.isEmpty) return true;
+        return url.toLowerCase().contains(restQuery) ||
+            statusCode.toString().contains(restQuery) ||
+            callerName.toLowerCase().contains(restQuery);
+      }
+    }
+
+    // 3. If query is a 3-digit HTTP status code (e.g. "200", "404", "500")
+    if (RegExp(r'^[1-5][0-9]{2}$').hasMatch(query)) {
+      return statusCode.toString() == query ||
+          url.toLowerCase().contains(query);
+    }
+
+    // 4. General search across URL, status code, or caller
+    final urlMatch = url.toLowerCase().contains(query);
+    final statusMatch = statusCode.toString().contains(query);
+    final callerMatch = callerName.toLowerCase().contains(query);
+
+    return urlMatch || statusMatch || callerMatch;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ApiLogItem && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

@@ -16,6 +16,7 @@ import 'fps_overlay_grid_painter.dart';
 import 'fps_overlay_tucked_handle.dart';
 import 'fps_overlay_pill_badge.dart';
 import 'fps_overlay_details_panel.dart';
+import 'monitor_theme_scope.dart';
 import 'responsive_dialog_wrapper.dart';
 
 class FpsOverlay extends StatefulWidget {
@@ -100,63 +101,65 @@ class _FpsOverlayState extends State<FpsOverlay> {
   void _onTimings(List<FrameTiming> timings) {
     if (!mounted || timings.isEmpty) return;
 
-    // 1. Lấy tần số quét phần cứng chuẩn của màn hình (60Hz / 90Hz / 120Hz)
-    double targetFps = 60.0;
     try {
-      final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
-      if (view != null && view.display.refreshRate > 0) {
-        targetFps = view.display.refreshRate.clamp(30.0, 144.0);
+      // 1. Lấy tần số quét phần cứng chuẩn của màn hình (60Hz / 90Hz / 120Hz)
+      double targetFps = 60.0;
+      try {
+        final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+        if (view != null && view.display.refreshRate > 0) {
+          targetFps = view.display.refreshRate.clamp(30.0, 144.0);
+        }
+      } catch (_) {}
+
+      // 2. Ngân sách chuẩn của 1 Frame theo Flutter DevTools
+      // 60Hz  -> 16.67ms (16,667 µs)
+      // 120Hz -> 8.33ms  (8,333 µs)
+      final targetBudgetUs = (1000000.0 / targetFps).round();
+
+      double totalBuildMs = 0.0;
+      double totalRasterMs = 0.0;
+      double totalEffectiveFps = 0.0;
+      int count = 0;
+
+      for (final t in timings) {
+        final buildUs = t.buildDuration.inMicroseconds;
+        final rasterUs = t.rasterDuration.inMicroseconds;
+        final totalUs = buildUs + rasterUs;
+
+        // Chuẩn DevTools: Frame được tính là Jank khi Build hoặc Raster hoặc Total vượt ngân sách
+        if (buildUs > targetBudgetUs || rasterUs > targetBudgetUs || totalUs > targetBudgetUs) {
+          _ctrl.recordJankFrame();
+        }
+
+        totalBuildMs += buildUs / 1000.0;
+        totalRasterMs += rasterUs / 1000.0;
+
+        // Tính FPS hiệu dụng cho từng frame riêng lẻ
+        final double frameFps;
+        if (totalUs <= targetBudgetUs) {
+          frameFps = targetFps;
+        } else {
+          frameFps = (1000000.0 / totalUs).clamp(1.0, targetFps);
+        }
+        totalEffectiveFps += frameFps;
+        count++;
+      }
+
+      if (count == 0) return;
+
+      final avgBuildMs = totalBuildMs / count;
+      final avgRasterMs = totalRasterMs / count;
+      final calculatedFps = totalEffectiveFps / count;
+
+      final now = DateTime.now();
+      if (now.difference(_lastPublishTime).inMilliseconds >= 300) {
+        _lastPublishTime = now;
+        final route = MonitorNavigatorObserver.currentRoute;
+        _ctrl.addFpsSample(route.isEmpty ? '/init' : route, calculatedFps);
+        _ctrl.notifyFpsUpdate(calculatedFps, avgBuildMs, avgRasterMs);
+        _ctrl.addOverlaySamples(calculatedFps, avgRasterMs, avgBuildMs);
       }
     } catch (_) {}
-
-    // 2. Ngân sách chuẩn của 1 Frame theo Flutter DevTools
-    // 60Hz  -> 16.67ms (16,667 µs)
-    // 120Hz -> 8.33ms  (8,333 µs)
-    final targetBudgetUs = (1000000.0 / targetFps).round();
-
-    double totalBuildMs = 0.0;
-    double totalRasterMs = 0.0;
-    double totalEffectiveFps = 0.0;
-    int count = 0;
-
-    for (final t in timings) {
-      final buildUs = t.buildDuration.inMicroseconds;
-      final rasterUs = t.rasterDuration.inMicroseconds;
-      final totalUs = buildUs + rasterUs;
-
-      // Chuẩn DevTools: Frame được tính là Jank khi Build hoặc Raster hoặc Total vượt ngân sách
-      if (buildUs > targetBudgetUs || rasterUs > targetBudgetUs || totalUs > targetBudgetUs) {
-        _ctrl.recordJankFrame();
-      }
-
-      totalBuildMs += buildUs / 1000.0;
-      totalRasterMs += rasterUs / 1000.0;
-
-      // Tính FPS hiệu dụng cho từng frame riêng lẻ
-      final double frameFps;
-      if (totalUs <= targetBudgetUs) {
-        frameFps = targetFps;
-      } else {
-        frameFps = (1000000.0 / totalUs).clamp(1.0, targetFps);
-      }
-      totalEffectiveFps += frameFps;
-      count++;
-    }
-
-    if (count == 0) return;
-
-    final avgBuildMs = totalBuildMs / count;
-    final avgRasterMs = totalRasterMs / count;
-    final calculatedFps = totalEffectiveFps / count;
-
-    final now = DateTime.now();
-    if (now.difference(_lastPublishTime).inMilliseconds >= 300) {
-      _lastPublishTime = now;
-      final route = MonitorNavigatorObserver.currentRoute;
-      _ctrl.addFpsSample(route.isEmpty ? '/init' : route, calculatedFps);
-      _ctrl.notifyFpsUpdate(calculatedFps, avgBuildMs, avgRasterMs);
-      _ctrl.addOverlaySamples(calculatedFps, avgRasterMs, avgBuildMs);
-    }
   }
 
   void _onExpandPanel() => _overlayCtrl.expand();
@@ -272,8 +275,7 @@ class _FpsOverlayState extends State<FpsOverlay> {
                   return const SizedBox.shrink();
                 }
 
-                return Directionality(
-                  textDirection: TextDirection.ltr,
+                return MonitorThemeScope(
                   child: Stack(
                     children: [
                     if (gridMode != GridMode.off)

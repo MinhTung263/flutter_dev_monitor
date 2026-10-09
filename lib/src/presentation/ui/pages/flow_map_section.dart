@@ -462,19 +462,16 @@ class _FlowMapListState extends State<_FlowMapList>
       builder: (context) {
         String localSearchQuery = '';
 
-        return StatefulBuilder(
+        return MonitorThemeScope(
+          child: StatefulBuilder(
           builder: (context, setLocalState) {
             final List<ApiLogItem> filteredApis;
             if (localSearchQuery.isEmpty) {
               filteredApis = allApis;
             } else {
-              final q = localSearchQuery.toLowerCase();
-              filteredApis = allApis.where((l) {
-                final urlMatch = l.url.toLowerCase().contains(q);
-                final methodMatch = l.method.toLowerCase().contains(q);
-                final statusMatch = l.statusCode.toString().contains(q);
-                return urlMatch || methodMatch || statusMatch;
-              }).toList();
+              filteredApis = allApis
+                  .where((l) => l.matchesQuery(localSearchQuery))
+                  .toList();
             }
 
             return DefaultTabController(
@@ -632,6 +629,7 @@ class _FlowMapListState extends State<_FlowMapList>
                                             padding: const EdgeInsets.only(
                                                 bottom: 8),
                                             child: ApiLogTile(
+                                              key: ValueKey(apiLog.id),
                                               log: apiLog,
                                               compact: false,
                                               showOrder: false,
@@ -693,6 +691,7 @@ class _FlowMapListState extends State<_FlowMapList>
               ),
             );
           },
+        ),
         );
       },
     );
@@ -800,6 +799,9 @@ class _FlowMapListState extends State<_FlowMapList>
         message: LocaleKeys.resetLayoutConfirmMessage.tr,
         confirmLabel: LocaleKeys.confirm.tr,
         cancelLabel: LocaleKeys.cancel.tr,
+        icon: Icons.restart_alt_rounded,
+        isDestructive: false,
+        badgeLabel: 'RESET VIEW',
       ),
     );
     if (confirmed == true && mounted) {
@@ -893,11 +895,13 @@ class _FlowMapListState extends State<_FlowMapList>
       backgroundColor: Colors.transparent,
       routeSettings: const RouteSettings(name: MonitorConstants.mapSearchSheet),
       builder: (context) {
-        return _MapSearchSheet(
-          routes: routes,
-          onSelected: (route) {
-            _focusOnNode(route);
-          },
+        return MonitorThemeScope(
+          child: _MapSearchSheet(
+            routes: routes,
+            onSelected: (route) {
+              _focusOnNode(route);
+            },
+          ),
         );
       },
     );
@@ -1496,17 +1500,25 @@ class _FlowMapListState extends State<_FlowMapList>
                                         if (_focusedRoute == route) {
                                           final apis = routeApis[route] ?? [];
                                           final errors = routeErrors[route] ?? [];
-                                          if (apis.isNotEmpty || errors.isNotEmpty) {
-                                            _showScreenApisBottomSheet(
-                                              route,
-                                              apis,
-                                              errors,
-                                            );
-                                          }
+                                          _showScreenApisBottomSheet(
+                                            route,
+                                            apis,
+                                            errors,
+                                          );
                                         } else {
                                           _focusedRoute = route;
                                         }
                                       });
+                                    },
+                                    onOpenApis: () {
+                                      setState(() => _focusedRoute = route);
+                                      final apis = routeApis[route] ?? [];
+                                      final errors = routeErrors[route] ?? [];
+                                      _showScreenApisBottomSheet(
+                                        route,
+                                        apis,
+                                        errors,
+                                      );
                                     },
                                   ),
                                 ),
@@ -1798,6 +1810,7 @@ class _FlowMapStateCard extends StatelessWidget {
   final double width;
   final double height;
   final VoidCallback onTap;
+  final VoidCallback? onOpenApis;
 
   const _FlowMapStateCard({
     required this.route,
@@ -1810,6 +1823,7 @@ class _FlowMapStateCard extends StatelessWidget {
     required this.width,
     required this.height,
     required this.onTap,
+    this.onOpenApis,
   });
 
   Widget _buildTypeBadge(String type) {
@@ -1991,15 +2005,81 @@ class _FlowMapStateCard extends StatelessWidget {
                   ],
                 ),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Icon(Icons.directions_run_rounded,
-                        size: 9, color: MonitorColors.secondaryText),
-                    const SizedBox(width: 3),
-                    MonoText(
-                      LocaleKeys.mapVisitsCount.trWith({'count': visitCount}),
-                      8.5,
-                      color: MonitorColors.secondaryText,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.directions_run_rounded,
+                            size: 9, color: MonitorColors.secondaryText),
+                        const SizedBox(width: 3),
+                        MonoText(
+                          LocaleKeys.mapVisitsCount.trWith({'count': visitCount}),
+                          8.5,
+                          color: MonitorColors.secondaryText,
+                        ),
+                      ],
                     ),
+                    if (onOpenApis != null)
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onOpenApis,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4.5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: isFocused
+                                ? const Color(0xFF6366F1).withValues(alpha: 0.18)
+                                : (totalApis > 0
+                                    ? const Color(0xFF2196F3).withValues(alpha: 0.10)
+                                    : MonitorColors.pageBackground),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: isFocused
+                                  ? const Color(0xFF6366F1).withValues(alpha: 0.6)
+                                  : (totalApis > 0
+                                      ? const Color(0xFF2196F3).withValues(alpha: 0.35)
+                                      : MonitorColors.border.withValues(alpha: 0.6)),
+                              width: 0.6,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.terminal_rounded,
+                                size: 8,
+                                color: isFocused
+                                    ? const Color(0xFF6366F1)
+                                    : (totalApis > 0
+                                        ? const Color(0xFF2196F3)
+                                        : MonitorColors.secondaryText),
+                              ),
+                              const SizedBox(width: 2.5),
+                              MonoText(
+                                'API',
+                                7,
+                                weight: FontWeight.bold,
+                                color: isFocused
+                                    ? const Color(0xFF6366F1)
+                                    : (totalApis > 0
+                                        ? const Color(0xFF2196F3)
+                                        : MonitorColors.secondaryText),
+                              ),
+                              const SizedBox(width: 1.5),
+                              Icon(
+                                Icons.open_in_new_rounded,
+                                size: 7,
+                                color: isFocused
+                                    ? const Color(0xFF6366F1)
+                                    : (totalApis > 0
+                                        ? const Color(0xFF2196F3)
+                                        : MonitorColors.secondaryText),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 Container(
@@ -2038,23 +2118,35 @@ class _FlowMapStateCard extends StatelessWidget {
                           ),
                   ),
                 ),
-                Row(
-                  children: [
-                    MonoText(
-                      LocaleKeys.mapRequestsCount.trWith({'count': totalApis}),
-                      8,
-                      color: MonitorColors.primaryText,
-                      weight: FontWeight.bold,
-                    ),
-                    if (totalApis > 0) ...[
-                      const SizedBox(width: 4),
-                      _buildMiniBadge(successCount, const Color(0xFF57D888)),
-                      const SizedBox(width: 2),
-                      _buildMiniBadge(slowCount, MonitorColors.statusSlow),
-                      const SizedBox(width: 2),
-                      _buildMiniBadge(errorCount, MonitorColors.statusError),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onOpenApis,
+                  child: Row(
+                    children: [
+                      MonoText(
+                        LocaleKeys.mapRequestsCount.trWith({'count': totalApis}),
+                        8,
+                        color: MonitorColors.primaryText,
+                        weight: FontWeight.bold,
+                      ),
+                      if (totalApis > 0) ...[
+                        const SizedBox(width: 4),
+                        _buildMiniBadge(successCount, const Color(0xFF57D888)),
+                        const SizedBox(width: 2),
+                        _buildMiniBadge(slowCount, MonitorColors.statusSlow),
+                        const SizedBox(width: 2),
+                        _buildMiniBadge(errorCount, MonitorColors.statusError),
+                      ],
+                      const Spacer(),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 9.5,
+                        color: isFocused
+                            ? const Color(0xFF6366F1)
+                            : MonitorColors.secondaryText,
+                      ),
                     ],
-                  ],
+                  ),
                 ),
               ],
             ),

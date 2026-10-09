@@ -6,4 +6,6 @@ export 'src/presentation/controller/monitor_controller.dart';
 export 'src/presentation/navigation/monitor_navigator_observer.dart';
 export 'src/presentation/ui/theme/monitor_theme.dart' show MonitorColors;
 export 'src/presentation/ui/pages/monitor_dashboard_page.dart';
+export 'src/core/monitor_filter_keys.dart';
+export 'src/presentation/ui/widgets/monitor_theme_scope.dart';
 

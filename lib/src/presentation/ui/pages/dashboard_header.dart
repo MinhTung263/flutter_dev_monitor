@@ -146,13 +146,14 @@ class _ScreenPickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: MonitorColors.surface,
-        borderRadius: isDialog
-            ? BorderRadius.circular(16)
-            : const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+    return MonitorThemeScope(
+      child: Container(
+        decoration: BoxDecoration(
+          color: MonitorColors.surface,
+          borderRadius: isDialog
+              ? BorderRadius.circular(16)
+              : const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -300,6 +301,7 @@ class _ScreenPickerSheet extends StatelessWidget {
           SizedBox(height: MediaQuery.of(context).padding.bottom + 12),
         ],
       ),
+    ),
     );
   }
 }
