@@ -1,6 +1,9 @@
 // ignore_for_file: unnecessary_getters_setters
 
 
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -49,6 +52,8 @@ class _FpsOverlayState extends State<FpsOverlay> {
   bool _isDragging = false;
 
   DateTime _lastPublishTime = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastFrameTime = DateTime.now();
+  Timer? _idleTimer;
 
   OverlayController get _overlayCtrl => OverlayController.instance;
   MonitorController get _ctrl => MonitorController.instance;
@@ -68,6 +73,8 @@ class _FpsOverlayState extends State<FpsOverlay> {
 
   @override
   void dispose() {
+    _idleTimer?.cancel();
+    _idleTimer = null;
     _ctrl.removeListener(_onMonitorControllerChanged);
     if (_isListening) {
       SchedulerBinding.instance.removeTimingsCallback(_onTimings);
@@ -83,9 +90,17 @@ class _FpsOverlayState extends State<FpsOverlay> {
     final bool shouldListen = widget.isShowing && !_ctrl.isDashboardOpen;
     if (shouldListen && !_isListening) {
       _isListening = true;
+      _lastFrameTime = DateTime.now();
       SchedulerBinding.instance.addTimingsCallback(_onTimings);
+      _idleTimer?.cancel();
+      _idleTimer = Timer.periodic(
+        const Duration(milliseconds: 500),
+        _checkIdleState,
+      );
     } else if (!shouldListen && _isListening) {
       _isListening = false;
+      _idleTimer?.cancel();
+      _idleTimer = null;
       if (!widget.isShowing) {
         _overlayCtrl.collapse(
           MediaQuery.of(context).size.width,
@@ -98,14 +113,35 @@ class _FpsOverlayState extends State<FpsOverlay> {
     }
   }
 
+  void _checkIdleState(Timer timer) {
+    if (!_isListening || !mounted) return;
+    final now = DateTime.now();
+    if (now.difference(_lastFrameTime).inMilliseconds >= 1200) {
+      if (!_ctrl.isIdle) {
+        double targetFps = 60.0;
+        try {
+          final view =
+              WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+          if (view != null && view.display.refreshRate > 0) {
+            targetFps = view.display.refreshRate.clamp(30.0, 144.0);
+          }
+        } catch (_) {}
+        _ctrl.notifyFpsUpdate(targetFps, 0.0, 0.0, isIdle: true);
+      }
+    }
+  }
+
   void _onTimings(List<FrameTiming> timings) {
     if (!mounted || timings.isEmpty) return;
 
     try {
+      _lastFrameTime = DateTime.now();
+
       // 1. Lấy tần số quét phần cứng chuẩn của màn hình (60Hz / 90Hz / 120Hz)
       double targetFps = 60.0;
       try {
-        final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+        final view =
+            WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
         if (view != null && view.display.refreshRate > 0) {
           targetFps = view.display.refreshRate.clamp(30.0, 144.0);
         }
@@ -124,22 +160,27 @@ class _FpsOverlayState extends State<FpsOverlay> {
       for (final t in timings) {
         final buildUs = t.buildDuration.inMicroseconds;
         final rasterUs = t.rasterDuration.inMicroseconds;
-        final totalUs = buildUs + rasterUs;
 
-        // Chuẩn DevTools: Frame được tính là Jank khi Build hoặc Raster hoặc Total vượt ngân sách
-        if (buildUs > targetBudgetUs || rasterUs > targetBudgetUs || totalUs > targetBudgetUs) {
-          _ctrl.recordJankFrame();
-        }
+        // Điểm nghẽn (Critical bottleneck) quyết định nhịp khung hình thực tế
+        final longestUs = math.max(buildUs, rasterUs);
+
+        // Chuẩn DevTools / PerfDog: Trong kiến trúc đa luồng song song của Flutter (Pipelined Engine),
+        // Frame chỉ rớt VSync khi Build hoặc Raster vượt ngân sách của VSync slot.
+        _ctrl.recordFrameTiming(
+          longestUs: longestUs,
+          targetBudgetUs: targetBudgetUs,
+        );
 
         totalBuildMs += buildUs / 1000.0;
         totalRasterMs += rasterUs / 1000.0;
 
-        // Tính FPS hiệu dụng cho từng frame riêng lẻ
+        final bool isJank =
+            buildUs > targetBudgetUs || rasterUs > targetBudgetUs;
         final double frameFps;
-        if (totalUs <= targetBudgetUs) {
+        if (!isJank) {
           frameFps = targetFps;
         } else {
-          frameFps = (1000000.0 / totalUs).clamp(1.0, targetFps);
+          frameFps = (1000000.0 / longestUs).clamp(1.0, targetFps);
         }
         totalEffectiveFps += frameFps;
         count++;
@@ -156,7 +197,12 @@ class _FpsOverlayState extends State<FpsOverlay> {
         _lastPublishTime = now;
         final route = MonitorNavigatorObserver.currentRoute;
         _ctrl.addFpsSample(route.isEmpty ? '/init' : route, calculatedFps);
-        _ctrl.notifyFpsUpdate(calculatedFps, avgBuildMs, avgRasterMs);
+        _ctrl.notifyFpsUpdate(
+          calculatedFps,
+          avgBuildMs,
+          avgRasterMs,
+          isIdle: false,
+        );
         _ctrl.addOverlaySamples(calculatedFps, avgRasterMs, avgBuildMs);
       }
     } catch (_) {}

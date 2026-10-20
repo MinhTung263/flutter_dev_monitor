@@ -1,0 +1,56 @@
+Running `(cd /Volumes/Onyx/.pub-cache/hosted/pub.dev/objective_c-9.4.1/; ANDROID_HOME=/Volumes/Onyx/Android/sdk TMPDIR=/var/folders/dt/5svk0b_90451gmxzyvts4swr0000gn/T/ PATH=/Users/pine/.gemini/antigravity-ide/bin:/Users/pine/.nvm/versions/node/v24.22.0/bin:/Volumes/Onyx/.shorebird/bin:/Volumes/Onyx/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin:/Users/pine/.gem/ruby/2.6.0/bin:/Volumes/Onyx/fvm/default/bin:/Volumes/Onyx/homebrew/bin:/Volumes/Onyx/homebrew/sbin:/Users/pine/fvm/default/bin:/Volumes/Onyx/homebrew/bin:/Volumes/Onyx/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Users/pine/.pub-cache/bin:/Volumes/Onyx/.pub-cache/bin:/Volumes/Onyx/Android/sdk/emulator:/Volumes/Onyx/Android/sdk/platform-tools:/Volumes/Onyx/Android/sdk/cmdline-tools/latest/bin HOME=/Users/pine /Volumes/Onyx/fvm/versions/3.41.1/bin/cache/dart-sdk/bin/dart --packages=/Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/package_config.json /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/objective_c/9fb02c5622/hook.dill --config=/Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/objective_c/9fb02c5622/input.json )`.
+INFO: 2026-10-20 09:45:51.279036: No compiler set in BuildInput.cCompiler.cc. Falling back to assuming clang is in the PATH.
+
+INFO: 2026-10-20 09:45:51.282938: Running: clang -isysroot /Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-darwin -mmacos-version-min=12 -c /Volumes/Onyx/.pub-cache/hosted/pub.dev/objective_c-9.4.1/src/include/dart_api_dl.c -fpic -gline-tables-only -I src -o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/include/dart_api_dl.c.o
+
+INFO: 2026-10-20 09:45:51.283766: Running: clang -isysroot /Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-darwin -mmacos-version-min=12 -c /Volumes/Onyx/.pub-cache/hosted/pub.dev/objective_c-9.4.1/src/objective_c.c -fpic -gline-tables-only -I src -o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.c.o
+
+INFO: 2026-10-20 09:45:51.283884: Running: clang -isysroot /Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Volumes/Onyx/.pub-cache/hosted/pub.dev/objective_c-9.4.1/src/input_stream_adapter.m -fpic -gline-tables-only -I src -o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/input_stream_adapter.m.o
+
+INFO: 2026-10-20 09:45:51.283964: Running: clang -isysroot /Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Volumes/Onyx/.pub-cache/hosted/pub.dev/objective_c-9.4.1/src/objective_c.m -fpic -gline-tables-only -I src -o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.m.o
+
+INFO: 2026-10-20 09:45:51.284038: Running: clang -isysroot /Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Volumes/Onyx/.pub-cache/hosted/pub.dev/objective_c-9.4.1/src/observer.m -fpic -gline-tables-only -I src -o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/observer.m.o
+
+INFO: 2026-10-20 09:45:51.284200: Running: clang -isysroot /Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Volumes/Onyx/.pub-cache/hosted/pub.dev/objective_c-9.4.1/src/protocol.m -fpic -gline-tables-only -I src -o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/protocol.m.o
+
+
+
+INFO: 2026-10-20 09:45:51.284291: Running: clang -isysroot /Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Volumes/Onyx/.pub-cache/hosted/pub.dev/objective_c-9.4.1/src/objective_c_bindings_generated.m -fpic -gline-tables-only -I src -o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c_bindings_generated.m.o
+
+INFO: 2026-10-20 09:45:51.620168: 
+INFO: 2026-10-20 09:45:51.620297: 
+
+lutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.c.o
+
+INFO: 2026-10-20 09:45:51.620665: Generated /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/include/dart_api_dl.c.o
+
+INFO: 2026-10-20 09:45:51.621139: 
+INFO: 2026-10-20 09:45:51.621168: 
+INFO: 2026-10-20 09:45:51.621185: Generated /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/observer.m.o
+
+INFO: 2026-10-20 09:45:51.626094: 
+INFO: 2026-10-20 09:45:51.626123: 
+INFO: 2026-10-20 09:45:51.626133: Generated /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/protocol.m.o
+
+INFO: 2026-10-20 09:45:51.996646: 
+INFO: 2026-10-20 09:45:51.996678: 
+INFO: 2026-10-20 09:45:51.996700: Generated /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/ns_number.m.o
+
+INFO: 2026-10-20 09:45:52.006792: 
+INFO: 2026-10-20 09:45:52.006838: 
+INFO: 2026-10-20 09:45:52.006849: Generated /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.m.o
+
+INFO: 2026-10-20 09:45:52.006942: 
+INFO: 2026-10-20 09:45:52.006955: 
+INFO: 2026-10-20 09:45:52.006962: Generated /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/input_stream_adapter.m.o
+
+INFO: 2026-10-20 09:45:52.021003: 
+INFO: 2026-10-20 09:45:52.021033: 
+INFO: 2026-10-20 09:45:52.021042: Generated /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c_bindings_generated.m.o
+
+INFO: 2026-10-20 09:45:52.021316: Running: clang -shared -Wl,-encryptable -undefined dynamic_lookup -isysroot /Volumes/Onyx/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk -target arm64-apple-darwin -mmacos-version-min=12 /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/include/dart_api_dl.c.o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.c.o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/input_stream_adapter.m.o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.m.o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/observer.m.o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/ns_number.m.o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/protocol.m.o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c_bindings_generated.m.o -o /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/objective_c.dylib
+
+INFO: 2026-10-20 09:45:52.188387: 
+INFO: 2026-10-20 09:45:52.188429: 
+INFO: 2026-10-20 09:45:52.188440: Generated /Volumes/Onyx/Development/flutter_dev_monitor/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/objective_c.dylib
+

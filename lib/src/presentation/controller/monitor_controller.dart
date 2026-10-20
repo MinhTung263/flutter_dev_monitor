@@ -151,6 +151,11 @@ class MonitorController extends ChangeNotifier {
   double get currentBuildMs => _fps.currentBuildMs;
   double get currentGpuMs => _fps.currentGpuMs;
   int get jankFrameCount => _fps.jankFrameCount;
+  int get bigJankFrameCount => _fps.bigJankFrameCount;
+  int get dropFrameCount => _fps.dropFrameCount;
+  double get stutterRate => _fps.stutterRate;
+  int get totalFrameCount => _fps.totalFrameCount;
+  bool get isIdle => _fps.isIdle;
   Map<String, List<double>> get fpsHistoryMap => _fps.fpsHistoryMap;
   List<double> get overlayFpsHistory => _fps.overlayFpsHistory;
   List<double> get overlayGpuHistory => _fps.overlayGpuHistory;
@@ -469,6 +474,10 @@ class MonitorController extends ChangeNotifier {
 
   void recordJankFrame() => _fps.recordJankFrame();
 
+  void recordFrameTiming({required int longestUs, required int targetBudgetUs}) {
+    _fps.recordTiming(longestUs: longestUs, targetBudgetUs: targetBudgetUs);
+  }
+
   void addFpsSample(String screenName, double fps) {
     if (screenName.isEmpty || screenName == MonitorConstants.unknownRoute) {
       return;
@@ -479,13 +488,19 @@ class MonitorController extends ChangeNotifier {
     _fps.addSample(screenName, fps);
   }
 
-  void notifyFpsUpdate(double fps, double buildMs, double gpuMs) {
+  void notifyFpsUpdate(
+    double fps,
+    double buildMs,
+    double gpuMs, {
+    bool isIdle = false,
+  }) {
     if ((_fps.currentFps - fps).abs() < 0.2 &&
         (_fps.currentBuildMs - buildMs).abs() < 0.2 &&
-        (_fps.currentGpuMs - gpuMs).abs() < 0.2) {
+        (_fps.currentGpuMs - gpuMs).abs() < 0.2 &&
+        _fps.isIdle == isIdle) {
       return;
     }
-    _fps.update(fps, buildMs, gpuMs);
+    _fps.update(fps, buildMs, gpuMs, isIdle: isIdle);
     notifyListeners();
   }
 

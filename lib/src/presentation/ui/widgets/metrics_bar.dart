@@ -43,7 +43,11 @@ class MonitorMetricsBar extends StatelessWidget {
                 emptyLabel: '--',
               ),
               const SizedBox(width: 8),
-              _JankBadge(count: ctrl.jankFrameCount),
+              _JankBadge(
+                count: ctrl.jankFrameCount,
+                bigJank: ctrl.bigJankFrameCount,
+                stutter: ctrl.stutterRate,
+              ),
             ],
           ),
         );
@@ -113,13 +117,24 @@ class _PhasePill extends StatelessWidget {
 
 class _JankBadge extends StatelessWidget {
   final int count;
-  const _JankBadge({required this.count});
+  final int bigJank;
+  final double stutter;
+
+  const _JankBadge({
+    required this.count,
+    this.bigJank = 0,
+    this.stutter = 0.0,
+  });
 
   @override
   Widget build(BuildContext context) {
     final hasJank = count > 0;
-    final color =
-        hasJank ? MonitorColors.statusSlow : MonitorColors.secondaryText;
+    final hasBigJank = bigJank > 0;
+    final color = hasBigJank
+        ? MonitorColors.statusError
+        : (hasJank ? MonitorColors.statusSlow : MonitorColors.secondaryText);
+
+    final jankText = hasBigJank ? '$count (!$bigJank)' : '$count';
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
@@ -132,9 +147,14 @@ class _JankBadge extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          LabelText('JANK', color.withValues(alpha: 0.7)),
+          LabelText(
+            stutter > 0
+                ? '${LocaleKeys.overlayJankLabel.tr.toUpperCase()} • ${stutter.toStringAsFixed(1)}%'
+                : LocaleKeys.overlayJankLabel.tr.toUpperCase(),
+            color.withValues(alpha: 0.7),
+          ),
           const SizedBox(height: 3),
-          MonoText('$count', 12, color: color, weight: FontWeight.bold),
+          MonoText(jankText, 12, color: color, weight: FontWeight.bold),
         ],
       ),
     );

@@ -216,12 +216,20 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                       'Mem', '${memMb.toStringAsFixed(1)}MB', mMem, [], 1),
                   (() {
                     final List<String> alerts = [];
-                    if (apiErr > 0) alerts.add('${apiErr}e');
-                    if (slowApi > 0) alerts.add('${slowApi}s');
+                    if (apiErr > 0) {
+                      alerts.add('$apiErr ${LocaleKeys.overlayApiErr.tr}');
+                    }
+                    if (slowApi > 0) {
+                      alerts.add('$slowApi ${LocaleKeys.overlayApiSlow.tr}');
+                    }
                     final alertText =
-                        alerts.isNotEmpty ? ' (⚠️ ${alerts.join('·')})' : '';
+                        alerts.isNotEmpty ? ' (⚠️ ${alerts.join(' · ')})' : '';
                     return _metricRow(
-                        'API', '$apiCount calls$alertText', mApi, [], 0);
+                        'API',
+                        '$apiCount ${LocaleKeys.overlayApiCalls.tr}$alertText',
+                        mApi,
+                        [],
+                        0);
                   })(),
                   if (flutterErr > 0)
                     _metricRow('ERR', '$flutterErr errors', mJank, [], 0),
@@ -239,6 +247,22 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                       0),
                   _metricRow(
                       'FPS', fps.toStringAsFixed(2), mFpsActive, fpsHist, 2),
+                  _metricRow(
+                      LocaleKeys.overlayJankLabel.tr,
+                      '${ctrl.jankFrameCount} (${LocaleKeys.overlayBigJankLabel.tr}: ${ctrl.bigJankFrameCount})',
+                      ctrl.bigJankFrameCount > 0
+                          ? mJank
+                          : (ctrl.jankFrameCount > 0 ? mBuild : subtleTxt),
+                      [],
+                      0),
+                  _metricRow(
+                      LocaleKeys.overlayStutterLabel.tr,
+                      '${ctrl.stutterRate.toStringAsFixed(1)}% (${LocaleKeys.overlayDropLabel.tr}: ${ctrl.dropFrameCount})',
+                      ctrl.stutterRate > 5.0
+                          ? mJank
+                          : (ctrl.stutterRate > 1.0 ? mBuild : subtleTxt),
+                      [],
+                      0),
                   const SizedBox(height: 4),
                   Container(height: 0.5, color: divColor),
                   const SizedBox(height: 3),
@@ -327,13 +351,17 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                   fontFamily: MonitorTextStyle.monoFontFamily,
                   fontWeight: FontWeight.w600,
                   height: 1.2)),
-          Text(value,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 10,
-                  fontFamily: MonitorTextStyle.monoFontFamily,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2)),
+          Flexible(
+            child: Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 10,
+                    fontFamily: MonitorTextStyle.monoFontFamily,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2)),
+          ),
           if (range.isNotEmpty) ...[
             const Spacer(),
             Text(range,

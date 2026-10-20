@@ -24,13 +24,16 @@ class FpsOverlayPillBadge extends StatelessWidget {
             final osVersion = parts.length > 1 ? parts.last : '';
 
             final fps = ctrl.currentFps;
+            final isIdle = ctrl.isIdle;
             final memMb = ctrl.currentRam;
             final apiCount = ctrl.currentPhaseApiCount;
             final jankCount = ctrl.jankFrameCount;
+            final bigJankCount = ctrl.bigJankFrameCount;
             final pingMs = ctrl.currentPingMs;
-            final jank = fps < 50 && fps > 0;
-            final fpsColor =
-                jank ? MonitorColors.overlayAlert : MonitorColors.overlayFps;
+            final jank = !isIdle && fps < 50 && fps > 0;
+            final fpsColor = isIdle
+                ? MonitorColors.overlayFps.withValues(alpha: 0.75)
+                : (jank ? MonitorColors.overlayAlert : MonitorColors.overlayFps);
             final pingColor = pingMs == null
                 ? Colors.white24
                 : pingMs < 50
@@ -159,7 +162,9 @@ class FpsOverlayPillBadge extends StatelessWidget {
                           ),
                           const SizedBox(width: 3.5),
                           Text(
-                            fps.toStringAsFixed(1),
+                            isIdle
+                                ? '${fps.toStringAsFixed(0)} •'
+                                : fps.toStringAsFixed(1),
                             style: TextStyle(
                               color: fpsColor,
                               fontSize: 10.5,
@@ -170,7 +175,9 @@ class FpsOverlayPillBadge extends StatelessWidget {
                           ),
                           const SizedBox(width: 1.5),
                           Text(
-                            LocaleKeys.overlayFpsLabel.tr,
+                            isIdle
+                                ? LocaleKeys.overlayIdleLabel.tr
+                                : LocaleKeys.overlayFpsLabel.tr,
                             style: TextStyle(
                               color: fpsColor.withValues(alpha: 0.6),
                               fontSize: 7,
@@ -181,9 +188,13 @@ class FpsOverlayPillBadge extends StatelessWidget {
                           if (jankCount > 0) ...[
                             const SizedBox(width: 3.5),
                             Text(
-                              '⚡$jankCount',
-                              style: const TextStyle(
-                                color: MonitorColors.overlayGpu,
+                              bigJankCount > 0
+                                  ? '⚡$jankCount(!$bigJankCount)'
+                                  : '⚡$jankCount',
+                              style: TextStyle(
+                                color: bigJankCount > 0
+                                    ? MonitorColors.overlayAlert
+                                    : MonitorColors.overlayGpu,
                                 fontSize: 7.5,
                                 fontWeight: FontWeight.w700,
                                 fontFamily: MonitorTextStyle.monoFontFamily,

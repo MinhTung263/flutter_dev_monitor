@@ -89,6 +89,14 @@ class LocaleKeys {
   static const overlayApiLabel = MonitorLocaleKey('overlayApiLabel');
   static const overlayMemLabel = MonitorLocaleKey('overlayMemLabel');
   static const overlayNetLabel = MonitorLocaleKey('overlayNetLabel');
+  static const overlayJankLabel = MonitorLocaleKey('overlayJankLabel');
+  static const overlayBigJankLabel = MonitorLocaleKey('overlayBigJankLabel');
+  static const overlayDropLabel = MonitorLocaleKey('overlayDropLabel');
+  static const overlayStutterLabel = MonitorLocaleKey('overlayStutterLabel');
+  static const overlayIdleLabel = MonitorLocaleKey('overlayIdleLabel');
+  static const overlayApiErr = MonitorLocaleKey('overlayApiErr');
+  static const overlayApiSlow = MonitorLocaleKey('overlayApiSlow');
+  static const overlayApiCalls = MonitorLocaleKey('overlayApiCalls');
   static const logsForScreen = MonitorLocaleKey('logsForScreen');
   static const diffRequestsLabel = MonitorLocaleKey('diffRequestsLabel');
   static const mapNoApiRequests = MonitorLocaleKey('mapNoApiRequests');

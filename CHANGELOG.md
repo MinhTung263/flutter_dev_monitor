@@ -1,3 +1,15 @@
+## 2.8.0
+
+* **PerfDog-Compliant Metrics**:
+  * **BigJank Detection ($\ge 100\text{ms}$)**: Accurately identifies severe frame freezes ($\ge 6$ VSync slots at 60Hz) with prominent red badges (`⚡X(!Y)`).
+  * **Drop Frames Calculation**: Accurately tracks total missed VSync intervals ($\max(0, \lfloor \text{longestUs} / \text{budgetUs} \rfloor - 1)$) rather than only counting binary jank occurrences.
+  * **Real-time Stutter Rate (%)**: Measures percentage of stutter frame render duration over total rendering time to gauge smooth experience scientifically.
+* **Pipelined Engine FPS Bottleneck**: Aligned effective FPS with Flutter Engine's concurrent dual-thread architecture using critical path bottleneck $\max(\text{buildUs}, \text{rasterUs})$ instead of simple summation.
+* **Smart Idle Heartbeat**: Detects stationary app state after 1200ms without new frames, displaying an `idle` indicator to avoid false FPS drop reports during static screens.
+* **Full Bilingual Support (EN / VI)**: Added Vietnamese and English localization across all new metrics (`Jank`, `BigJank`, `Drop`, `Stutter`, `idle`).
+* **Clear API Alert Formatting**: Replaced confusing `5e · 3s` scientific-like notation with clear localized text and numbers (e.g. `3 calls (⚠️ 5 lỗi · 3 chậm)` / `3 calls (⚠️ 5 err · 3 slow)`).
+* **Comprehensive Test Suite**: Added 6 new unit tests for PerfDog metrics in `test/fps_controller_test.dart` (25/25 tests passing).
+
 ## 2.7.0
 
 * **Expanded HTTP Methods Support**: Full support for `PUT` and `DELETE` requests with distinct color badges, dedicated filter chips in dashboard, and interceptor telemetry.

@@ -176,6 +176,38 @@
     "en": "NET ",
     "vi": "NET "
   },
+  "overlayJankLabel": {
+    "en": "Jank",
+    "vi": "Giật (Jank)"
+  },
+  "overlayBigJankLabel": {
+    "en": "Big",
+    "vi": "Đơ nặng"
+  },
+  "overlayDropLabel": {
+    "en": "Drop",
+    "vi": "Rớt khung"
+  },
+  "overlayStutterLabel": {
+    "en": "Stutter",
+    "vi": "Tỷ lệ khựng"
+  },
+  "overlayIdleLabel": {
+    "en": "idle",
+    "vi": "chờ"
+  },
+  "overlayApiErr": {
+    "en": "err",
+    "vi": "lỗi"
+  },
+  "overlayApiSlow": {
+    "en": "slow",
+    "vi": "chậm"
+  },
+  "overlayApiCalls": {
+    "en": "calls",
+    "vi": "calls"
+  },
   "logsForScreen": {
     "en": "LOGS FOR SCREEN",
     "vi": "LOG CỦA MÀN HÌNH"

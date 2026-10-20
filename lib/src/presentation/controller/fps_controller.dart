@@ -5,6 +5,17 @@ class FpsController {
   double currentBuildMs = 0.0;
   double currentGpuMs = 0.0;
   int jankFrameCount = 0;
+  int bigJankFrameCount = 0;
+  int dropFrameCount = 0;
+  int totalFrameCount = 0;
+  int totalRenderDurationUs = 0;
+  int totalJankDurationUs = 0;
+  bool isIdle = false;
+
+  /// PerfDog Stutter Rate (%): Total duration of jank frames / Total frame duration * 100
+  double get stutterRate => totalRenderDurationUs > 0
+      ? (totalJankDurationUs / totalRenderDurationUs * 100.0).clamp(0.0, 100.0)
+      : 0.0;
 
   Map<String, List<double>> fpsHistoryMap = {};
   final List<double> overlayFpsHistory = [];
@@ -36,10 +47,29 @@ class FpsController {
     addCapped(overlayBuildHistory, buildMs);
   }
 
-  void update(double fps, double buildMs, double gpuMs) {
+  void update(double fps, double buildMs, double gpuMs, {bool isIdle = false}) {
     currentFps = fps;
     currentBuildMs = buildMs;
     currentGpuMs = gpuMs;
+    this.isIdle = isIdle;
+  }
+
+  /// Records timing of each frame according to PerfDog / DevTools specs
+  void recordTiming({required int longestUs, required int targetBudgetUs}) {
+    totalFrameCount++;
+    totalRenderDurationUs += longestUs;
+    if (longestUs > targetBudgetUs) {
+      jankFrameCount++;
+      totalJankDurationUs += longestUs;
+      final dropped = (longestUs ~/ targetBudgetUs) - 1;
+      if (dropped > 0) {
+        dropFrameCount += dropped;
+      }
+      // BigJank: severe stutter >= 100ms (>= 6 frames dropped at 60Hz)
+      if (longestUs >= 100000) {
+        bigJankFrameCount++;
+      }
+    }
   }
 
   void recordJankFrame() {
@@ -57,6 +87,11 @@ class FpsController {
   void clearAll() {
     fpsHistoryMap = {};
     jankFrameCount = 0;
+    bigJankFrameCount = 0;
+    dropFrameCount = 0;
+    totalFrameCount = 0;
+    totalRenderDurationUs = 0;
+    totalJankDurationUs = 0;
     currentFps = 60.0;
     clearOverlayHistory();
   }
