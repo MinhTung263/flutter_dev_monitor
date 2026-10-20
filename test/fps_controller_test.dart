@@ -75,6 +75,8 @@ void main() {
       expect(controller.dropFrameCount, equals(0));
       expect(controller.totalFrameCount, equals(0));
       expect(controller.stutterRate, equals(0.0));
+      expect(controller.currentBuildMs, equals(0.0));
+      expect(controller.currentGpuMs, equals(0.0));
     });
   });
 }

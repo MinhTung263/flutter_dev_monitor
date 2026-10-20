@@ -134,6 +134,12 @@ class _FpsOverlayState extends State<FpsOverlay> {
   void _onTimings(List<FrameTiming> timings) {
     if (!mounted || timings.isEmpty) return;
 
+    if (_ctrl.skipTimingFrames > 0) {
+      _ctrl.skipTimingFrames -= timings.length;
+      if (_ctrl.skipTimingFrames < 0) _ctrl.skipTimingFrames = 0;
+      return;
+    }
+
     try {
       _lastFrameTime = DateTime.now();
 

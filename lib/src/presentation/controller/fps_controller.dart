@@ -13,7 +13,7 @@ class FpsController {
   bool isIdle = false;
 
   /// PerfDog Stutter Rate (%): Total duration of jank frames / Total frame duration * 100
-  double get stutterRate => totalRenderDurationUs > 0
+  double get stutterRate => (totalRenderDurationUs > 0 && jankFrameCount > 0)
       ? (totalJankDurationUs / totalRenderDurationUs * 100.0).clamp(0.0, 100.0)
       : 0.0;
 
@@ -93,6 +93,8 @@ class FpsController {
     totalRenderDurationUs = 0;
     totalJankDurationUs = 0;
     currentFps = 60.0;
+    currentBuildMs = 0.0;
+    currentGpuMs = 0.0;
     clearOverlayHistory();
   }
 }

@@ -161,6 +161,11 @@ class MonitorController extends ChangeNotifier {
   List<double> get overlayGpuHistory => _fps.overlayGpuHistory;
   List<double> get overlayBuildHistory => _fps.overlayBuildHistory;
 
+  /// Number of upcoming frame timings to ignore (e.g. immediately after reset/clearAll)
+  /// so that the heavy reset-button tap and widget-rebuild frame does not immediately
+  /// register as Jank/100% Stutter Rate.
+  int skipTimingFrames = 0;
+
   // ── Visited screens (never cleared on pop, ordered by last visit) ────
 
   /// Returns screen names in last-visited-first order (newest at index 0).
@@ -439,6 +444,7 @@ class MonitorController extends ChangeNotifier {
   }
 
   void clearAll() {
+    skipTimingFrames = 3;
     _apiLog.clearAll();
     _fps.clearAll();
     _hardware.clearAll();
