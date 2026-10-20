@@ -208,6 +208,18 @@
     "en": "calls",
     "vi": "calls"
   },
+  "overlayRamLabel": {
+    "en": "RAM",
+    "vi": "RAM"
+  },
+  "overlayRomLabel": {
+    "en": "ROM",
+    "vi": "ROM"
+  },
+  "overlayFreeLabel": {
+    "en": "free",
+    "vi": "trống"
+  },
   "logsForScreen": {
     "en": "LOGS FOR SCREEN",
     "vi": "LOG CỦA MÀN HÌNH"

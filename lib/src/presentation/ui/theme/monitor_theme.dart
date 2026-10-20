@@ -194,7 +194,7 @@ abstract class MonitorTextStyle {
 }
 
 abstract class OverlayLayout {
-  static const double expandedW = 210.0;
+  static const double expandedW = 250.0;
   static const double expandedH = 210.0;
   static const double pillW = 104.0;
   static const double pillH = 58.0;

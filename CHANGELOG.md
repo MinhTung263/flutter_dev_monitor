@@ -1,3 +1,10 @@
+## 2.8.1
+
+* **Explicit RAM Consumption & Total Capacity**: Replaced ambiguous `Mem: 444.0MB` with clear consumed / total ratio: `RAM: 444MB / 4.0GB` (and `RAM 444M/4G` in pill badge).
+* **Storage Footprint (ROM)**: Added `ROM: App 14.5MB / 64GB (free 32GB)` to track how much disk space the app occupies vs total and free device storage.
+* **Widen HUD & Anti-Truncation**: Increased `OverlayLayout.expandedW` from `210.0` to `250.0` and enabled `softWrap: true` on metric values to eliminate `...` ellipsis truncation across all screen sizes.
+* **Full Bilingual Support**: Added localized `RAM`, `ROM`, and `free` / `trống` strings.
+
 ## 2.8.0
 
 * **PerfDog-Compliant Metrics**:

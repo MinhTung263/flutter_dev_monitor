@@ -31,6 +31,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
   static const _cGpu = MonitorColors.overlayGpu;
   static const _cBuild = MonitorColors.overlayBuild;
   static const _cMem = MonitorColors.overlayMem;
+  static const _cRom = Color(0xFF38BDF8);
   static const _cApi = MonitorColors.overlayApi;
 
   @override
@@ -130,6 +131,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
           final mGpu = dark ? _cGpu : const Color(0xFFEA580C);
           final mBuild = dark ? _cBuild : const Color(0xFFD97706);
           final mMem = dark ? _cMem : const Color(0xFFDB2777);
+          final mRom = dark ? _cRom : const Color(0xFF0284C7);
           final mApi = dark ? _cApi : const Color(0xFF2563EB);
           final mFpsActive = jank ? mJank : mFps;
 
@@ -138,7 +140,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
             onLongPress: onCollapse,
             behavior: HitTestBehavior.opaque,
             child: Container(
-              width: 210,
+              width: OverlayLayout.expandedW,
               decoration: BoxDecoration(
                 color: panelBg,
                 borderRadius: BorderRadius.circular(6),
@@ -212,8 +214,38 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                       buildHist, 2),
                   _metricRow('GPU', '${gpuMs.toStringAsFixed(2)}ms', mGpu,
                       gpuHist, 2),
-                  _metricRow(
-                      'Mem', '${memMb.toStringAsFixed(1)}MB', mMem, [], 1),
+                  (() {
+                    final totalRamMb = ctrl.totalRam;
+                    final String ramStr;
+                    if (totalRamMb > 0) {
+                      final totalRamGb = totalRamMb / 1024.0;
+                      ramStr =
+                          '${memMb.toStringAsFixed(0)}MB / ${totalRamGb.toStringAsFixed(1)}GB';
+                    } else {
+                      ramStr = '${memMb.toStringAsFixed(1)}MB';
+                    }
+                    return _metricRow(
+                        LocaleKeys.overlayRamLabel.tr, ramStr, mMem, [], 1);
+                  })(),
+                  (() {
+                    final appDiskMb = ctrl.appDiskUsed;
+                    final totalDiskGb = ctrl.totalDisk;
+                    final freeDiskGb = ctrl.freeDisk;
+                    final String romStr;
+                    if (totalDiskGb > 0) {
+                      final freeStr = freeDiskGb > 0
+                          ? ' (${LocaleKeys.overlayFreeLabel.tr} ${freeDiskGb.toStringAsFixed(0)}GB)'
+                          : '';
+                      romStr =
+                          'App ${appDiskMb.toStringAsFixed(1)}MB / ${totalDiskGb.toStringAsFixed(0)}GB$freeStr';
+                    } else if (appDiskMb > 0) {
+                      romStr = 'App ${appDiskMb.toStringAsFixed(1)}MB';
+                    } else {
+                      romStr = '--';
+                    }
+                    return _metricRow(
+                        LocaleKeys.overlayRomLabel.tr, romStr, mRom, [], 1);
+                  })(),
                   (() {
                     final List<String> alerts = [];
                     if (apiErr > 0) {
@@ -343,6 +375,8 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1.0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
         children: [
           Text('$label: ',
               style: TextStyle(
@@ -351,10 +385,9 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                   fontFamily: MonitorTextStyle.monoFontFamily,
                   fontWeight: FontWeight.w600,
                   height: 1.2)),
-          Flexible(
+          Expanded(
             child: Text(value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                softWrap: true,
                 style: TextStyle(
                     color: color,
                     fontSize: 10,
@@ -363,7 +396,7 @@ class FpsOverlayDetailsPanel extends StatelessWidget {
                     height: 1.2)),
           ),
           if (range.isNotEmpty) ...[
-            const Spacer(),
+            const SizedBox(width: 4),
             Text(range,
                 style: TextStyle(
                     color: color.withValues(alpha: 0.65),

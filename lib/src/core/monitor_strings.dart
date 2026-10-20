@@ -97,6 +97,9 @@ class LocaleKeys {
   static const overlayApiErr = MonitorLocaleKey('overlayApiErr');
   static const overlayApiSlow = MonitorLocaleKey('overlayApiSlow');
   static const overlayApiCalls = MonitorLocaleKey('overlayApiCalls');
+  static const overlayRamLabel = MonitorLocaleKey('overlayRamLabel');
+  static const overlayRomLabel = MonitorLocaleKey('overlayRomLabel');
+  static const overlayFreeLabel = MonitorLocaleKey('overlayFreeLabel');
   static const logsForScreen = MonitorLocaleKey('logsForScreen');
   static const diffRequestsLabel = MonitorLocaleKey('diffRequestsLabel');
   static const mapNoApiRequests = MonitorLocaleKey('mapNoApiRequests');

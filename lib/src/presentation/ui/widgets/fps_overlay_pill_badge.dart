@@ -26,6 +26,7 @@ class FpsOverlayPillBadge extends StatelessWidget {
             final fps = ctrl.currentFps;
             final isIdle = ctrl.isIdle;
             final memMb = ctrl.currentRam;
+            final totalRamMb = ctrl.totalRam;
             final apiCount = ctrl.currentPhaseApiCount;
             final jankCount = ctrl.jankFrameCount;
             final bigJankCount = ctrl.bigJankFrameCount;
@@ -220,12 +221,16 @@ class FpsOverlayPillBadge extends StatelessWidget {
                               style: valStyle.copyWith(
                                   color: MonitorColors.overlayApi)),
                           const SizedBox(width: 5),
-                          Text(LocaleKeys.overlayMemLabel.tr,
+                          Text('RAM ',
                               style: lblStyle.copyWith(
                                   color: MonitorColors.overlayMem)),
-                          Text('${memMb.toStringAsFixed(0)}M',
-                              style: valStyle.copyWith(
-                                  color: MonitorColors.overlayMem)),
+                          Text(
+                            totalRamMb > 0
+                                ? '${memMb.toStringAsFixed(0)}M/${(totalRamMb / 1024.0).toStringAsFixed(0)}G'
+                                : '${memMb.toStringAsFixed(0)}M',
+                            style: valStyle.copyWith(
+                                color: MonitorColors.overlayMem),
+                          ),
                         ],
                         ),
                       ),
