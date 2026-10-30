@@ -22,7 +22,139 @@ String _extractCleanPath(String rawUrl) {
   }
 }
 
-Set<String> _findDiffQueryKeys(ApiLogItem log) {
+Map<String, String> _extractEffectiveQueryParams(ApiLogItem log) {
+  if (log.queryParams.isNotEmpty) return log.queryParams;
+  try {
+    final uri = Uri.parse(log.url);
+    if (uri.queryParameters.isNotEmpty) {
+      return uri.queryParameters;
+    }
+  } catch (_) {}
+  return const {};
+}
+
+void _flattenJsonIntoMap(
+  dynamic value,
+  String prefix,
+  Map<String, String> out, {
+  int depth = 0,
+}) {
+  if (value == null) {
+    out[prefix] = 'null';
+    return;
+  }
+  if (depth < 3 && value is Map) {
+    if (value.isEmpty) {
+      out[prefix] = '{}';
+      return;
+    }
+    value.forEach((k, v) {
+      final nextKey = prefix.isEmpty ? k.toString() : '$prefix.$k';
+      _flattenJsonIntoMap(v, nextKey, out, depth: depth + 1);
+    });
+    return;
+  }
+  if (depth < 2 &&
+      value is List &&
+      value.isNotEmpty &&
+      value.length <= 4 &&
+      value.every((e) => e is Map)) {
+    for (int i = 0; i < value.length; i++) {
+      final nextKey = '$prefix[$i]';
+      _flattenJsonIntoMap(value[i], nextKey, out, depth: depth + 1);
+    }
+    return;
+  }
+  if (value is Map || value is List) {
+    out[prefix] = jsonEncode(value);
+  } else {
+    out[prefix] = value.toString();
+  }
+}
+
+Map<String, String> _extractBodyMapParams(ApiLogItem log) {
+  final raw = log.requestBody;
+  if (raw == null || raw.isEmpty) return const {};
+  final trimmed = raw.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is Map) {
+        final Map<dynamic, dynamic> targetMap =
+            (decoded['@type'] == 'FormData' && decoded['@fields'] is Map)
+                ? decoded['@fields'] as Map
+                : decoded;
+        final result = <String, String>{};
+        _flattenJsonIntoMap(targetMap, '', result);
+        return result;
+      }
+    } catch (_) {}
+  } else if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is List) {
+        final result = <String, String>{};
+        _flattenJsonIntoMap(decoded, 'body', result);
+        return result;
+      }
+    } catch (_) {}
+  }
+  return const {};
+}
+
+Map<String, String> _extractAllParamsMap(ApiLogItem log) {
+  final query = _extractEffectiveQueryParams(log);
+  final body = _extractBodyMapParams(log);
+  if (query.isEmpty && body.isEmpty) {
+    if (log.requestBody != null && log.requestBody!.trim().isNotEmpty) {
+      return {'@body': log.requestBody!.trim()};
+    }
+    return const {};
+  }
+  return {...query, ...body};
+}
+
+class _ParamDiffEntry {
+  final String key;
+  final String currentValue;
+  final List<({int callIndex, String value, String phase})> otherValues;
+  final List<({int callIndex, String value, String phase, bool isCurrent})>
+      allCallValues;
+  final bool isMissingInCurrent;
+
+  const _ParamDiffEntry({
+    required this.key,
+    required this.currentValue,
+    required this.otherValues,
+    required this.allCallValues,
+    this.isMissingInCurrent = false,
+  });
+}
+
+class _SiblingEndpointInfo {
+  final List<ApiLogItem> siblings;
+  final int currentCallIndex;
+  final Set<String> diffKeys;
+  final List<_ParamDiffEntry> diffEntries;
+  final Map<String, String> sameParams;
+  final bool hasDiffCaller;
+  final bool hasDiffPhase;
+
+  const _SiblingEndpointInfo({
+    required this.siblings,
+    required this.currentCallIndex,
+    required this.diffKeys,
+    required this.diffEntries,
+    required this.sameParams,
+    required this.hasDiffCaller,
+    required this.hasDiffPhase,
+  });
+
+  bool get hasMultipleCallsToEndpoint => siblings.length > 1;
+  bool get hasParamDiffs => diffEntries.isNotEmpty;
+}
+
+_SiblingEndpointInfo _analyzeSiblingEndpoint(ApiLogItem log) {
   final pathToCheck = _extractCleanPath(log.url);
   final allLogs = MonitorController.instance.apiLogs.isNotEmpty
       ? MonitorController.instance.apiLogs
@@ -32,121 +164,218 @@ Set<String> _findDiffQueryKeys(ApiLogItem log) {
     return l.method == log.method && _extractCleanPath(l.url) == pathToCheck;
   }).toList();
 
-  final Set<String> diffKeys = {};
-  if (siblingLogs.length > 1) {
-    final Map<String, Set<String>> keyToValues = {};
-    for (final sib in siblingLogs) {
-      for (final entry in sib.queryParams.entries) {
-        keyToValues
-            .putIfAbsent(entry.key, () => {})
-            .add(entry.value.toString());
-      }
-    }
-    final allKeys = keyToValues.keys.toSet();
-    for (final sib in siblingLogs) {
-      for (final k in allKeys) {
-        if (!sib.queryParams.containsKey(k)) {
-          diffKeys.add(k);
-        }
-      }
-    }
-    keyToValues.forEach((key, values) {
-      if (values.length > 1) {
-        diffKeys.add(key);
-      }
-    });
-  }
-  return diffKeys;
-}
+  // Sort oldest -> newest so #1 is the first call, #2 is the second call, etc.
+  siblingLogs.sort((a, b) {
+    final cmp = a.timestamp.compareTo(b.timestamp);
+    if (cmp != 0) return cmp;
+    return a.id.compareTo(b.id);
+  });
 
-Widget? _buildPayloadRow(BuildContext context, ApiLogItem log) {
-  final requestBody = log.requestBody;
-  if (requestBody != null && requestBody.isNotEmpty) {
-    String clean;
-    try {
-      clean = requestBody.trim().replaceAll('\n', '').replaceAll(' ', '');
-      if (clean.length > 60) {
-        clean = '${clean.substring(0, 60)}...';
-      }
-    } catch (_) {
-      clean = requestBody;
-    }
-    return Row(
-      children: [
-        Icon(Icons.subdirectory_arrow_right_rounded,
-            size: 11, color: MonitorColors.secondaryText.withValues(alpha: 0.6)),
-        const SizedBox(width: 3),
-        Expanded(
-          child: MonoText(
-            'Body: $clean',
-            9.5,
-            color: MonitorColors.secondaryText.withValues(alpha: 0.8),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
+  int currentIdx = siblingLogs.indexWhere((s) => s.id == log.id);
+  if (currentIdx < 0) currentIdx = 0;
+  final int currentCallNumber = currentIdx + 1;
+
+  if (siblingLogs.length <= 1) {
+    return _SiblingEndpointInfo(
+      siblings: siblingLogs.isEmpty ? [log] : siblingLogs,
+      currentCallIndex: 1,
+      diffKeys: const {},
+      diffEntries: const [],
+      sameParams: _extractAllParamsMap(log),
+      hasDiffCaller: false,
+      hasDiffPhase: false,
     );
   }
 
-  if (log.queryParams.isNotEmpty) {
-    final diffKeys = _findDiffQueryKeys(log);
-    // If there is only 1 call or all sibling calls have identical query parameters, do NOT show params row!
-    if (diffKeys.isEmpty) {
-      return null;
+  final List<Map<String, String>> siblingParamMaps =
+      siblingLogs.map(_extractAllParamsMap).toList();
+  final Map<String, String> currentParams = siblingParamMaps[currentIdx];
+
+  final Set<String> allKeys = {};
+  for (final m in siblingParamMaps) {
+    allKeys.addAll(m.keys);
+  }
+
+  final Set<String> diffKeys = {};
+  final List<_ParamDiffEntry> diffEntries = [];
+  final Map<String, String> sameParams = {};
+
+  for (final key in allKeys) {
+    final Set<String> distinctVals = {};
+    for (final m in siblingParamMaps) {
+      distinctVals.add(m[key] ?? '<không gửi>');
     }
+    if (distinctVals.length > 1) {
+      diffKeys.add(key);
+      final bool isMissing = !currentParams.containsKey(key);
+      final String curVal = currentParams[key] ?? '<không gửi>';
+      final List<({int callIndex, String value, String phase})> others = [];
+      final List<({int callIndex, String value, String phase, bool isCurrent})>
+          allVals = [];
 
-    final diffEntries = log.queryParams.entries
-        .where((e) => diffKeys.contains(e.key))
-        .toList();
+      for (int i = 0; i < siblingLogs.length; i++) {
+        final sib = siblingLogs[i];
+        final v = siblingParamMaps[i][key] ?? '<không gửi>';
+        allVals.add((
+          callIndex: i + 1,
+          value: v,
+          phase: sib.phase,
+          isCurrent: i == currentIdx,
+        ));
+        if (i != currentIdx && v != curVal) {
+          others.add((callIndex: i + 1, value: v, phase: sib.phase));
+        }
+      }
 
-    if (diffEntries.isEmpty) {
-      return null;
+      diffEntries.add(_ParamDiffEntry(
+        key: key,
+        currentValue: curVal,
+        otherValues: others,
+        allCallValues: allVals,
+        isMissingInCurrent: isMissing,
+      ));
+    } else if (currentParams.containsKey(key)) {
+      sameParams[key] = currentParams[key]!;
     }
+  }
 
+  final callers = siblingLogs
+      .map((s) => s.callerName.trim())
+      .where((c) => c.isNotEmpty && c != 'unknown')
+      .toSet();
+  final phases = siblingLogs.map((s) => s.phase).toSet();
+
+  return _SiblingEndpointInfo(
+    siblings: siblingLogs,
+    currentCallIndex: currentCallNumber,
+    diffKeys: diffKeys,
+    diffEntries: diffEntries,
+    sameParams: sameParams,
+    hasDiffCaller: callers.length > 1,
+    hasDiffPhase: phases.length > 1,
+  );
+}
+
+Set<String> _findDiffQueryKeys(ApiLogItem log) =>
+    _analyzeSiblingEndpoint(log).diffKeys;
+
+String _truncateParamVal(String v, [int maxLen = 22]) {
+  if (v.length <= maxLen) return v;
+  return '${v.substring(0, maxLen)}…';
+}
+
+Widget? _buildPayloadRow(BuildContext context, ApiLogItem log) {
+  final info = _analyzeSiblingEndpoint(log);
+  final allParams = _extractAllParamsMap(log);
+  final isDark = MonitorColors.isDark;
+  final diffColor =
+      isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+  final warnColor =
+      isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+  final keyColor =
+      isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1);
+  final valColor = MonitorColors.primaryText.withValues(alpha: 0.9);
+
+  // Case 1: Duplicate endpoint on the same screen WITH request parameter diffs!
+  if (info.hasMultipleCallsToEndpoint && info.hasParamDiffs) {
     final List<InlineSpan> spans = [];
-    spans.add(TextSpan(
-      text: 'Params diff: ',
-      style: TextStyle(
-        fontFamily: 'monospace',
-        fontSize: 9.5,
-        color: MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
-        fontWeight: FontWeight.w700,
-      ),
-    ));
+    final visibleDiffs = info.diffEntries.take(3).toList();
+    final remainingDiffs = info.diffEntries.length - visibleDiffs.length;
 
-    for (int i = 0; i < diffEntries.length; i++) {
-      final entry = diffEntries[i];
-      final paramColor = MonitorColors.isDark
-          ? const Color(0xFFFBBF24)
-          : const Color(0xFFD97706);
+    for (int i = 0; i < visibleDiffs.length; i++) {
+      final d = visibleDiffs[i];
+      final curStr = _truncateParamVal(d.currentValue, 20);
+      final otherSummary = d.otherValues.isNotEmpty
+          ? d.otherValues
+              .take(2)
+              .map((o) => '#${o.callIndex}: ${_truncateParamVal(o.value, 14)}')
+              .join(', ')
+          : '';
 
       spans.add(TextSpan(
-        text: '⚡ ${entry.key}=',
+        text: '${d.key}: ',
         style: TextStyle(
           fontFamily: 'monospace',
-          fontSize: 9.5,
-          color: paramColor,
+          fontSize: 9.0,
+          color: diffColor,
           fontWeight: FontWeight.w700,
         ),
       ));
       spans.add(TextSpan(
-        text: entry.value.toString(),
+        text: curStr,
         style: TextStyle(
           fontFamily: 'monospace',
-          fontSize: 9.5,
-          color: paramColor,
+          fontSize: 9.0,
+          color: d.isMissingInCurrent ? warnColor : diffColor,
           fontWeight: FontWeight.w800,
         ),
       ));
-
-      if (i < diffEntries.length - 1) {
+      if (otherSummary.isNotEmpty) {
         spans.add(TextSpan(
-          text: ',  ',
+          text: ' ($otherSummary)',
           style: TextStyle(
             fontFamily: 'monospace',
-            fontSize: 9.5,
-            color: MonitorColors.secondaryText.withValues(alpha: 0.5),
+            fontSize: 8.3,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.85),
+            fontWeight: FontWeight.w500,
+          ),
+        ));
+      }
+      if (i < visibleDiffs.length - 1 ||
+          remainingDiffs > 0 ||
+          info.sameParams.isNotEmpty) {
+        spans.add(TextSpan(
+          text: '  ·  ',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 9.0,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.45),
+          ),
+        ));
+      }
+    }
+    if (remainingDiffs > 0) {
+      spans.add(TextSpan(
+        text: '+$remainingDiffs khác',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 8.5,
+          color: diffColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ));
+      if (info.sameParams.isNotEmpty) {
+        spans.add(TextSpan(
+          text: '  ·  ',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 9.0,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.45),
+          ),
+        ));
+      }
+    }
+
+    // Append unchanged params inline in subtle text so user sees full context calmly
+    final sameEntries = info.sameParams.entries.take(2).toList();
+    for (int i = 0; i < sameEntries.length; i++) {
+      final e = sameEntries[i];
+      spans.add(TextSpan(
+        text: '${e.key}: ${_truncateParamVal(e.value, 14)}',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 8.5,
+          color: MonitorColors.secondaryText.withValues(alpha: 0.70),
+          fontWeight: FontWeight.w500,
+        ),
+      ));
+      if (i < sameEntries.length - 1) {
+        spans.add(TextSpan(
+          text: ' · ',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 8.5,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.40),
           ),
         ));
       }
@@ -154,23 +383,160 @@ Widget? _buildPayloadRow(BuildContext context, ApiLogItem log) {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      margin: const EdgeInsets.only(top: 2),
+      margin: const EdgeInsets.only(top: 1),
       decoration: BoxDecoration(
-        color: (MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)).withValues(alpha: 0.08),
+        color: diffColor.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
-          color: (MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)).withValues(alpha: 0.25),
+          color: diffColor.withValues(alpha: 0.25),
           width: 0.6,
         ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.difference_rounded,
-              size: 11, color: MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)),
-          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.8),
+            margin: const EdgeInsets.only(top: 0.5, right: 5),
+            decoration: BoxDecoration(
+              color: diffColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: MonoText(
+              'Khác ${info.diffEntries.length}',
+              7.5,
+              color: diffColor,
+              weight: FontWeight.w800,
+            ),
+          ),
           Expanded(
             child: RichText(
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(children: spans),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Case 2 & 3: Single call OR Duplicate endpoint with identical params (subtle, non-intrusive)
+  if (allParams.isNotEmpty || info.hasMultipleCallsToEndpoint) {
+    final entries = allParams.entries.toList();
+    final maxPreview = 4;
+    final visibleEntries = entries.take(maxPreview).toList();
+    final remaining = entries.length - visibleEntries.length;
+
+    final otherIndices = <int>[];
+    if (info.hasMultipleCallsToEndpoint) {
+      for (int i = 0; i < info.siblings.length; i++) {
+        if (i + 1 != info.currentCallIndex) otherIndices.add(i + 1);
+      }
+    }
+    final sameTag = otherIndices.isNotEmpty
+        ? 'Giống #${otherIndices.first}'
+        : '';
+
+    final List<InlineSpan> spans = [];
+    if ( visibleEntries.isEmpty && sameTag.isNotEmpty) {
+      spans.add(TextSpan(
+        text: 'Không có params',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 8.5,
+          color: MonitorColors.secondaryText.withValues(alpha: 0.65),
+        ),
+      ));
+    }
+    for (int i = 0; i < visibleEntries.length; i++) {
+      final entry = visibleEntries[i];
+      final valStr = _truncateParamVal(entry.value, 24);
+
+      spans.add(TextSpan(
+        text: '${entry.key}: ',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 9.0,
+          color: keyColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ));
+      spans.add(TextSpan(
+        text: valStr,
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 9.0,
+          color: valColor,
+          fontWeight: FontWeight.w600,
+        ),
+      ));
+
+      if (i < visibleEntries.length - 1 || remaining > 0) {
+        spans.add(TextSpan(
+          text: '  ·  ',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 9.0,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.45),
+          ),
+        ));
+      }
+    }
+
+    if (remaining > 0) {
+      spans.add(TextSpan(
+        text: '+$remaining',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 8.5,
+          color: MonitorColors.metricTotal,
+          fontWeight: FontWeight.w700,
+        ),
+      ));
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      margin: const EdgeInsets.only(top: 1),
+      decoration: BoxDecoration(
+        color: MonitorColors.expandedDetailBg.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: MonitorColors.border.withValues(alpha: 0.6),
+          width: 0.6,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (sameTag.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.8),
+              margin: const EdgeInsets.only(right: 5),
+              decoration: BoxDecoration(
+                color: MonitorColors.secondaryText.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: MonoText(
+                sameTag,
+                7.5,
+                color: MonitorColors.secondaryText,
+                weight: FontWeight.w700,
+              ),
+            ),
+          ] else ...[
+            Icon(
+              Icons.tune_rounded,
+              size: 10,
+              color: MonitorColors.secondaryText.withValues(alpha: 0.7),
+            ),
+            const SizedBox(width: 4),
+          ],
+          Expanded(
+            child: RichText(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               text: TextSpan(children: spans),
             ),
           ),
@@ -183,6 +549,54 @@ Widget? _buildPayloadRow(BuildContext context, ApiLogItem log) {
 }
 
 Widget? _buildCompactPayloadRow(ApiLogItem log) {
+  final allParams = _extractAllParamsMap(log);
+  if (allParams.isNotEmpty) {
+    final diffKeys = _findDiffQueryKeys(log);
+    final entries = allParams.entries.toList();
+    entries.sort((a, b) {
+      final aDiff = diffKeys.contains(a.key) ? 0 : 1;
+      final bDiff = diffKeys.contains(b.key) ? 0 : 1;
+      return aDiff.compareTo(bDiff);
+    });
+
+    final isDark = MonitorColors.isDark;
+    final diffColor =
+        isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+    final keyColor =
+        isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1);
+
+    final visible = entries.take(3).toList();
+    final List<InlineSpan> spans = [];
+    for (int i = 0; i < visible.length; i++) {
+      final entry = visible[i];
+      final isDiff = diffKeys.contains(entry.key);
+      spans.add(TextSpan(
+        text: '${isDiff ? "⚡" : ""}${entry.key}=${entry.value}',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 8.5,
+          color: isDiff ? diffColor : keyColor,
+          fontWeight: isDiff ? FontWeight.bold : FontWeight.w600,
+        ),
+      ));
+      if (i < visible.length - 1) {
+        spans.add(TextSpan(
+          text: ' · ',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 8.5,
+            color: MonitorColors.secondaryText.withValues(alpha: 0.4),
+          ),
+        ));
+      }
+    }
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(children: spans),
+    );
+  }
+
   final requestBody = log.requestBody;
   if (requestBody != null && requestBody.isNotEmpty) {
     String clean;
@@ -200,64 +614,6 @@ Widget? _buildCompactPayloadRow(ApiLogItem log) {
       color: MonitorColors.secondaryText.withValues(alpha: 0.7),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-    );
-  }
-
-  if (log.queryParams.isNotEmpty) {
-    final diffKeys = _findDiffQueryKeys(log);
-    if (diffKeys.isEmpty) {
-      return null;
-    }
-
-    final diffEntries = log.queryParams.entries
-        .where((e) => diffKeys.contains(e.key))
-        .toList();
-
-    if (diffEntries.isEmpty) {
-      return null;
-    }
-
-    final List<InlineSpan> spans = [];
-    spans.add(TextSpan(
-      text: 'Diff: ',
-      style: TextStyle(
-        fontFamily: 'monospace',
-        fontSize: 8.5,
-        color: MonitorColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
-        fontWeight: FontWeight.w700,
-      ),
-    ));
-
-    for (int i = 0; i < diffEntries.length; i++) {
-      final entry = diffEntries[i];
-      final paramColor = MonitorColors.isDark
-          ? const Color(0xFFFBBF24)
-          : const Color(0xFFD97706);
-
-      spans.add(TextSpan(
-        text: '${entry.key}=${entry.value}',
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 8.5,
-          color: paramColor,
-          fontWeight: FontWeight.bold,
-        ),
-      ));
-
-      if (i < diffEntries.length - 1) {
-        spans.add(TextSpan(
-          text: ', ',
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 8.5,
-            color: MonitorColors.secondaryText.withValues(alpha: 0.4),
-          ),
-        ));
-      }
-    }
-
-    return RichText(
-      text: TextSpan(children: spans),
     );
   }
 
@@ -309,7 +665,8 @@ class _ApiLogTileState extends State<ApiLogTile> {
   Widget build(BuildContext context) {
     final log = widget.log;
     final statusColor = _statusColor(log);
-    final laneColor = widget.lane != null ? _palette[widget.lane! % _palette.length] : null;
+    final laneColor =
+        widget.lane != null ? _palette[widget.lane! % _palette.length] : null;
 
     final isExpanded = _expanded;
     final radius = widget.compact ? 6.0 : 8.0;
@@ -334,9 +691,11 @@ class _ApiLogTileState extends State<ApiLogTile> {
                       ? MonitorColors.statusError.withValues(alpha: 0.8)
                       : MonitorColors.metricTotal.withValues(alpha: 0.65)))
               : (log.isSlow
-                  ? MonitorColors.statusSlow.withValues(alpha: widget.compact ? 0.35 : 0.4)
+                  ? MonitorColors.statusSlow
+                      .withValues(alpha: widget.compact ? 0.35 : 0.4)
                   : (log.isSuccess
-                      ? MonitorColors.border.withValues(alpha: widget.compact ? 0.45 : 1.0)
+                      ? MonitorColors.border
+                          .withValues(alpha: widget.compact ? 0.45 : 1.0)
                       : MonitorColors.statusError.withValues(alpha: 0.35))),
           width: isExpanded
               ? (widget.compact ? 1.0 : 1.2)
@@ -345,7 +704,8 @@ class _ApiLogTileState extends State<ApiLogTile> {
         boxShadow: isExpanded
             ? [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: MonitorColors.isDark ? 0.40 : 0.08),
+                  color: Colors.black
+                      .withValues(alpha: MonitorColors.isDark ? 0.40 : 0.08),
                   blurRadius: 10,
                   spreadRadius: 0.5,
                   offset: const Offset(0, 3),
@@ -359,10 +719,19 @@ class _ApiLogTileState extends State<ApiLogTile> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (laneColor != null && !widget.compact)
+              if (!widget.compact)
                 Container(
-                  width: isExpanded ? 5.0 : 4.5,
-                  color: laneColor,
+                  width: isExpanded ? 4.5 : 3.5,
+                  color: laneColor ??
+                      (!log.isSuccess
+                          ? MonitorColors.statusError
+                          : (log.isSlow
+                              ? MonitorColors.statusSlow
+                              : (log.phase == 'OPEN'
+                                  ? MonitorColors.metricInit
+                                      .withValues(alpha: 0.75)
+                                  : MonitorColors.metricRefresh
+                                      .withValues(alpha: 0.75)))),
                 ),
               Expanded(
                 child: Column(
@@ -430,14 +799,69 @@ class _CollapsedRow extends StatelessWidget {
     required this.onTap,
   });
 
+  static Widget _buildHighlightedUrl(String url, bool expanded) {
+    final clean = url.trim();
+    final segments = clean.split('/').where((s) => s.isNotEmpty).toList();
+    if (segments.length <= 2) {
+      return MonoText(
+        clean,
+        11.5,
+        color: MonitorColors.primaryText,
+        weight: FontWeight.w700,
+        maxLines: expanded ? null : 2,
+        overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+      );
+    }
+
+    final prefixSegments = segments.sublist(0, segments.length - 2);
+    final endpointSegments = segments.sublist(segments.length - 2);
+    final prefix = '/${prefixSegments.join('/')}/';
+    final endpoint = endpointSegments.join('/');
+
+    return RichText(
+      maxLines: expanded ? null : 2,
+      overflow: expanded ? TextOverflow.clip : TextOverflow.ellipsis,
+      text: TextSpan(
+        style: const TextStyle(fontFamily: 'monospace', height: 1.25),
+        children: [
+          TextSpan(
+            text: prefix,
+            style: TextStyle(
+              fontSize: 10.0,
+              color: MonitorColors.secondaryText.withValues(alpha: 0.65),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          TextSpan(
+            text: endpoint,
+            style: TextStyle(
+              fontSize: 11.5,
+              color: MonitorColors.primaryText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final siblingInfo = _analyzeSiblingEndpoint(log);
     final payloadRow = _buildPayloadRow(context, log);
     // Shorten URL path (clean endpoint path without query string)
     String displayUrl = log.url;
     if (!showFullUrl) {
       displayUrl = _extractCleanPath(log.url);
     }
+
+    final ts = log.timestamp;
+    final timeStr =
+        '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
+    final isInitPhase = log.phase == 'OPEN';
+    final phaseColor =
+        isInitPhase ? MonitorColors.metricInit : MonitorColors.metricRefresh;
+    final statusText = log.statusCode > 0 ? '${log.statusCode}' : 'ERR';
 
     return InkWell(
       onTap: onTap,
@@ -452,81 +876,106 @@ class _CollapsedRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Row 1: Primary API signature (Method + Call Count + URL path + Duration)
+            // Row 1: Primary API signature (Method + Status + Sibling/Call Count + URL path + Duration)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.only(top: 1),
                   child: _MethodBadge(method: log.method),
                 ),
-                if (log.hasMultipleCalls) ...[
-                  const SizedBox(width: 5),
+                const SizedBox(width: 4),
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: statusColor.withValues(alpha: 0.32),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: MonoText(
+                      statusText,
+                      9,
+                      color: statusColor,
+                      weight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (siblingInfo.hasMultipleCallsToEndpoint) ...[
+                  const SizedBox(width: 4),
                   Padding(
-                    padding: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.only(top: 1),
+                    child: _SiblingCallBadge(
+                      currentIndex: siblingInfo.currentCallIndex,
+                      totalCount: siblingInfo.siblings.length,
+                      hasDiff: siblingInfo.hasParamDiffs,
+                    ),
+                  ),
+                ] else if (log.hasMultipleCalls) ...[
+                  const SizedBox(width: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
                     child: _CallCountBadge(count: log.callCount),
                   ),
                 ],
                 const SizedBox(width: 6),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: MonoText(
-                      displayUrl,
-                      11.5,
-                      color: MonitorColors.primaryText,
-                      weight: FontWeight.w500,
-                    ),
+                    padding: const EdgeInsets.only(top: 1),
+                    child: _buildHighlightedUrl(displayUrl, expanded),
                   ),
                 ),
                 const SizedBox(width: 6),
                 Padding(
-                  padding: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.only(top: 1.5),
                   child: _DurationLabel(
                       duration: log.duration,
                       isSlow: log.isSlow,
                       color: statusColor),
                 ),
-                const SizedBox(width: 6),
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MonitorResponsiveRoute(
-                          builder: (_) => MonitorApiDetailPage(log: log),
-                          settings: const RouteSettings(name: MonitorConstants.apiDetailPage),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: MonitorColors.expandedDetailBg,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: MonitorColors.border,
-                          width: 0.5,
-                        ),
+                const SizedBox(width: 5),
+                InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MonitorResponsiveRoute(
+                        builder: (_) => MonitorApiDetailPage(log: log),
+                        settings: const RouteSettings(
+                            name: MonitorConstants.apiDetailPage),
                       ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.open_in_new_rounded,
-                        color: MonitorColors.primaryText,
-                        size: 14,
+                    );
+                  },
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: MonitorColors.expandedDetailBg,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: MonitorColors.border,
+                        width: 0.5,
                       ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.open_in_new_rounded,
+                      color: MonitorColors.secondaryText,
+                      size: 12,
                     ),
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 3),
                 Padding(
-                  padding: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.only(top: 3.5),
                   child: Icon(
                     expanded ? Icons.expand_less : Icons.expand_more,
                     color: MonitorColors.secondaryText,
-                    size: 14,
+                    size: 15,
                   ),
                 ),
               ],
@@ -535,25 +984,59 @@ class _CollapsedRow extends StatelessWidget {
               const SizedBox(height: 4),
               payloadRow,
             ],
-            // Row 2: Screen and Caller Metadata
-            if (showScreenBadge || log.hasCallerName) ...[
-              const SizedBox(height: 5),
-              Row(
-                children: [
-                  if (showScreenBadge) ...[
-                    _ScreenBadge(screen: log.screen, lane: lane),
-                    const SizedBox(width: 6),
-                  ],
-                  if (log.hasCallerName)
-                    Expanded(
-                      child: _CallerRow(
-                        callerName: log.callerName,
-                        color: MonitorColors.secondaryText.withValues(alpha: 0.8),
-                      ),
-                    ),
+            // Row 2: Phase + Screen + Size + Caller + Timestamp metadata
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 4.5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: phaseColor.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(3.5),
+                  ),
+                  child: LabelText(
+                    isInitPhase
+                        ? LocaleKeys.initLabel.tr
+                        : (log.refreshCycle > 0
+                            ? '${LocaleKeys.actionLabel.tr} #${log.refreshCycle}'
+                            : LocaleKeys.actionLabel.tr),
+                    phaseColor,
+                    size: 7.5,
+                    spacing: 0.3,
+                  ),
+                ),
+                if (showScreenBadge) ...[
+                  const SizedBox(width: 5),
+                  _ScreenBadge(screen: log.screen, lane: lane),
                 ],
-              ),
-            ],
+                if (log.hasResponseSize) ...[
+                  const SizedBox(width: 6),
+                  MonoText(
+                    log.responseSizeFormatted,
+                    8.5,
+                    color: MonitorColors.secondaryText.withValues(alpha: 0.85),
+                    weight: FontWeight.w600,
+                  ),
+                ],
+                if (log.hasCallerName) ...[
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _CallerRow(
+                      callerName: log.callerName,
+                      color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ] else
+                  const Spacer(),
+                const SizedBox(width: 6),
+                MonoText(
+                  timeStr,
+                  8.5,
+                  color: MonitorColors.secondaryText.withValues(alpha: 0.65),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -610,7 +1093,8 @@ class _CompactCollapsedRow extends StatelessWidget {
               children: [
                 // Method Badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
                   decoration: BoxDecoration(
                     color: methodColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(3),
@@ -627,7 +1111,8 @@ class _CompactCollapsedRow extends StatelessWidget {
                 const SizedBox(width: 5),
                 // Status Code
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(3),
@@ -665,7 +1150,8 @@ class _CompactCollapsedRow extends StatelessWidget {
                     Navigator.of(context).push(
                       MonitorResponsiveRoute(
                         builder: (_) => MonitorApiDetailPage(log: log),
-                        settings: const RouteSettings(name: MonitorConstants.apiDetailPage),
+                        settings: const RouteSettings(
+                            name: MonitorConstants.apiDetailPage),
                       ),
                     );
                   },
@@ -734,7 +1220,9 @@ class _ScreenBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = MonitorController.formatRouteName(screen);
-    final badgeColor = lane != null ? _palette[lane! % _palette.length] : const Color(0xFFA78BFA);
+    final badgeColor = lane != null
+        ? _palette[lane! % _palette.length]
+        : const Color(0xFFA78BFA);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
@@ -775,13 +1263,36 @@ class _ExpandedDetail extends StatefulWidget {
 }
 
 class _ExpandedDetailState extends State<_ExpandedDetail> {
-  int _tab = 0;
+  late int _tab;
 
-  static const _tabLabels = ['REQUEST', 'RESPONSE', 'TIMELINE', 'HEADERS'];
+  @override
+  void initState() {
+    super.initState();
+    final log = widget.log;
+    final hasResBody = log.responseBody != null && log.responseBody!.isNotEmpty;
+    final hasReqPayload =
+        (log.requestBody != null && log.requestBody!.isNotEmpty) ||
+            _extractEffectiveQueryParams(log).isNotEmpty;
+    // Open RESPONSE tab by default when response body exists (since QuickParamsStrip
+    // shows request params right above the response!). Otherwise open REQUEST if present.
+    _tab = (hasResBody || !log.isSuccess || !hasReqPayload) ? 1 : 0;
+  }
+
+  List<String> _buildTabLabels(ApiLogItem log) {
+    final paramCount = _extractAllParamsMap(log).length;
+    final hdrCount = log.requestHeaders.length + log.responseHeaders.length;
+    return [
+      paramCount > 0 ? 'REQUEST ($paramCount)' : 'REQUEST',
+      'RESPONSE',
+      'TIMELINE',
+      hdrCount > 0 ? 'HEADERS ($hdrCount)' : 'HEADERS',
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     final log = widget.log;
+    final tabLabels = _buildTabLabels(log);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -794,7 +1305,7 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
             children: [
               Expanded(
                 child: _TabBar(
-                  tabs: _tabLabels,
+                  tabs: tabLabels,
                   active: _tab,
                   onTap: (i) => setState(() => _tab = i),
                 ),
@@ -802,20 +1313,32 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
               // Vertical divider
               Container(
                 width: 1,
-                height: 34,
+                height: 32,
                 color: MonitorColors.border,
               ),
               // Copy-all button
-              GestureDetector(
+              InkWell(
                 onTap: () => _showCopySheet(context, log),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  height: 32,
                   alignment: Alignment.center,
-                  child: Icon(
-                    Icons.copy_all_rounded,
-                    size: 16,
-                    color: MonitorColors.secondaryText,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.copy_all_rounded,
+                        size: 14,
+                        color: MonitorColors.secondaryText,
+                      ),
+                      const SizedBox(width: 3),
+                      BodyText(
+                        'Copy',
+                        8.5,
+                        color: MonitorColors.secondaryText,
+                        weight: FontWeight.w600,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -843,7 +1366,8 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      routeSettings: const RouteSettings(name: MonitorConstants.copyActionsSheet),
+      routeSettings:
+          const RouteSettings(name: MonitorConstants.copyActionsSheet),
       builder: (_) => _CopyActionsSheet(log: log),
     );
   }
@@ -853,7 +1377,10 @@ class _ExpandedDetailState extends State<_ExpandedDetail> {
       case 0:
         return _RequestContent(log: log);
       case 1:
-        return _ResponseContent(log: log);
+        return _ResponseContent(
+          log: log,
+          onSwitchToRequestTab: () => setState(() => _tab = 0),
+        );
       case 2:
         return _TimelineContent(log: log);
       case 3:
@@ -877,13 +1404,10 @@ class _ExpandedDetailFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _ApiLogTileState._statusColor(log);
-    final ts = log.timestamp;
-    final timeStr =
-        '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
+    final curl = _buildCurl(log);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: MonitorColors.expandedDetailBg,
         borderRadius: const BorderRadius.only(
@@ -893,43 +1417,32 @@ class _ExpandedDetailFooter extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Mini status badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: statusColor.withValues(alpha: 0.35), width: 0.5),
-            ),
-            child: MonoText(
-              '${log.statusCode}',
-              10,
-              color: statusColor,
-              weight: FontWeight.bold,
-            ),
-          ),
+          _CurlCopyButton(curl: curl),
+          const SizedBox(width: 8),
+          if (log.hasCallerName)
+            Expanded(
+              child: Row(
+                children: [
+                  Icon(Icons.call_made,
+                      size: 10,
+                      color:
+                          MonitorColors.secondaryText.withValues(alpha: 0.7)),
+                  const SizedBox(width: 3),
+                  Expanded(
+                    child: MonoText(
+                      log.callerName,
+                      9.0,
+                      color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            const Spacer(),
           const SizedBox(width: 6),
-          MonoText(
-            '${log.duration}ms',
-            10,
-            color: log.isSlow ? MonitorColors.statusSlow : MonitorColors.secondaryText,
-            weight: FontWeight.w600,
-          ),
-          if (log.hasResponseSize) ...[
-            const SizedBox(width: 6),
-            MonoText(
-              '·  ${log.responseSizeFormatted}',
-              10,
-              color: MonitorColors.secondaryText,
-            ),
-          ],
-          const SizedBox(width: 6),
-          MonoText(
-            '·  $timeStr',
-            9.5,
-            color: MonitorColors.secondaryText.withValues(alpha: 0.7),
-          ),
-          const Spacer(),
           // Fullscreen Detail button
           InkWell(
             borderRadius: BorderRadius.circular(5),
@@ -937,7 +1450,8 @@ class _ExpandedDetailFooter extends StatelessWidget {
               Navigator.of(context).push(
                 MonitorResponsiveRoute(
                   builder: (_) => MonitorApiDetailPage(log: log),
-                  settings: const RouteSettings(name: MonitorConstants.apiDetailPage),
+                  settings:
+                      const RouteSettings(name: MonitorConstants.apiDetailPage),
                 ),
               );
             },
@@ -951,9 +1465,12 @@ class _ExpandedDetailFooter extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.open_in_new_rounded, size: 11, color: MonitorColors.primaryText),
+                  Icon(Icons.open_in_new_rounded,
+                      size: 11, color: MonitorColors.primaryText),
                   const SizedBox(width: 4),
-                  BodyText('Detail', 9.5, color: MonitorColors.primaryText, weight: FontWeight.w500),
+                  BodyText('Detail', 9.5,
+                      color: MonitorColors.primaryText,
+                      weight: FontWeight.w500),
                 ],
               ),
             ),
@@ -965,7 +1482,8 @@ class _ExpandedDetailFooter extends StatelessWidget {
               borderRadius: BorderRadius.circular(5),
               onTap: onCollapse,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
                 decoration: BoxDecoration(
                   color: MonitorColors.surface,
                   borderRadius: BorderRadius.circular(5),
@@ -977,7 +1495,8 @@ class _ExpandedDetailFooter extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.keyboard_arrow_up_rounded, size: 13, color: MonitorColors.metricTotal),
+                    Icon(Icons.keyboard_arrow_up_rounded,
+                        size: 13, color: MonitorColors.metricTotal),
                     const SizedBox(width: 3),
                     BodyText(
                       LocaleKeys.collapse.tr,
@@ -1010,30 +1529,39 @@ class _TabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: MonitorColors.expandedDetailBg,
-      child: Row(
-        children: [
-          for (int i = 0; i < tabs.length; i++)
-            GestureDetector(
-              onTap: () => onTap(i),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: active == i
-                          ? MonitorColors.metricTotal
-                          : Colors.transparent,
-                      width: 2,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (int i = 0; i < tabs.length; i++)
+              GestureDetector(
+                onTap: () => onTap(i),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7.5),
+                  decoration: BoxDecoration(
+                    color: active == i
+                        ? MonitorColors.metricTotal.withValues(alpha: 0.08)
+                        : Colors.transparent,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: active == i
+                            ? MonitorColors.metricTotal
+                            : Colors.transparent,
+                        width: 2,
+                      ),
                     ),
                   ),
+                  child: active == i
+                      ? LabelText(tabs[i], MonitorColors.metricTotal, size: 8.5)
+                      : BodyText(tabs[i], 8.5,
+                          color: MonitorColors.secondaryText,
+                          weight: FontWeight.w600),
                 ),
-                child: active == i
-                    ? LabelText(tabs[i], MonitorColors.metricTotal, size: 9)
-                    : BodyText(tabs[i], 9, color: MonitorColors.secondaryText, weight: FontWeight.w500),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1056,7 +1584,8 @@ class _TimelineContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LabelText('EXECUTION TIMELINE', MonitorColors.secondaryText, size: 9, spacing: 0.8),
+          LabelText('EXECUTION TIMELINE', MonitorColors.secondaryText,
+              size: 9, spacing: 0.8),
           const SizedBox(height: 12),
           _TimelineStep(
             title: 'Request Sent',
@@ -1126,6 +1655,614 @@ String _buildCurl(ApiLogItem log) {
   return sb.toString();
 }
 
+// ─── Quick Params Strip (shown above Response so params are always visible) ──
+
+class _QuickParamsStrip extends StatefulWidget {
+  final ApiLogItem log;
+  final VoidCallback? onOpenRequestTab;
+
+  const _QuickParamsStrip({
+    required this.log,
+    this.onOpenRequestTab,
+  });
+
+  @override
+  State<_QuickParamsStrip> createState() => _QuickParamsStripState();
+}
+
+class _QuickParamsStripState extends State<_QuickParamsStrip> {
+  bool _tableMode = false;
+  bool _showAllChips = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final siblingInfo = _analyzeSiblingEndpoint(widget.log);
+    final queryParams = _extractEffectiveQueryParams(widget.log);
+    final bodyParams = _extractBodyMapParams(widget.log);
+    final allParams = <String, String>{...queryParams, ...bodyParams};
+    if (allParams.isEmpty && !siblingInfo.hasMultipleCallsToEndpoint) {
+      return const SizedBox.shrink();
+    }
+
+    final diffKeys = siblingInfo.diffKeys;
+    final entries = allParams.entries.toList();
+    entries.sort((a, b) {
+      final aDiff = diffKeys.contains(a.key) ? 0 : 1;
+      final bDiff = diffKeys.contains(b.key) ? 0 : 1;
+      return aDiff.compareTo(bDiff);
+    });
+
+    final isDark = MonitorColors.isDark;
+    final diffColor =
+        isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+    final hasDiff = diffKeys.isNotEmpty;
+    final copyFormatted =
+        entries.map((e) => '${e.key}: ${e.value}').join('\n');
+
+    final int maxInitialChips = 6;
+    final bool hasMoreChips = entries.length > maxInitialChips;
+    final visibleChipEntries = (!_showAllChips && hasMoreChips)
+        ? entries.take(maxInitialChips).toList()
+        : entries;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (siblingInfo.hasMultipleCallsToEndpoint &&
+            siblingInfo.hasParamDiffs)
+          _SiblingRequestComparisonCard(info: siblingInfo),
+        if (allParams.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: MonitorColors.surface,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(
+                color: hasDiff
+                    ? diffColor.withValues(alpha: 0.35)
+                    : MonitorColors.border.withValues(alpha: 0.85),
+                width: 0.8,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 11,
+                      color: hasDiff ? diffColor : MonitorColors.metricTotal,
+                    ),
+                    const SizedBox(width: 4),
+                    LabelText(
+                      'PARAMS (${entries.length})',
+                      hasDiff ? diffColor : MonitorColors.metricTotal,
+                      size: 8.5,
+                      spacing: 0.5,
+                    ),
+                    if (queryParams.isNotEmpty && bodyParams.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      MonoText(
+                        '${queryParams.length} query · ${bodyParams.length} body',
+                        8.0,
+                        color: MonitorColors.secondaryText,
+                      ),
+                    ] else if (bodyParams.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      MonoText(
+                        'JSON body',
+                        8.0,
+                        color: MonitorColors.secondaryText,
+                      ),
+                    ],
+                    if (hasDiff) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: diffColor.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: MonoText(
+                          '⚡ ${diffKeys.length} khác',
+                          7.5,
+                          color: diffColor,
+                          weight: FontWeight.bold,
+                        ),
+                      ),
+                    ] else if (siblingInfo.hasMultipleCallsToEndpoint) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: MonitorColors.secondaryText
+                              .withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: MonoText(
+                          'Lần #${siblingInfo.currentCallIndex}/${siblingInfo.siblings.length} · Giống nhau',
+                          7.5,
+                          color: MonitorColors.secondaryText,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    // Toggle Chips vs Table view
+                    GestureDetector(
+                      onTap: () => setState(() => _tableMode = !_tableMode),
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _tableMode
+                              ? MonitorColors.metricTotal
+                                  .withValues(alpha: 0.12)
+                              : MonitorColors.expandedDetailBg,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: _tableMode
+                                ? MonitorColors.metricTotal
+                                    .withValues(alpha: 0.4)
+                                : MonitorColors.border,
+                            width: 0.6,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _tableMode
+                                  ? Icons.table_rows_rounded
+                                  : Icons.grid_view_rounded,
+                              size: 9.5,
+                              color: _tableMode
+                                  ? MonitorColors.metricTotal
+                                  : MonitorColors.secondaryText,
+                            ),
+                            const SizedBox(width: 3),
+                            MonoText(
+                              _tableMode ? 'Bảng' : 'Chips',
+                              7.5,
+                              color: _tableMode
+                                  ? MonitorColors.metricTotal
+                                  : MonitorColors.secondaryText,
+                              weight: FontWeight.bold,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    _InlineCopyBtn(text: copyFormatted),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                if (_tableMode)
+                  _KVTable(entries: entries, diffKeys: diffKeys)
+                else
+                  Wrap(
+                    spacing: 5,
+                    runSpacing: 5,
+                    children: [
+                      for (final entry in visibleChipEntries)
+                        _ParamChipItem(
+                          paramKey: entry.key,
+                          paramValue: entry.value,
+                          isDiff: diffKeys.contains(entry.key),
+                        ),
+                      if (hasMoreChips)
+                        GestureDetector(
+                          onTap: () =>
+                              setState(() => _showAllChips = !_showAllChips),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: MonitorColors.metricTotal
+                                  .withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: MonitorColors.metricTotal
+                                    .withValues(alpha: 0.3),
+                                width: 0.6,
+                              ),
+                            ),
+                            child: MonoText(
+                              _showAllChips
+                                  ? 'Thu gọn'
+                                  : '+${entries.length - maxInitialChips} xem thêm',
+                              8.5,
+                              color: MonitorColors.metricTotal,
+                              weight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ParamChipItem extends StatefulWidget {
+  final String paramKey;
+  final String paramValue;
+  final bool isDiff;
+
+  const _ParamChipItem({
+    required this.paramKey,
+    required this.paramValue,
+    this.isDiff = false,
+  });
+
+  @override
+  State<_ParamChipItem> createState() => _ParamChipItemState();
+}
+
+class _ParamChipItemState extends State<_ParamChipItem> {
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    await Clipboard.setData(
+        ClipboardData(text: '${widget.paramKey}=${widget.paramValue}'));
+    setState(() => _copied = true);
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (mounted) setState(() => _copied = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = MonitorColors.isDark;
+    final diffColor =
+        isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+    final keyColor =
+        isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1);
+
+    String displayVal = widget.paramValue;
+    if (displayVal.length > 36) {
+      displayVal = '${displayVal.substring(0, 36)}…';
+    }
+
+    return GestureDetector(
+      onTap: _copy,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: _copied
+              ? MonitorColors.statusSuccess.withValues(alpha: 0.14)
+              : (widget.isDiff
+                  ? diffColor.withValues(alpha: 0.10)
+                  : MonitorColors.expandedDetailBg),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: _copied
+                ? MonitorColors.statusSuccess.withValues(alpha: 0.45)
+                : (widget.isDiff
+                    ? diffColor.withValues(alpha: 0.38)
+                    : MonitorColors.border.withValues(alpha: 0.8)),
+            width: 0.6,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_copied) ...[
+              Icon(Icons.check_rounded,
+                  size: 10, color: MonitorColors.statusSuccess),
+              const SizedBox(width: 3),
+            ],
+            Flexible(
+              child: RichText(
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                text: TextSpan(
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 9.0),
+                  children: [
+                    TextSpan(
+                      text:
+                          '${widget.isDiff ? "⚡" : ""}${widget.paramKey}: ',
+                      style: TextStyle(
+                        color: _copied
+                            ? MonitorColors.statusSuccess
+                            : (widget.isDiff ? diffColor : keyColor),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    TextSpan(
+                      text: displayVal,
+                      style: TextStyle(
+                        color: _copied
+                            ? MonitorColors.statusSuccess
+                            : (widget.isDiff
+                                ? diffColor
+                                : MonitorColors.primaryText),
+                        fontWeight:
+                            widget.isDiff ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SiblingCallBadge extends StatelessWidget {
+  final int currentIndex;
+  final int totalCount;
+  final bool hasDiff;
+
+  const _SiblingCallBadge({
+    required this.currentIndex,
+    required this.totalCount,
+    required this.hasDiff,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = MonitorColors.isDark;
+    final color = hasDiff
+        ? (isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706))
+        : MonitorColors.secondaryText;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: hasDiff ? 0.14 : 0.10),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: color.withValues(alpha: hasDiff ? 0.40 : 0.25),
+          width: 0.6,
+        ),
+      ),
+      child: MonoText(
+        '#$currentIndex/$totalCount',
+        8.5,
+        color: color,
+        weight: hasDiff ? FontWeight.w800 : FontWeight.w700,
+      ),
+    );
+  }
+}
+
+class _SiblingRequestComparisonCard extends StatelessWidget {
+  final _SiblingEndpointInfo info;
+
+  const _SiblingRequestComparisonCard({required this.info});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = MonitorColors.isDark;
+    final diffColor =
+        isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+    final neutralColor = MonitorColors.secondaryText;
+    final accentColor = info.hasParamDiffs ? diffColor : neutralColor;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: info.hasParamDiffs
+            ? diffColor.withValues(alpha: 0.07)
+            : MonitorColors.surface,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(
+          color: info.hasParamDiffs
+              ? diffColor.withValues(alpha: 0.35)
+              : MonitorColors.border.withValues(alpha: 0.8),
+          width: 0.8,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                info.hasParamDiffs
+                    ? Icons.compare_arrows_rounded
+                    : Icons.history_rounded,
+                size: 12,
+                color: accentColor,
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: LabelText(
+                  info.hasParamDiffs
+                      ? 'SO SÁNH REQUEST (${info.siblings.length} LẦN GỌI · KHÁC ${info.diffEntries.length} PARAM)'
+                      : 'LỊCH SỬ GỌI TRONG MÀN (${info.siblings.length} LẦN · CÙNG PARAMS)',
+                  accentColor,
+                  size: 8.2,
+                  spacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          // Call timeline chips (#1, #2, ...)
+          Wrap(
+            spacing: 5,
+            runSpacing: 4,
+            children: [
+              for (int i = 0; i < info.siblings.length; i++)
+                _buildCallChip(info.siblings[i], i + 1,
+                    isCurrent: (i + 1) == info.currentCallIndex,
+                    accentColor: info.hasParamDiffs
+                        ? diffColor
+                        : MonitorColors.metricTotal),
+            ],
+          ),
+          if (info.hasParamDiffs) ...[
+            const SizedBox(height: 6),
+            Container(
+              decoration: BoxDecoration(
+                color: MonitorColors.surface,
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(
+                  color: accentColor.withValues(alpha: 0.28),
+                  width: 0.6,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (int i = 0; i < info.diffEntries.length; i++) ...[
+                    if (i > 0)
+                      Container(
+                        height: 0.5,
+                        color: MonitorColors.border.withValues(alpha: 0.6),
+                      ),
+                    _DiffMatrixRow(entry: info.diffEntries[i]),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCallChip(
+    ApiLogItem item,
+    int idx, {
+    required bool isCurrent,
+    required Color accentColor,
+  }) {
+    final ts = item.timestamp;
+    final tStr =
+        '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
+    final phaseLabel = item.phase == 'OPEN'
+        ? 'LOAD'
+        : (item.refreshCycle > 0
+            ? 'INTERACTION #${item.refreshCycle}'
+            : 'INTERACTION');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+      decoration: BoxDecoration(
+        color: isCurrent
+            ? accentColor.withValues(alpha: 0.18)
+            : MonitorColors.surface,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: isCurrent
+              ? accentColor.withValues(alpha: 0.65)
+              : MonitorColors.border,
+          width: isCurrent ? 1.0 : 0.6,
+        ),
+      ),
+      child: MonoText(
+        isCurrent
+            ? '● Lần #$idx (Đang xem · $phaseLabel · $tStr)'
+            : 'Lần #$idx ($phaseLabel · $tStr)',
+        8.0,
+        color: isCurrent ? accentColor : MonitorColors.secondaryText,
+        weight: isCurrent ? FontWeight.w800 : FontWeight.w600,
+      ),
+    );
+  }
+}
+
+class _DiffMatrixRow extends StatelessWidget {
+  final _ParamDiffEntry entry;
+
+  const _DiffMatrixRow({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = MonitorColors.isDark;
+    final diffColor =
+        isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 105,
+            child: MonoText(
+              '⚡ ${entry.key}',
+              9.0,
+              color: diffColor,
+              weight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final callVal in entry.allCallValues)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: callVal.isCurrent
+                          ? diffColor.withValues(alpha: 0.16)
+                          : MonitorColors.expandedDetailBg,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: callVal.isCurrent
+                            ? diffColor.withValues(alpha: 0.55)
+                            : MonitorColors.border.withValues(alpha: 0.7),
+                        width: callVal.isCurrent ? 0.9 : 0.5,
+                      ),
+                    ),
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(
+                            fontFamily: 'monospace', fontSize: 8.6),
+                        children: [
+                          TextSpan(
+                            text: '#${callVal.callIndex}: ',
+                            style: TextStyle(
+                              color: callVal.isCurrent
+                                  ? diffColor
+                                  : MonitorColors.secondaryText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          TextSpan(
+                            text: callVal.value,
+                            style: TextStyle(
+                              color: callVal.isCurrent
+                                  ? diffColor
+                                  : MonitorColors.primaryText,
+                              fontWeight: callVal.isCurrent
+                                  ? FontWeight.w900
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Request content ──────────────────────────────────────────────────────────
 
 class _RequestContent extends StatelessWidget {
@@ -1135,60 +2272,94 @@ class _RequestContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasQuery = log.queryParams.isNotEmpty;
+    final siblingInfo = _analyzeSiblingEndpoint(log);
+    final effectiveQuery = _extractEffectiveQueryParams(log);
+    final bodyMapParams = _extractBodyMapParams(log);
+    final diffKeys = siblingInfo.diffKeys;
+    final hasQuery = effectiveQuery.isNotEmpty;
     final hasBody = log.requestBody != null && log.requestBody!.isNotEmpty;
     final curl = _buildCurl(log);
 
     final topContent = [
+      if (siblingInfo.hasMultipleCallsToEndpoint)
+        _SiblingRequestComparisonCard(info: siblingInfo),
       // URL row: label + copy url + copy cURL
       Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _SectionLabel('URL'),
+          _SectionLabel('ENDPOINT URL'),
           const Spacer(),
           _InlineCopyBtn(text: log.url),
           const SizedBox(width: 6),
           _CurlCopyButton(curl: curl),
         ],
       ),
-      const SizedBox(height: 6),
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _MethodBadge(method: log.method),
-          const SizedBox(width: 8),
-          Expanded(
-            child: SelectionArea(
-              child: MonoText(log.url, 11, color: MonitorColors.primaryText, height: 1.4),
+      const SizedBox(height: 5),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: MonitorColors.surface,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: MonitorColors.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _MethodBadge(method: log.method),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SelectionArea(
+                child: MonoText(log.url, 10.5,
+                    color: MonitorColors.primaryText, height: 1.35),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       if (hasQuery) ...[
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         _SectionRow(
-            label: 'QUERY PARAMS', copyText: _fmtParams(log.queryParams)),
-        const SizedBox(height: 6),
-        _KVTable(entries: log.queryParams.entries.toList()),
+            label: 'QUERY PARAMS (${effectiveQuery.length})',
+            copyText: _fmtParams(effectiveQuery)),
+        const SizedBox(height: 5),
+        _KVTable(
+          entries: effectiveQuery.entries.toList(),
+          diffKeys: diffKeys,
+        ),
+      ],
+      if (bodyMapParams.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        _SectionRow(
+          label: 'BODY PARAMS (${bodyMapParams.length})',
+          copyText: bodyMapParams.entries
+              .map((e) => '${e.key}: ${e.value}')
+              .join('\n'),
+        ),
+        const SizedBox(height: 5),
+        _KVTable(
+          entries: bodyMapParams.entries.toList(),
+          diffKeys: diffKeys,
+        ),
       ],
     ];
 
     if (!isFullPage) {
       return Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ...topContent,
             if (hasBody) ...[
-              const SizedBox(height: 14),
-              _SectionLabel('BODY'),
-              const SizedBox(height: 6),
+              const SizedBox(height: 10),
+              _SectionLabel('RAW BODY'),
+              const SizedBox(height: 5),
               _BodyBlock(text: log.requestBody!),
             ],
             if (!hasQuery && !hasBody) ...[
               const SizedBox(height: 8),
-              BodyText('No query params or body.', 11, color: MonitorColors.secondaryText),
+              BodyText('No query params or request body.', 11,
+                  color: MonitorColors.secondaryText),
             ],
           ],
         ),
@@ -1196,15 +2367,15 @@ class _RequestContent extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ...topContent,
           if (hasBody) ...[
             const SizedBox(height: 10),
-            _SectionLabel('BODY'),
-            const SizedBox(height: 6),
+            _SectionLabel('RAW BODY'),
+            const SizedBox(height: 5),
             Expanded(
               child: _BodyBlock(
                 text: log.requestBody!,
@@ -1214,7 +2385,8 @@ class _RequestContent extends StatelessWidget {
           ],
           if (!hasQuery && !hasBody) ...[
             const SizedBox(height: 8),
-            BodyText('No query params or body.', 11, color: MonitorColors.secondaryText),
+            BodyText('No query params or request body.', 11,
+                color: MonitorColors.secondaryText),
           ],
         ],
       ),
@@ -1248,7 +2420,7 @@ class _CurlCopyButtonState extends State<_CurlCopyButton> {
       onTap: _copy,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
         decoration: BoxDecoration(
           color: _copied
               ? MonitorColors.statusSuccess.withValues(alpha: 0.12)
@@ -1271,7 +2443,11 @@ class _CurlCopyButtonState extends State<_CurlCopyButton> {
                   : MonitorColors.metricTotal,
             ),
             const SizedBox(width: 4),
-            BodyText(_copied ? 'Copied!' : 'Copy cURL', 9, color: _copied ? MonitorColors.statusSuccess : MonitorColors.metricTotal, weight: FontWeight.bold),
+            BodyText(_copied ? 'Copied!' : 'cURL', 9,
+                color: _copied
+                    ? MonitorColors.statusSuccess
+                    : MonitorColors.metricTotal,
+                weight: FontWeight.bold),
           ],
         ),
       ),
@@ -1284,68 +2460,68 @@ class _CurlCopyButtonState extends State<_CurlCopyButton> {
 class _ResponseContent extends StatelessWidget {
   final ApiLogItem log;
   final bool isFullPage;
-  const _ResponseContent({required this.log, this.isFullPage = false});
+  final VoidCallback? onSwitchToRequestTab;
+
+  const _ResponseContent({
+    required this.log,
+    this.isFullPage = false,
+    this.onSwitchToRequestTab,
+  });
 
   @override
   Widget build(BuildContext context) {
     final hasBody = log.responseBody != null && log.responseBody!.isNotEmpty;
-    final statusColor =
-        log.isSuccess ? MonitorColors.statusSuccess : MonitorColors.statusError;
+    final hasParams = _extractAllParamsMap(log).isNotEmpty;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Status summary bar
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.06),
-            border: Border(
-              bottom: BorderSide(color: MonitorColors.border),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                      color: statusColor.withValues(alpha: 0.4), width: 0.5),
-                ),
-                child: MonoText('${log.statusCode}', 11, color: statusColor, weight: FontWeight.bold),
+    if (isFullPage) {
+      return Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (hasParams)
+              _QuickParamsStrip(
+                log: log,
+                onOpenRequestTab: onSwitchToRequestTab,
               ),
-              const SizedBox(width: 10),
-              MonoText('${log.duration}ms', 11, color: log.isSlow ? MonitorColors.statusSlow : MonitorColors.secondaryText, weight: FontWeight.w600),
-              if (log.hasResponseSize) ...[
-                const SizedBox(width: 10),
-                MonoText(log.responseSizeFormatted, 11),
-              ],
-            ],
-          ),
+            if (hasBody)
+              Expanded(
+                child: _BodyBlock(
+                  text: log.responseBody!,
+                  fillHeight: true,
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: BodyText('No response body.', 11,
+                    color: MonitorColors.secondaryText),
+              ),
+          ],
         ),
-        if (hasBody)
-          isFullPage
-              ? Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: _BodyBlock(
-                      text: log.responseBody!,
-                      fillHeight: true,
-                    ),
-                  ),
-                )
-              : Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _BodyBlock(text: log.responseBody!),
-                )
-        else
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: BodyText('No response body.', 11, color: MonitorColors.secondaryText),
-          ),
-      ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (hasParams)
+            _QuickParamsStrip(
+              log: log,
+              onOpenRequestTab: onSwitchToRequestTab,
+            ),
+          if (hasBody)
+            _BodyBlock(text: log.responseBody!)
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: BodyText('No response body.', 11,
+                  color: MonitorColors.secondaryText),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1364,7 +2540,8 @@ class _HeadersContent extends StatelessWidget {
     if (!hasReqHeaders && !hasResHeaders) {
       return Padding(
         padding: const EdgeInsets.all(12),
-        child: BodyText('No headers captured.', 11, color: MonitorColors.secondaryText),
+        child: BodyText('No headers captured.', 11,
+            color: MonitorColors.secondaryText),
       );
     }
 
@@ -1447,9 +2624,9 @@ class _CopyActionsSheetState extends State<_CopyActionsSheet> {
           key: 'req_body',
           icon: Icons.upload_rounded,
           label: 'Request Body',
-          preview: log.requestBody!.replaceAll('\n', ' ').substring(
-              0,
-              log.requestBody!.length.clamp(0, 60)),
+          preview: log.requestBody!
+              .replaceAll('\n', ' ')
+              .substring(0, log.requestBody!.length.clamp(0, 60)),
           text: log.requestBody!,
         ),
       if (log.responseBody != null && log.responseBody!.isNotEmpty)
@@ -1457,9 +2634,9 @@ class _CopyActionsSheetState extends State<_CopyActionsSheet> {
           key: 'res_body',
           icon: Icons.download_rounded,
           label: 'Response Body',
-          preview: log.responseBody!.replaceAll('\n', ' ').substring(
-              0,
-              log.responseBody!.length.clamp(0, 60)),
+          preview: log.responseBody!
+              .replaceAll('\n', ' ')
+              .substring(0, log.responseBody!.length.clamp(0, 60)),
           text: log.responseBody!,
         ),
       if (log.requestHeaders.isNotEmpty)
@@ -1486,103 +2663,105 @@ class _CopyActionsSheetState extends State<_CopyActionsSheet> {
           color: MonitorColors.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(top: 12, bottom: 14),
-            decoration: BoxDecoration(
-              color: MonitorColors.border,
-              borderRadius: BorderRadius.circular(2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 14),
+              decoration: BoxDecoration(
+                color: MonitorColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(
-              children: [
-                Icon(Icons.copy_all_rounded,
-                    size: 16, color: MonitorColors.secondaryText),
-                const SizedBox(width: 8),
-                BodyText('Copy', 14, weight: FontWeight.bold),
-                const Spacer(),
-                // Status badge
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: (log.isSuccess
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(
+                children: [
+                  Icon(Icons.copy_all_rounded,
+                      size: 16, color: MonitorColors.secondaryText),
+                  const SizedBox(width: 8),
+                  BodyText('Copy', 14, weight: FontWeight.bold),
+                  const Spacer(),
+                  // Status badge
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (log.isSuccess
+                              ? MonitorColors.statusSuccess
+                              : MonitorColors.statusError)
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: MonoText('${log.method} ${log.statusCode}', 10,
+                        color: log.isSuccess
                             ? MonitorColors.statusSuccess
-                            : MonitorColors.statusError)
-                        .withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4),
+                            : MonitorColors.statusError,
+                        weight: FontWeight.bold),
                   ),
-                  child: MonoText('${log.method} ${log.statusCode}', 10, color: log.isSuccess ? MonitorColors.statusSuccess : MonitorColors.statusError, weight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          Container(height: 1, color: MonitorColors.border),
-          // Actions list
-          for (final action in actions) ...[
-            InkWell(
-              onTap: () => _copy(action.key, action.text),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: MonitorColors.expandedDetailBg,
-                        borderRadius: BorderRadius.circular(8),
-                        border:
-                            Border.all(color: MonitorColors.border),
-                      ),
-                      child: Icon(action.icon,
-                          size: 15,
-                          color: MonitorColors.secondaryText),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          BodyText(action.label, 13, weight: FontWeight.w600),
-                          const SizedBox(height: 2),
-                          MonoText(action.preview, 10, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: _lastCopied == action.key
-                          ? Icon(Icons.check_rounded,
-                              key: const ValueKey('check'),
-                              size: 18,
-                              color: MonitorColors.statusSuccess)
-                          : Icon(Icons.copy_rounded,
-                              key: const ValueKey('copy'),
-                              size: 16,
-                              color: MonitorColors.secondaryText),
-                    ),
-                  ],
-                ),
+                ],
               ),
             ),
             Container(height: 1, color: MonitorColors.border),
+            // Actions list
+            for (final action in actions) ...[
+              InkWell(
+                onTap: () => _copy(action.key, action.text),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: MonitorColors.expandedDetailBg,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: MonitorColors.border),
+                        ),
+                        child: Icon(action.icon,
+                            size: 15, color: MonitorColors.secondaryText),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            BodyText(action.label, 13, weight: FontWeight.w600),
+                            const SizedBox(height: 2),
+                            MonoText(action.preview, 10,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: _lastCopied == action.key
+                            ? Icon(Icons.check_rounded,
+                                key: const ValueKey('check'),
+                                size: 18,
+                                color: MonitorColors.statusSuccess)
+                            : Icon(Icons.copy_rounded,
+                                key: const ValueKey('copy'),
+                                size: 16,
+                                color: MonitorColors.secondaryText),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(height: 1, color: MonitorColors.border),
+            ],
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
           ],
-          SizedBox(
-              height: MediaQuery.of(context).padding.bottom + 8),
-        ],
+        ),
       ),
-    ),
     );
   }
 }
@@ -1681,7 +2860,11 @@ class _InlineCopyBtnState extends State<_InlineCopyBtn> {
 
 class _KVTable extends StatelessWidget {
   final List<MapEntry<String, String>> entries;
-  const _KVTable({required this.entries});
+  final Set<String> diffKeys;
+  const _KVTable({
+    required this.entries,
+    this.diffKeys = const {},
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1695,26 +2878,104 @@ class _KVTable extends StatelessWidget {
         children: [
           for (int i = 0; i < entries.length; i++) ...[
             if (i > 0) Container(height: 1, color: MonitorColors.border),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            _KVTableRow(
+              entry: entries[i],
+              isDiff: diffKeys.contains(entries[i].key),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _KVTableRow extends StatefulWidget {
+  final MapEntry<String, String> entry;
+  final bool isDiff;
+
+  const _KVTableRow({
+    required this.entry,
+    this.isDiff = false,
+  });
+
+  @override
+  State<_KVTableRow> createState() => _KVTableRowState();
+}
+
+class _KVTableRowState extends State<_KVTableRow> {
+  bool _copied = false;
+
+  Future<void> _copyValue() async {
+    await Clipboard.setData(ClipboardData(text: widget.entry.value));
+    setState(() => _copied = true);
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (mounted) setState(() => _copied = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = MonitorColors.isDark;
+    final diffColor =
+        isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+
+    return InkWell(
+      onTap: _copyValue,
+      child: Container(
+        color: widget.isDiff
+            ? diffColor.withValues(alpha: 0.06)
+            : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5.5),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 112,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 110,
-                    child: MonoText(entries[i].key, 10, color: MonitorColors.callerName, weight: FontWeight.w500),
-                  ),
-                  const SizedBox(width: 8),
+                  if (widget.isDiff)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 2),
+                      child: MonoText('⚡', 9.5,
+                          color: diffColor, weight: FontWeight.bold),
+                    ),
                   Expanded(
-                    child: SelectionArea(
-                      child: MonoText(entries[i].value, 10, color: MonitorColors.primaryText),
+                    child: MonoText(
+                      widget.entry.key,
+                      10,
+                      color:
+                          widget.isDiff ? diffColor : MonitorColors.callerName,
+                      weight:
+                          widget.isDiff ? FontWeight.w700 : FontWeight.w600,
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SelectionArea(
+                child: MonoText(
+                  widget.entry.value,
+                  10,
+                  color: widget.isDiff ? diffColor : MonitorColors.primaryText,
+                  weight: widget.isDiff ? FontWeight.w700 : FontWeight.normal,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(
+                _copied ? Icons.check_rounded : Icons.copy_rounded,
+                size: 11,
+                color: _copied
+                    ? MonitorColors.statusSuccess
+                    : MonitorColors.secondaryText.withValues(alpha: 0.45),
+              ),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1730,21 +2991,32 @@ class _BodyBlock extends StatefulWidget {
 }
 
 class _BodyBlockState extends State<_BodyBlock> {
+  static final RegExp _jsonTokenRegExp = RegExp(
+    r'("(?:\\.|[^"\\])*")(\s*:)|("(?:\\.|[^"\\])*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)',
+  );
+
   bool _prettyJson = true;
+  bool _wordWrap = false;
   bool _searchMode = false;
+  bool _tallBox = false;
   String _searchQuery = '';
   late final ScrollController _scrollController;
   late final ScrollController _horizontalScrollController;
 
   late String _formattedText;
   late List<String> _lines;
+  int _maxLineChars = 0;
   final List<int> _matchingLineIndices = [];
   int _currentMatchIndex = 0;
+
+  bool _isAtTop = true;
+  bool _isAtBottom = false;
+  int _currentTopLine = 1;
 
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController();
+    _scrollController = ScrollController()..addListener(_onScrollChanged);
     _horizontalScrollController = ScrollController();
     _processText();
   }
@@ -1759,9 +3031,77 @@ class _BodyBlockState extends State<_BodyBlock> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScrollChanged);
     _scrollController.dispose();
     _horizontalScrollController.dispose();
     super.dispose();
+  }
+
+  void _onScrollChanged() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    final offset = pos.pixels;
+    final maxExt = pos.maxScrollExtent;
+    final atTop = offset <= 4.0;
+    final atBottom = maxExt > 0 && offset >= (maxExt - 6.0);
+    final estLine =
+        ((offset / 18.5).floor() + 1).clamp(1, _lines.length.clamp(1, 999999));
+
+    if (atTop != _isAtTop ||
+        atBottom != _isAtBottom ||
+        (estLine - _currentTopLine).abs() >= 2) {
+      setState(() {
+        _isAtTop = atTop;
+        _isAtBottom = atBottom;
+        _currentTopLine = atBottom ? _lines.length : estLine;
+      });
+    }
+  }
+
+  Future<void> _scrollToTop() async {
+    if (!_scrollController.hasClients) return;
+    await _scrollController.animateTo(
+      0.0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+    if (_horizontalScrollController.hasClients) {
+      _horizontalScrollController.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (mounted) {
+      setState(() {
+        _isAtTop = true;
+        _isAtBottom = false;
+        _currentTopLine = 1;
+      });
+    }
+  }
+
+  Future<void> _scrollToBottom() async {
+    if (!_scrollController.hasClients) return;
+    final target = _scrollController.position.maxScrollExtent;
+    await _scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
+    // Ensure exact bottom landing even when wordWrap dynamically measures lines
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final finalExtent = _scrollController.position.maxScrollExtent;
+      if ((_scrollController.offset - finalExtent).abs() > 2.0) {
+        _scrollController.jumpTo(finalExtent);
+      }
+      setState(() {
+        _isAtTop = false;
+        _isAtBottom = true;
+        _currentTopLine = _lines.length;
+      });
+    });
   }
 
   void _processText() {
@@ -1783,6 +3123,11 @@ class _BodyBlockState extends State<_BodyBlock> {
       _formattedText = raw;
     }
     _lines = _formattedText.split('\n');
+    int maxChars = 0;
+    for (final line in _lines) {
+      if (line.length > maxChars) maxChars = line.length;
+    }
+    _maxLineChars = maxChars;
     if (_searchQuery.isNotEmpty) {
       _performSearch(_searchQuery);
     }
@@ -1802,12 +3147,16 @@ class _BodyBlockState extends State<_BodyBlock> {
   }
 
   void _scrollToMatch(int matchIndex) {
-    if (_matchingLineIndices.isEmpty || matchIndex >= _matchingLineIndices.length) return;
+    if (_matchingLineIndices.isEmpty ||
+        matchIndex >= _matchingLineIndices.length) {
+      return;
+    }
     final lineIdx = _matchingLineIndices[matchIndex];
     const double lineH = 18.5;
     final targetY = (lineIdx * lineH) - 60.0;
     if (_scrollController.hasClients) {
-      final clamped = targetY.clamp(0.0, _scrollController.position.maxScrollExtent);
+      final clamped =
+          targetY.clamp(0.0, _scrollController.position.maxScrollExtent);
       _scrollController.animateTo(
         clamped,
         duration: const Duration(milliseconds: 150),
@@ -1819,7 +3168,8 @@ class _BodyBlockState extends State<_BodyBlock> {
   void _nextMatch() {
     if (_matchingLineIndices.isEmpty) return;
     setState(() {
-      _currentMatchIndex = (_currentMatchIndex + 1) % _matchingLineIndices.length;
+      _currentMatchIndex =
+          (_currentMatchIndex + 1) % _matchingLineIndices.length;
       _scrollToMatch(_currentMatchIndex);
     });
   }
@@ -1828,42 +3178,132 @@ class _BodyBlockState extends State<_BodyBlock> {
     if (_matchingLineIndices.isEmpty) return;
     setState(() {
       _currentMatchIndex =
-          (_currentMatchIndex - 1 + _matchingLineIndices.length) % _matchingLineIndices.length;
+          (_currentMatchIndex - 1 + _matchingLineIndices.length) %
+              _matchingLineIndices.length;
       _scrollToMatch(_currentMatchIndex);
     });
   }
 
-  TextSpan _buildHighlightedLine(String line, String query, TextStyle baseStyle) {
-    if (query.isEmpty) {
-      return TextSpan(text: line, style: baseStyle);
+  void _appendSearchHighlightedSegment(
+    List<InlineSpan> out,
+    String segment,
+    String lowerQuery,
+    TextStyle style,
+  ) {
+    if (segment.isEmpty) return;
+    if (lowerQuery.isEmpty) {
+      out.add(TextSpan(text: segment, style: style));
+      return;
     }
 
-    final lowerLine = line.toLowerCase();
-    final lowerQuery = query.toLowerCase();
-    final spans = <InlineSpan>[];
+    final lowerSeg = segment.toLowerCase();
     int start = 0;
-
     while (true) {
-      final index = lowerLine.indexOf(lowerQuery, start);
+      final index = lowerSeg.indexOf(lowerQuery, start);
       if (index == -1) {
-        spans.add(TextSpan(text: line.substring(start), style: baseStyle));
+        out.add(TextSpan(text: segment.substring(start), style: style));
         break;
       }
-
       if (index > start) {
-        spans.add(TextSpan(text: line.substring(start, index), style: baseStyle));
+        out.add(TextSpan(text: segment.substring(start, index), style: style));
       }
-
-      spans.add(TextSpan(
-        text: line.substring(index, index + query.length),
-        style: baseStyle.copyWith(
+      out.add(TextSpan(
+        text: segment.substring(index, index + lowerQuery.length),
+        style: style.copyWith(
           backgroundColor: Colors.orange.withValues(alpha: 0.85),
           color: Colors.black,
           fontWeight: FontWeight.bold,
         ),
       ));
+      start = index + lowerQuery.length;
+    }
+  }
 
-      start = index + query.length;
+  TextSpan _buildHighlightedLine(
+    String line,
+    String query,
+    TextStyle baseStyle, {
+    required bool isJson,
+    required bool isDark,
+  }) {
+    final lowerQuery = query.toLowerCase();
+    if (!isJson || line.length > 500) {
+      final spans = <InlineSpan>[];
+      _appendSearchHighlightedSegment(spans, line, lowerQuery, baseStyle);
+      return TextSpan(children: spans);
+    }
+
+    final keyColor = isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0369A1);
+    final strColor = isDark ? const Color(0xFF86EFAC) : const Color(0xFF15803D);
+    final numColor = isDark ? const Color(0xFFFDBA74) : const Color(0xFFC2410C);
+    final boolColor =
+        isDark ? const Color(0xFFC4B5FD) : const Color(0xFF6D28D9);
+    final punctStyle = baseStyle.copyWith(
+      color: MonitorColors.secondaryText.withValues(alpha: 0.85),
+    );
+
+    final spans = <InlineSpan>[];
+    int lastEnd = 0;
+
+    for (final match in _jsonTokenRegExp.allMatches(line)) {
+      if (match.start > lastEnd) {
+        _appendSearchHighlightedSegment(
+          spans,
+          line.substring(lastEnd, match.start),
+          lowerQuery,
+          punctStyle,
+        );
+      }
+
+      if (match.group(1) != null) {
+        // JSON key + colon
+        _appendSearchHighlightedSegment(
+          spans,
+          match.group(1)!,
+          lowerQuery,
+          baseStyle.copyWith(color: keyColor, fontWeight: FontWeight.w600),
+        );
+        _appendSearchHighlightedSegment(
+          spans,
+          match.group(2) ?? ':',
+          lowerQuery,
+          punctStyle,
+        );
+      } else if (match.group(3) != null) {
+        // JSON string value
+        _appendSearchHighlightedSegment(
+          spans,
+          match.group(3)!,
+          lowerQuery,
+          baseStyle.copyWith(color: strColor),
+        );
+      } else if (match.group(4) != null) {
+        // true / false / null
+        _appendSearchHighlightedSegment(
+          spans,
+          match.group(4)!,
+          lowerQuery,
+          baseStyle.copyWith(color: boolColor, fontWeight: FontWeight.w600),
+        );
+      } else if (match.group(5) != null) {
+        // number
+        _appendSearchHighlightedSegment(
+          spans,
+          match.group(5)!,
+          lowerQuery,
+          baseStyle.copyWith(color: numColor, fontWeight: FontWeight.w600),
+        );
+      }
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < line.length) {
+      _appendSearchHighlightedSegment(
+        spans,
+        line.substring(lastEnd),
+        lowerQuery,
+        punctStyle,
+      );
     }
 
     return TextSpan(children: spans);
@@ -1875,6 +3315,134 @@ class _BodyBlockState extends State<_BodyBlock> {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 
+  Widget _buildQuickJumpButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required bool isActive,
+    required Color borderCol,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(
+          color: isActive
+              ? MonitorColors.metricTotal.withValues(alpha: 0.14)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isActive
+                ? MonitorColors.metricTotal.withValues(alpha: 0.45)
+                : borderCol,
+            width: 0.6,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 9.5,
+              color: isActive
+                  ? MonitorColors.metricTotal
+                  : MonitorColors.secondaryText.withValues(alpha: 0.5),
+            ),
+            const SizedBox(width: 2),
+            MonoText(
+              label,
+              7.5,
+              color: isActive
+                  ? MonitorColors.metricTotal
+                  : MonitorColors.secondaryText.withValues(alpha: 0.6),
+              weight: FontWeight.bold,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLineRow(
+    int index, {
+    required bool isJson,
+    required bool isDark,
+    required Color lineNumCol,
+    required Color borderCol,
+    required bool wrap,
+  }) {
+    final line = _lines[index];
+    final isMatchedLine =
+        _searchQuery.isNotEmpty && _matchingLineIndices.contains(index);
+    final isCurrentActiveMatch = _matchingLineIndices.isNotEmpty &&
+        _currentMatchIndex < _matchingLineIndices.length &&
+        _matchingLineIndices[_currentMatchIndex] == index;
+
+    final lineNumWidth =
+        (_lines.length.toString().length * 7.5 + 14.0).clamp(28.0, 60.0);
+
+    return Container(
+      color: isCurrentActiveMatch
+          ? Colors.orange.withValues(alpha: 0.18)
+          : isMatchedLine
+              ? Colors.yellow.withValues(alpha: 0.08)
+              : Colors.transparent,
+      padding: EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: wrap ? 2.0 : 0.0,
+      ),
+      child: Row(
+        crossAxisAlignment:
+            wrap ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: lineNumWidth,
+            child: Padding(
+              padding: EdgeInsets.only(top: wrap ? 1.5 : 0.0),
+              child: Text(
+                '${index + 1}',
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontFamily: MonitorTextStyle.monoFontFamily,
+                  fontSize: 9,
+                  color: lineNumCol,
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 1,
+            height: 14,
+            color: borderCol.withValues(alpha: 0.3),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              maxLines: wrap ? null : 1,
+              softWrap: wrap,
+              overflow: TextOverflow.visible,
+              text: _buildHighlightedLine(
+                line,
+                _searchQuery,
+                TextStyle(
+                  fontFamily: MonitorTextStyle.monoFontFamily,
+                  fontSize: 10.5,
+                  color: MonitorColors.primaryText,
+                  height: wrap ? 1.35 : 1.1,
+                ),
+                isJson: isJson,
+                isDark: isDark,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = MonitorColors.isDark;
@@ -1883,12 +3451,80 @@ class _BodyBlockState extends State<_BodyBlock> {
     final borderCol = MonitorColors.border.withValues(alpha: 0.8);
     final lineNumCol = MonitorColors.secondaryText.withValues(alpha: 0.5);
 
-    final isJson = widget.text.trim().startsWith('{') || widget.text.trim().startsWith('[');
+    final isJson = widget.text.trim().startsWith('{') ||
+        widget.text.trim().startsWith('[');
     final sizeStr = _formatSize(widget.text.length);
     final lineCount = _lines.length;
+    final bool isLongContent = lineCount > 12;
 
     final double linesHeight = (_lines.length * 18.5) + 16.0;
-    final double boxHeight = linesHeight.clamp(80.0, 360.0);
+    final double maxInlineHeight = _tallBox ? 580.0 : 340.0;
+    final double boxHeight = linesHeight.clamp(80.0, maxInlineHeight);
+
+    final Widget scrollableList = SelectionArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (_wordWrap) {
+            return Scrollbar(
+              controller: _scrollController,
+              thumbVisibility: true,
+              child: ListView.builder(
+                controller: _scrollController,
+                itemCount: _lines.length,
+                padding: EdgeInsets.only(
+                  top: 8,
+                  bottom: isLongContent ? 34 : 8,
+                ),
+                itemBuilder: (context, index) => _buildLineRow(
+                  index,
+                  isJson: isJson,
+                  isDark: isDark,
+                  lineNumCol: lineNumCol,
+                  borderCol: borderCol,
+                  wrap: true,
+                ),
+              ),
+            );
+          }
+
+          final double estimatedWidth =
+              (_maxLineChars * 6.5 + 72.0).clamp(280.0, 2400.0);
+          final double targetWidth = constraints.maxWidth.isFinite &&
+                  constraints.maxWidth > estimatedWidth
+              ? constraints.maxWidth
+              : estimatedWidth;
+
+          return Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _horizontalScrollController,
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: targetWidth,
+                child: ListView.builder(
+                  controller: _scrollController,
+                  itemCount: _lines.length,
+                  itemExtent: 18.5,
+                  padding: EdgeInsets.only(
+                    top: 8,
+                    bottom: isLongContent ? 34 : 8,
+                  ),
+                  itemBuilder: (context, index) => _buildLineRow(
+                    index,
+                    isJson: isJson,
+                    isDark: isDark,
+                    lineNumCol: lineNumCol,
+                    borderCol: borderCol,
+                    wrap: false,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
 
     final Widget codeContent = Container(
       decoration: BoxDecoration(
@@ -1898,84 +3534,140 @@ class _BodyBlockState extends State<_BodyBlock> {
           bottomRight: Radius.circular(7.2),
         ),
       ),
-      child: SelectionArea(
-        child: Scrollbar(
-          controller: _scrollController,
-          thumbVisibility: true,
-          child: SingleChildScrollView(
-            controller: _horizontalScrollController,
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 1200,
-              child: ListView.builder(
-                controller: _scrollController,
-                itemCount: _lines.length,
-                itemExtent: 18.5,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemBuilder: (context, index) {
-                  final line = _lines[index];
-                  final isMatchedLine = _searchQuery.isNotEmpty &&
-                      _matchingLineIndices.contains(index);
-                  final isCurrentActiveMatch = _matchingLineIndices.isNotEmpty &&
-                      _currentMatchIndex < _matchingLineIndices.length &&
-                      _matchingLineIndices[_currentMatchIndex] == index;
-
-                  final lineNumWidth = (_lines.length.toString().length * 7.5 + 16.0).clamp(32.0, 64.0);
-
-                  return Container(
-                    color: isCurrentActiveMatch
-                        ? Colors.orange.withValues(alpha: 0.18)
-                        : isMatchedLine
-                            ? Colors.yellow.withValues(alpha: 0.08)
-                            : Colors.transparent,
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: lineNumWidth,
-                          child: Text(
-                            '${index + 1}',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              fontFamily: MonitorTextStyle.monoFontFamily,
-                              fontSize: 9,
-                              color: lineNumCol,
-                              height: 1.0,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 1,
-                          height: 14,
-                          color: borderCol.withValues(alpha: 0.3),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: RichText(
-                            maxLines: 1,
-                            overflow: TextOverflow.visible,
-                            text: _buildHighlightedLine(
-                              line,
-                              _searchQuery,
-                              TextStyle(
-                                fontFamily: MonitorTextStyle.monoFontFamily,
-                                fontSize: 10,
-                                color: MonitorColors.primaryText,
-                                height: 1.0,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+      child: Stack(
+        children: [
+          Positioned.fill(child: scrollableList),
+          if (lineCount > 15)
+            Positioned(
+              right: 10,
+              bottom: 6,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: headerBg.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: MonitorColors.metricTotal.withValues(alpha: 0.35),
+                    width: 0.7,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
-                  );
-                },
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    MonoText(
+                      'L$_currentTopLine/$lineCount',
+                      7.5,
+                      color: MonitorColors.secondaryText,
+                      weight: FontWeight.w600,
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: _scrollToTop,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 3, vertical: 1),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.vertical_align_top_rounded,
+                              size: 11,
+                              color: !_isAtTop
+                                  ? MonitorColors.metricTotal
+                                  : MonitorColors.secondaryText
+                                      .withValues(alpha: 0.4),
+                            ),
+                            const SizedBox(width: 1.5),
+                            MonoText(
+                              'Đầu',
+                              8.0,
+                              color: !_isAtTop
+                                  ? MonitorColors.metricTotal
+                                  : MonitorColors.secondaryText
+                                      .withValues(alpha: 0.4),
+                              weight: FontWeight.bold,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 10,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      color: borderCol,
+                    ),
+                    GestureDetector(
+                      onTap: _scrollToBottom,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 3, vertical: 1),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.vertical_align_bottom_rounded,
+                              size: 11,
+                              color: !_isAtBottom
+                                  ? MonitorColors.metricTotal
+                                  : MonitorColors.secondaryText
+                                      .withValues(alpha: 0.4),
+                            ),
+                            const SizedBox(width: 1.5),
+                            MonoText(
+                              'Cuối',
+                              8.0,
+                              color: !_isAtBottom
+                                  ? MonitorColors.metricTotal
+                                  : MonitorColors.secondaryText
+                                      .withValues(alpha: 0.4),
+                              weight: FontWeight.bold,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (!widget.fillHeight && lineCount > 22) ...[
+                      Container(
+                        width: 1,
+                        height: 10,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        color: borderCol,
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => _tallBox = !_tallBox),
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 2, vertical: 1),
+                          child: Icon(
+                            _tallBox
+                                ? Icons.unfold_less_rounded
+                                : Icons.unfold_more_rounded,
+                            size: 12,
+                            color: _tallBox
+                                ? MonitorColors.metricTotal
+                                : MonitorColors.secondaryText,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ),
+        ],
       ),
     );
 
@@ -2010,24 +3702,29 @@ class _BodyBlockState extends State<_BodyBlock> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4.5, vertical: 1.5),
                         decoration: BoxDecoration(
                           color: isJson
-                              ? MonitorColors.statusSuccess.withValues(alpha: 0.15)
-                              : MonitorColors.secondaryText.withValues(alpha: 0.15),
+                              ? MonitorColors.statusSuccess
+                                  .withValues(alpha: 0.15)
+                              : MonitorColors.secondaryText
+                                  .withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: MonoText(
                           isJson ? 'JSON' : 'TEXT',
                           8.0,
-                          color: isJson ? MonitorColors.statusSuccess : MonitorColors.secondaryText,
+                          color: isJson
+                              ? MonitorColors.statusSuccess
+                              : MonitorColors.secondaryText,
                           weight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(width: 5),
                       Flexible(
                         child: Text(
-                          '$lineCount lines • $sizeStr',
+                          '$lineCount lines · $sizeStr',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -2044,6 +3741,55 @@ class _BodyBlockState extends State<_BodyBlock> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (isLongContent) ...[
+                      _buildQuickJumpButton(
+                        icon: Icons.vertical_align_top_rounded,
+                        label: 'Đầu',
+                        onTap: _scrollToTop,
+                        isActive: !_isAtTop,
+                        borderCol: borderCol,
+                      ),
+                      const SizedBox(width: 3),
+                      _buildQuickJumpButton(
+                        icon: Icons.vertical_align_bottom_rounded,
+                        label: 'Cuối',
+                        onTap: _scrollToBottom,
+                        isActive: !_isAtBottom,
+                        borderCol: borderCol,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    GestureDetector(
+                      onTap: () => setState(() => _wordWrap = !_wordWrap),
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: _wordWrap
+                              ? MonitorColors.metricTotal
+                                  .withValues(alpha: 0.15)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: _wordWrap
+                                ? MonitorColors.metricTotal
+                                    .withValues(alpha: 0.4)
+                                : borderCol,
+                            width: 0.6,
+                          ),
+                        ),
+                        child: MonoText(
+                          'WRAP',
+                          7.5,
+                          color: _wordWrap
+                              ? MonitorColors.metricTotal
+                              : MonitorColors.secondaryText,
+                          weight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     if (isJson) ...[
                       GestureDetector(
                         onTap: () {
@@ -2054,15 +3800,18 @@ class _BodyBlockState extends State<_BodyBlock> {
                         },
                         behavior: HitTestBehavior.opaque,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: _prettyJson
-                                ? MonitorColors.metricTotal.withValues(alpha: 0.15)
+                                ? MonitorColors.metricTotal
+                                    .withValues(alpha: 0.15)
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
                               color: _prettyJson
-                                  ? MonitorColors.metricTotal.withValues(alpha: 0.4)
+                                  ? MonitorColors.metricTotal
+                                      .withValues(alpha: 0.4)
                                   : borderCol,
                               width: 0.6,
                             ),
@@ -2083,7 +3832,9 @@ class _BodyBlockState extends State<_BodyBlock> {
                       icon: Icon(
                         _searchMode ? Icons.close : Icons.search,
                         size: 13,
-                        color: _searchMode ? MonitorColors.statusError : MonitorColors.secondaryText,
+                        color: _searchMode
+                            ? MonitorColors.statusError
+                            : MonitorColors.secondaryText,
                       ),
                       onPressed: () {
                         setState(() {
@@ -2094,7 +3845,8 @@ class _BodyBlockState extends State<_BodyBlock> {
                           }
                         });
                       },
-                      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                      constraints:
+                          const BoxConstraints(minWidth: 20, minHeight: 20),
                       padding: EdgeInsets.zero,
                       style: IconButton.styleFrom(
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2115,7 +3867,8 @@ class _BodyBlockState extends State<_BodyBlock> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: MonitorColors.pageBackground,
-                border: Border(bottom: BorderSide(color: borderCol, width: 0.5)),
+                border:
+                    Border(bottom: BorderSide(color: borderCol, width: 0.5)),
               ),
               child: Row(
                 children: [
@@ -2129,12 +3882,14 @@ class _BodyBlockState extends State<_BodyBlock> {
                       ),
                       decoration: InputDecoration(
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 6),
                         hintText: LocaleKeys.searchResponsePlaceholder.tr,
                         hintStyle: TextStyle(
                           fontFamily: MonitorTextStyle.monoFontFamily,
                           fontSize: 9.5,
-                          color: MonitorColors.secondaryText.withValues(alpha: 0.5),
+                          color: MonitorColors.secondaryText
+                              .withValues(alpha: 0.5),
                         ),
                         border: InputBorder.none,
                       ),
@@ -2164,7 +3919,8 @@ class _BodyBlockState extends State<_BodyBlock> {
                       icon: Icon(Icons.keyboard_arrow_up_rounded,
                           size: 14, color: MonitorColors.primaryText),
                       onPressed: _prevMatch,
-                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      constraints:
+                          const BoxConstraints(minWidth: 24, minHeight: 24),
                       padding: EdgeInsets.zero,
                       style: IconButton.styleFrom(
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2175,7 +3931,8 @@ class _BodyBlockState extends State<_BodyBlock> {
                       icon: Icon(Icons.keyboard_arrow_down_rounded,
                           size: 14, color: MonitorColors.primaryText),
                       onPressed: _nextMatch,
-                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      constraints:
+                          const BoxConstraints(minWidth: 24, minHeight: 24),
                       padding: EdgeInsets.zero,
                       style: IconButton.styleFrom(
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2191,7 +3948,9 @@ class _BodyBlockState extends State<_BodyBlock> {
           if (widget.fillHeight)
             Expanded(child: codeContent)
           else
-            SizedBox(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
               height: boxHeight,
               child: codeContent,
             ),
@@ -2200,6 +3959,7 @@ class _BodyBlockState extends State<_BodyBlock> {
     );
   }
 }
+
 class _CopyButton extends StatefulWidget {
   final String text;
   const _CopyButton({required this.text});
@@ -2258,10 +4018,6 @@ class _CopyButtonState extends State<_CopyButton> {
   }
 }
 
-
-
-
-
 class _MethodBadge extends StatelessWidget {
   final String method;
   const _MethodBadge({required this.method});
@@ -2294,7 +4050,8 @@ class _DurationLabel extends StatelessWidget {
       children: [
         MonoText('${duration}ms', 11, color: color, weight: FontWeight.bold),
         if (isSlow)
-          BodyText('⚠ SLOW', 7, color: MonitorColors.statusSlow, weight: FontWeight.bold),
+          BodyText('⚠ SLOW', 7,
+              color: MonitorColors.statusSlow, weight: FontWeight.bold),
       ],
     );
   }
@@ -2312,7 +4069,8 @@ class _CallerRow extends StatelessWidget {
         Icon(Icons.call_made, size: 10, color: color),
         const SizedBox(width: 4),
         Expanded(
-          child: MonoText(callerName, 10, color: color, maxLines: 1, overflow: TextOverflow.ellipsis),
+          child: MonoText(callerName, 10,
+              color: color, maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
       ],
     );
@@ -2333,7 +4091,8 @@ class _CallCountBadge extends StatelessWidget {
         border:
             Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
       ),
-      child: MonoText('×$count', 9, color: Color(0xFFB45309), weight: FontWeight.bold),
+      child: MonoText('×$count', 9,
+          color: Color(0xFFB45309), weight: FontWeight.bold),
     );
   }
 }
@@ -2354,7 +4113,11 @@ class _SlowBanner extends StatelessWidget {
               color: MonitorColors.statusSlow, size: 14),
           const SizedBox(width: 8),
           Expanded(
-            child: BodyText('Slow: ${(duration / 1000).toStringAsFixed(2)}s — risk of UI jank.', 10, color: MonitorColors.statusSlow, weight: FontWeight.w500),
+            child: BodyText(
+                'Slow: ${(duration / 1000).toStringAsFixed(2)}s — risk of UI jank.',
+                10,
+                color: MonitorColors.statusSlow,
+                weight: FontWeight.w500),
           ),
         ],
       ),
@@ -2426,7 +4189,11 @@ class _LogFooter extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MonoText('${MonitorController.formatRouteName(log.screen)}  ·  ${log.phase == 'OPEN' ? LocaleKeys.initLabel.tr : LocaleKeys.actionLabel.tr}', 10, maxLines: 1, overflow: TextOverflow.ellipsis),
+        MonoText(
+            '${MonitorController.formatRouteName(log.screen)}  ·  ${log.phase == 'OPEN' ? LocaleKeys.initLabel.tr : LocaleKeys.actionLabel.tr}',
+            10,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
         if (log.hasCallerName) ...[
           const SizedBox(height: 3),
           Row(
@@ -2435,7 +4202,11 @@ class _LogFooter extends StatelessWidget {
               const SizedBox(width: 4),
               Expanded(
                 child: SelectionArea(
-                  child: MonoText(log.callerName, 10, color: MonitorColors.callerName, weight: FontWeight.w600, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  child: MonoText(log.callerName, 10,
+                      color: MonitorColors.callerName,
+                      weight: FontWeight.w600,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
                 ),
               ),
             ],
@@ -2464,20 +4235,16 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
       valueListenable: MonitorColors.isDarkNotifier,
       builder: (context, _, __) {
         final statusColor = _ApiLogTileState._statusColor(log);
-        final double screenWidth = MediaQuery.of(context).size.width;
-        final bool isLargeScreen = screenWidth > 640;
         return MonitorResponsiveDialogWrapper(
           appBar: AppBar(
             automaticallyImplyLeading: false,
             backgroundColor: MonitorColors.surface,
             elevation: 0,
-            leading: isLargeScreen
-                ? null
-                : IconButton(
-                    icon: Icon(Icons.arrow_back_ios_new_rounded,
-                        color: MonitorColors.primaryText, size: 18),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded,
+                  color: MonitorColors.primaryText, size: 18),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
             title: Row(
               children: [
                 Expanded(
@@ -2545,7 +4312,8 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
                   if (log.hasCallerName || log.hasMultipleCalls) ...[
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
                       margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
                         color: MonitorColors.surface,
@@ -2565,7 +4333,8 @@ class _MonitorApiDetailPageState extends State<MonitorApiDetailPage> {
                             Expanded(
                               child: _CallerRow(
                                 callerName: log.callerName,
-                                color: MonitorColors.secondaryText.withValues(alpha: 0.8),
+                                color: MonitorColors.secondaryText
+                                    .withValues(alpha: 0.8),
                               ),
                             ),
                         ],
@@ -2609,12 +4378,34 @@ class _DetailTabsSection extends StatefulWidget {
 }
 
 class _DetailTabsSectionState extends State<_DetailTabsSection> {
-  int _tab = 0;
-  static const _tabLabels = ['REQUEST', 'RESPONSE', 'TIMELINE', 'HEADERS'];
+  late int _tab;
+
+  @override
+  void initState() {
+    super.initState();
+    final log = widget.log;
+    final hasResBody = log.responseBody != null && log.responseBody!.isNotEmpty;
+    final hasReqPayload =
+        (log.requestBody != null && log.requestBody!.isNotEmpty) ||
+            _extractEffectiveQueryParams(log).isNotEmpty;
+    _tab = (hasResBody || !log.isSuccess || !hasReqPayload) ? 1 : 0;
+  }
+
+  List<String> _buildTabLabels(ApiLogItem log) {
+    final paramCount = _extractAllParamsMap(log).length;
+    final hdrCount = log.requestHeaders.length + log.responseHeaders.length;
+    return [
+      paramCount > 0 ? 'REQUEST ($paramCount)' : 'REQUEST',
+      'RESPONSE',
+      'TIMELINE',
+      hdrCount > 0 ? 'HEADERS ($hdrCount)' : 'HEADERS',
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     final log = widget.log;
+    final tabLabels = _buildTabLabels(log);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2626,7 +4417,7 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
             children: [
               Expanded(
                 child: _TabBar(
-                  tabs: _tabLabels,
+                  tabs: tabLabels,
                   active: _tab,
                   onTap: (i) => setState(() => _tab = i),
                 ),
@@ -2634,20 +4425,32 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
               // Vertical divider
               Container(
                 width: 1,
-                height: 34,
+                height: 32,
                 color: MonitorColors.border,
               ),
               // Copy-all button
-              GestureDetector(
+              InkWell(
                 onTap: () => _showCopySheet(context, log),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  height: 32,
                   alignment: Alignment.center,
-                  child: Icon(
-                    Icons.copy_all_rounded,
-                    size: 16,
-                    color: MonitorColors.secondaryText,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.copy_all_rounded,
+                        size: 14,
+                        color: MonitorColors.secondaryText,
+                      ),
+                      const SizedBox(width: 3),
+                      BodyText(
+                        'Copy',
+                        8.5,
+                        color: MonitorColors.secondaryText,
+                        weight: FontWeight.w600,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -2678,7 +4481,8 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      routeSettings: const RouteSettings(name: MonitorConstants.copyActionsSheet),
+      routeSettings:
+          const RouteSettings(name: MonitorConstants.copyActionsSheet),
       builder: (_) => _CopyActionsSheet(log: log),
     );
   }
@@ -2688,7 +4492,11 @@ class _DetailTabsSectionState extends State<_DetailTabsSection> {
       case 0:
         return _RequestContent(log: log, isFullPage: isFullPage);
       case 1:
-        return _ResponseContent(log: log, isFullPage: isFullPage);
+        return _ResponseContent(
+          log: log,
+          isFullPage: isFullPage,
+          onSwitchToRequestTab: () => setState(() => _tab = 0),
+        );
       case 2:
         return isFullPage
             ? SingleChildScrollView(child: _TimelineContent(log: log))

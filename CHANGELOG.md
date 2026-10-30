@@ -1,3 +1,21 @@
+## 2.9.0
+
+* **Futuristic Cyber-HUD Floating Overlay & Expanded Telemetry Cockpit**:
+  * Redesigned `FpsOverlayPillBadge` (collapsed pill) and `FpsOverlayDetailsPanel` (expanded panel) with a modern Cyber-HUD aesthetic, neon status rail, live dual-sparkline graph with coordinate gridlines, and hardware progress bars (`RAM` / `IMG` / `ROM`).
+  * Replaced ambiguous `API X+Y` counter with explicit **`Mở: X`** (screen entry APIs) and **`Thao tác: Y`** (latest interaction cycle APIs) capsules, preventing cumulative pull-to-refresh counters from misleading developers.
+  * Fixed Vietnamese diacritic rendering in overlay screen capsules using `MonitorTextStyle.standardFontFallback`.
+* **Accurate Screen Entry (`LOAD`) vs User Interaction (`INTERACTION`) API Measurement**:
+  * Added gesture-driven interaction detection (`Listener` pointer down/scroll) and active request batch tracking so multi-wave initialization waterfalls remain grouped in `LOAD`, while user-triggered actions accurately start new `INTERACTION #N` cycles.
+  * Computed true wall-clock batch duration by merging overlapping parallel request intervals instead of taking a single request's max duration.
+* **Smart Screen Title Stabilization & Dynamic Route Remapping**:
+  * Stabilized late-resolving `AppBar` titles across tab switches and page transitions (`remapScreenKey`) so API and route logs never split across temporary titles.
+  * Prioritized active visible page titles over background tab titles and added route-path disambiguation when different routes share the same display title.
+* **Subtle Duplicate API Request Diffing & Enhanced JSON Inspector**:
+  * Added inline parameter comparison across multiple calls to the same endpoint on a screen (`Khác N` with per-call values when parameters differ; subtle `Giống #1` tag when parameters are identical) plus a side-by-side diff matrix in the Request tab.
+  * Added 1-tap **`⬆ Đầu`** (Jump to Top) and **`⬇ Cuối`** (Jump to Bottom) navigation buttons and quick parameter chips above JSON responses.
+* **Tablet Safe-Area Positioning**:
+  * Adjusted default floating overlay offset on tablet/large screens to avoid overlapping top-right close/action buttons in dialogs and sheets.
+
 ## 2.8.2
 
 * **Fix Post-Reset Stutter Spike (100% Stutter / Jank = 1)**:

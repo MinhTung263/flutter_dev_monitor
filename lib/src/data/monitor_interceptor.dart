@@ -10,18 +10,34 @@ import '../presentation/navigation/monitor_navigator_observer.dart';
 /// An interceptor for Dio HTTP client that automatically captures
 /// request, response, and error logs for DevMonitor.
 class MonitorInterceptor extends Interceptor {
+  static final RegExp _callerFrameRegExp = RegExp(r'#\d+\s+(.+?)\s+\(');
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     try {
-      options.extra['caller_name'] = _extractCallerName(StackTrace.current.toString());
+      final isActive = MonitorController.instance.isMonitoringActive;
+      options.extra['caller_name'] = isActive
+          ? _extractCallerName(StackTrace.current.toString())
+          : 'unknown';
       options.extra['request_time'] = DateTime.now().millisecondsSinceEpoch;
       options.extra['req_headers'] = _flattenHeaders(options.headers);
-      options.extra['query_params'] = _flattenMap(options.queryParameters);
+      final mergedQuery = <String, dynamic>{
+        ...options.uri.queryParameters,
+        ...options.queryParameters,
+      };
+      options.extra['query_params'] = _flattenMap(mergedQuery);
       options.extra['req_body'] = _encodeBody(options.data);
 
-      final explicitScreen = options.extra['_dev_screen_origin'] ?? options.extra['screen'];
-      options.extra['request_screen'] = explicitScreen ?? MonitorNavigatorObserver.currentRoute;
+      final explicitScreen =
+          options.extra['_dev_screen_origin'] ?? options.extra['screen'];
+      final requestScreen =
+          (explicitScreen ?? MonitorNavigatorObserver.currentRoute).toString();
+      options.extra['request_screen'] = requestScreen;
+
+      final startInfo =
+          MonitorController.instance.onApiRequestStart(requestScreen);
+      options.extra['request_phase'] = startInfo.phase;
+      options.extra['request_cycle'] = startInfo.cycle;
     } catch (_) {}
     super.onRequest(options, handler);
   }
@@ -29,12 +45,14 @@ class MonitorInterceptor extends Interceptor {
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
     try {
+      final rawData = response.data;
       _sendToMonitor(
         response.requestOptions,
         response.statusCode ?? 200,
         responseBytes: _estimateBytes(response),
         responseHeaders: _flattenListHeaders(response.headers.map),
-        responseBody: _encodeBody(response.data),
+        responseBodyBuilder:
+            rawData == null ? null : () => _encodeBody(rawData),
       );
     } catch (_) {}
     super.onResponse(response, handler);
@@ -43,15 +61,15 @@ class MonitorInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     try {
+      final rawData = err.response?.data;
       _sendToMonitor(
         err.requestOptions,
         err.response?.statusCode ?? 500,
         responseHeaders: err.response != null
             ? _flattenListHeaders(err.response!.headers.map)
             : const {},
-        responseBody: err.response != null
-            ? _encodeBody(err.response!.data)
-            : null,
+        responseBodyBuilder:
+            rawData == null ? null : () => _encodeBody(rawData),
       );
     } catch (_) {}
     super.onError(err, handler);
@@ -63,28 +81,37 @@ class MonitorInterceptor extends Interceptor {
     int responseBytes = 0,
     Map<String, String> responseHeaders = const {},
     String? responseBody,
+    String? Function()? responseBodyBuilder,
   }) {
     final startTime = options.extra['request_time'] as int? ??
         DateTime.now().millisecondsSinceEpoch;
     final requestScreen = options.extra['request_screen'] as String? ??
         MonitorNavigatorObserver.currentRoute;
+    final preassignedPhase = options.extra['request_phase'] as String?;
+    final preassignedCycle = options.extra['request_cycle'] as int?;
 
-    MonitorController.instance.addLog(ApiLogItem(
-      url: options.uri.toString(),
-      method: options.method.toUpperCase(),
-      statusCode: statusCode,
-      duration: DateTime.now().millisecondsSinceEpoch - startTime,
-      responseBytes: responseBytes,
-      screen: requestScreen,
-      timestamp: DateTime.fromMillisecondsSinceEpoch(startTime),
-      callerName: options.extra['caller_name'] as String? ?? 'unknown',
-      queryParams: options.extra['query_params'] as Map<String, String>? ?? {},
-      requestHeaders:
-          options.extra['req_headers'] as Map<String, String>? ?? {},
-      requestBody: options.extra['req_body'] as String?,
-      responseHeaders: responseHeaders,
-      responseBody: responseBody,
-    ));
+    MonitorController.instance.addLog(
+      ApiLogItem(
+        url: options.uri.toString(),
+        method: options.method.toUpperCase(),
+        statusCode: statusCode,
+        duration: DateTime.now().millisecondsSinceEpoch - startTime,
+        responseBytes: responseBytes,
+        screen: requestScreen,
+        timestamp: DateTime.fromMillisecondsSinceEpoch(startTime),
+        callerName: options.extra['caller_name'] as String? ?? 'unknown',
+        queryParams:
+            options.extra['query_params'] as Map<String, String>? ?? {},
+        requestHeaders:
+            options.extra['req_headers'] as Map<String, String>? ?? {},
+        requestBody: options.extra['req_body'] as String?,
+        responseHeaders: responseHeaders,
+        responseBody: responseBody,
+        responseBodyBuilder: responseBodyBuilder,
+      ),
+      preassignedPhase: preassignedPhase,
+      preassignedCycle: preassignedCycle,
+    );
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -94,6 +121,7 @@ class MonitorInterceptor extends Interceptor {
     if (cl > 0) return cl;
     final data = response.data;
     if (data is String) return data.length;
+    if (data is Uint8List) return data.length;
     return 0;
   }
 
@@ -169,7 +197,7 @@ class MonitorInterceptor extends Interceptor {
     final shortTrace = trace.substring(0, truncateIndex);
     for (final line in shortTrace.split('\n')) {
       if (line.isEmpty || _isFrameworkFrame(line)) continue;
-      final match = RegExp(r'#\d+\s+(.+?)\s+\(').firstMatch(line);
+      final match = _callerFrameRegExp.firstMatch(line);
       if (match != null) {
         return match
             .group(1)!

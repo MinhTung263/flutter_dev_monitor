@@ -26,7 +26,7 @@ class ApiLogItem {
   final int duration;
 
   /// The total size of the response payload in bytes.
-  final int responseBytes;
+  final int _responseBytes;
 
   /// The screen route name where this request originated.
   final String screen;
@@ -58,8 +58,27 @@ class ApiLogItem {
   /// Flat map of the response headers received.
   final Map<String, String> responseHeaders;
 
-  /// Body content of the response, if any.
-  final String? responseBody;
+  String? _cachedResponseBody;
+  final String? Function()? _responseBodyBuilder;
+
+  /// Body content of the response, if any (lazily encoded on first read).
+  String? get responseBody {
+    if (_cachedResponseBody != null) return _cachedResponseBody;
+    final builder = _responseBodyBuilder;
+    if (builder != null) {
+      _cachedResponseBody = builder();
+    }
+    return _cachedResponseBody;
+  }
+
+  /// The total size of the response payload in bytes.
+  int get responseBytes {
+    if (_responseBytes > 0) return _responseBytes;
+    if (_cachedResponseBody != null) return _cachedResponseBody!.length;
+    return 0;
+  }
+
+  static final RegExp _statusCodeRegExp = RegExp(r'^[1-5][0-9]{2}$');
 
   /// Creates a new [ApiLogItem] log entry.
   ApiLogItem({
@@ -70,7 +89,7 @@ class ApiLogItem {
     required this.duration,
     required this.screen,
     required this.timestamp,
-    this.responseBytes = 0,
+    int responseBytes = 0,
     this.callerName = 'unknown',
     this.phase = phaseInit,
     this.callCount = 1,
@@ -79,8 +98,12 @@ class ApiLogItem {
     this.requestHeaders = const {},
     this.requestBody,
     this.responseHeaders = const {},
-    this.responseBody,
-  }) : id = id ?? _nextId++;
+    String? responseBody,
+    String? Function()? responseBodyBuilder,
+  })  : id = id ?? _nextId++,
+        _responseBytes = responseBytes,
+        _cachedResponseBody = responseBody,
+        _responseBodyBuilder = responseBodyBuilder;
 
   /// Whether the request completed successfully (status 200-299).
   bool get isSuccess => statusCode >= 200 && statusCode < 300;
@@ -144,7 +167,8 @@ class ApiLogItem {
       requestHeaders: requestHeaders ?? this.requestHeaders,
       requestBody: requestBody ?? this.requestBody,
       responseHeaders: responseHeaders ?? this.responseHeaders,
-      responseBody: responseBody ?? this.responseBody,
+      responseBody: responseBody ?? _cachedResponseBody,
+      responseBodyBuilder: responseBody != null ? null : _responseBodyBuilder,
     );
   }
 
@@ -188,7 +212,7 @@ class ApiLogItem {
     }
 
     // 3. If query is a 3-digit HTTP status code (e.g. "200", "404", "500")
-    if (RegExp(r'^[1-5][0-9]{2}$').hasMatch(query)) {
+    if (_statusCodeRegExp.hasMatch(query)) {
       return statusCode.toString() == query ||
           url.toLowerCase().contains(query);
     }

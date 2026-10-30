@@ -62,13 +62,19 @@ class _FpsOverlayState extends State<FpsOverlay> {
   void initState() {
     super.initState();
     _ctrl.addListener(_onMonitorControllerChanged);
+    _ctrl.updateHardwareMonitoring(visible: widget.isShowing);
+    _ctrl.updatePingMonitoring(visible: widget.isShowing);
     _manageListening();
   }
 
   @override
   void didUpdateWidget(FpsOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isShowing != widget.isShowing) _manageListening();
+    if (oldWidget.isShowing != widget.isShowing) {
+      _ctrl.updateHardwareMonitoring(visible: widget.isShowing);
+      _ctrl.updatePingMonitoring(visible: widget.isShowing);
+      _manageListening();
+    }
   }
 
   @override
@@ -246,231 +252,246 @@ class _FpsOverlayState extends State<FpsOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.isShowing) return widget.child;
+    return Stack(
+      children: [
+        Listener(
+          onPointerDown:
+              widget.isShowing ? (_) => _ctrl.onUserPointerDown() : null,
+          onPointerUp: widget.isShowing
+              ? (_) => MonitorNavigatorObserver.scheduleTabRouteResolutionForce()
+              : null,
+          behavior: HitTestBehavior.translucent,
+          child: RepaintBoundary(child: widget.child),
+        ),
+        if (widget.isShowing)
+          ListenableBuilder(
+            listenable: _overlayCtrl,
+            builder: (context, _) {
+              if (!_overlayCtrl.isInitialized) {
+                return const SizedBox.shrink();
+              }
 
-    return ListenableBuilder(
-      listenable: _overlayCtrl,
-      builder: (context, _) {
-        if (!_overlayCtrl.isInitialized) {
-          return widget.child;
-        }
+              final state = _overlayCtrl.state;
+              final mq = MediaQuery.of(context);
+              final sw = mq.size.width;
+              final sh = mq.size.height;
+              final pad = mq.padding;
 
-        final state = _overlayCtrl.state;
+              // Initializing position if not set
+              if (!state.positionInit) {
+                final top = pad.top + OverlayLayout.edgeMargin;
+                final left =
+                    sw - OverlayLayout.pillW - OverlayLayout.edgeMargin;
 
-        // Initializing position if not set
-        if (!state.positionInit) {
-          final size = MediaQuery.of(context).size;
-          final padding = MediaQuery.of(context).padding;
-          final top = padding.top + OverlayLayout.edgeMargin;
-          final left =
-              size.width - OverlayLayout.pillW - OverlayLayout.edgeMargin;
+                // Let initialization defer so it doesn't trigger build locks
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _overlayCtrl.initializePosition(top, left);
+                  if (widget.tuckedByDefault || widget.alwaysHideToEdge) {
+                    _overlayCtrl.tuck(false, sw, 18.0);
+                  }
+                });
+              }
 
-          // Let initialization defer so it doesn't trigger build locks
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _overlayCtrl.initializePosition(top, left);
-            if (widget.tuckedByDefault || widget.alwaysHideToEdge) {
-              _overlayCtrl.tuck(false, size.width, 18.0);
-            }
-          });
-        }
+              final isExpanded = state.isExpanded;
+              final isTucked = state.isTucked;
+              final tuckedLeft = state.tuckedLeft;
+              final gridMode = state.gridMode;
 
-        final mq = MediaQuery.of(context);
-        final sw = mq.size.width;
-        final sh = mq.size.height;
-        final pad = mq.padding;
+              final w =
+                  isExpanded ? OverlayLayout.expandedW : OverlayLayout.pillW;
+              final h =
+                  isExpanded ? OverlayLayout.expandedH : OverlayLayout.pillH;
+              final minLeft = OverlayLayout.edgeMargin;
+              final maxLeft = sw - w - OverlayLayout.edgeMargin;
+              final minTop = pad.top + OverlayLayout.edgeMargin;
+              final maxTop = sh - pad.bottom - h - OverlayLayout.edgeMargin;
 
-        final isExpanded = state.isExpanded;
-        final isTucked = state.isTucked;
-        final tuckedLeft = state.tuckedLeft;
-        final gridMode = state.gridMode;
+              double currentLeft = state.left ?? minLeft;
+              double currentTop = state.top ?? minTop;
 
-        final w = isExpanded ? OverlayLayout.expandedW : OverlayLayout.pillW;
-        final h = isExpanded ? OverlayLayout.expandedH : OverlayLayout.pillH;
-        final minLeft = OverlayLayout.edgeMargin;
-        final maxLeft = sw - w - OverlayLayout.edgeMargin;
-        final minTop = pad.top + OverlayLayout.edgeMargin;
-        final maxTop = sh - pad.bottom - h - OverlayLayout.edgeMargin;
+              if (!isTucked) {
+                final double safeMaxTop = maxTop < minTop ? minTop : maxTop;
 
-        double currentLeft = state.left ?? minLeft;
-        double currentTop = state.top ?? minTop;
+                if (_isDragging) {
+                  // Allow the overlay (both pill and expanded) to go slightly offscreen to trigger tucking.
+                  final minLeftDrag = -w * 0.5;
+                  final maxLeftDragDrag = sw - w * 0.5;
+                  final double safeMaxLeftDrag =
+                      maxLeftDragDrag < minLeftDrag ? minLeftDrag : maxLeftDragDrag;
 
-        if (!isTucked) {
-          final double safeMaxTop = maxTop < minTop ? minTop : maxTop;
-          
-          if (_isDragging) {
-            // Allow the overlay (both pill and expanded) to go slightly offscreen to trigger tucking.
-            final minLeftDrag = -w * 0.5;
-            final maxLeftDragDrag = sw - w * 0.5;
-            final double safeMaxLeftDrag = maxLeftDragDrag < minLeftDrag ? minLeftDrag : maxLeftDragDrag;
-            
-            currentLeft = currentLeft.clamp(minLeftDrag, safeMaxLeftDrag);
-            currentTop = currentTop.clamp(minTop, safeMaxTop);
-          } else {
-            // Clamp strictly within screen boundaries if not dragging (e.g. when expanded)
-            final double safeMaxLeft = maxLeft < minLeft ? minLeft : maxLeft;
-            currentLeft = currentLeft.clamp(minLeft, safeMaxLeft);
-            currentTop = currentTop.clamp(minTop, safeMaxTop);
-          }
-        }
-
-        return Stack(
-          children: [
-            Listener(
-              onPointerUp: (_) => MonitorNavigatorObserver.scheduleTabRouteResolutionForce(),
-              behavior: HitTestBehavior.translucent,
-              child: widget.child,
-            ),
-            ListenableBuilder(
-              listenable: _ctrl,
-              builder: (context, _) {
-                if (_ctrl.isDashboardOpen) {
-                  return const SizedBox.shrink();
+                  currentLeft = currentLeft.clamp(minLeftDrag, safeMaxLeftDrag);
+                  currentTop = currentTop.clamp(minTop, safeMaxTop);
+                } else {
+                  // Clamp strictly within screen boundaries if not dragging (e.g. when expanded)
+                  final double safeMaxLeft = maxLeft < minLeft ? minLeft : maxLeft;
+                  currentLeft = currentLeft.clamp(minLeft, safeMaxLeft);
+                  currentTop = currentTop.clamp(minTop, safeMaxTop);
                 }
+              }
 
-                return MonitorThemeScope(
-                  child: Stack(
-                    children: [
-                    if (gridMode != GridMode.off)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: ListenableBuilder(
-                            listenable: MonitorColors.isDarkNotifier,
-                            builder: (context, _) {
-                              return CustomPaint(
-                                painter: FpsOverlayGridPainter(
-                                  mode: gridMode,
-                                  isDark: MonitorColors.isDark,
-                                  padding: pad,
-                                ),
-                              );
-                            },
+              return ListenableBuilder(
+                listenable: _ctrl,
+                builder: (context, _) {
+                  if (_ctrl.isDashboardOpen) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return MonitorThemeScope(
+                    child: Stack(
+                      children: [
+                        if (gridMode != GridMode.off)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: ListenableBuilder(
+                                listenable: MonitorColors.isDarkNotifier,
+                                builder: (context, _) {
+                                  return CustomPaint(
+                                    painter: FpsOverlayGridPainter(
+                                      mode: gridMode,
+                                      isDark: MonitorColors.isDark,
+                                      padding: pad,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          top: currentTop,
+                          left: currentLeft,
+                          child: RepaintBoundary(
+                            child: GestureDetector(
+                              onPanStart: (_) {
+                                setState(() {
+                                  _isDragging = true;
+                                });
+                              },
+                              onPanUpdate: (d) {
+                                if (isTucked) {
+                                  final double currentX = d.globalPosition.dx;
+                                  const double pullThreshold = 45.0;
+
+                                  bool shouldUntuck = false;
+                                  if (tuckedLeft) {
+                                    if (currentX > pullThreshold) {
+                                      shouldUntuck = true;
+                                    }
+                                  } else {
+                                    if (currentX < sw - pullThreshold) {
+                                      shouldUntuck = true;
+                                    }
+                                  }
+
+                                  if (shouldUntuck) {
+                                    _overlayCtrl.untuck(
+                                      sw,
+                                      OverlayLayout.pillW,
+                                      OverlayLayout.expandedW,
+                                      OverlayLayout.edgeMargin,
+                                      dragX: currentX,
+                                    );
+                                  } else {
+                                    final double nextTop =
+                                        (currentTop + d.delta.dy).clamp(
+                                      pad.top + OverlayLayout.edgeMargin,
+                                      sh -
+                                          pad.bottom -
+                                          48.0 -
+                                          OverlayLayout.edgeMargin,
+                                    );
+                                    _overlayCtrl.updatePosition(
+                                        nextTop, currentLeft);
+                                  }
+                                  return;
+                                }
+
+                                final double nextTop =
+                                    (currentTop + d.delta.dy).clamp(
+                                  pad.top + OverlayLayout.edgeMargin,
+                                  sh - pad.bottom - h - OverlayLayout.edgeMargin,
+                                );
+                                final minLeftDrag = -w * 0.5;
+                                final maxLeftDrag = sw - w * 0.5;
+                                final double nextLeft = (currentLeft + d.delta.dx)
+                                    .clamp(minLeftDrag, maxLeftDrag);
+
+                                _overlayCtrl.updatePosition(nextTop, nextLeft);
+                              },
+                              onPanEnd: (details) {
+                                setState(() {
+                                  _isDragging = false;
+                                });
+                                if (isTucked) {
+                                  _overlayCtrl.finalizePosition(
+                                      currentTop, currentLeft);
+                                  return;
+                                }
+
+                                if (widget.alwaysHideToEdge) {
+                                  final isLeft = (currentLeft + w / 2) < sw / 2;
+                                  _overlayCtrl.tuck(isLeft, sw, 18.0);
+                                } else if (currentLeft < -w * 0.25) {
+                                  _overlayCtrl.tuck(true, sw, 18.0);
+                                } else if (currentLeft + w > sw + w * 0.25) {
+                                  _overlayCtrl.tuck(false, sw, 18.0);
+                                } else if (widget.enableSnapToEdge) {
+                                  final center = currentLeft + w / 2;
+                                  final double snapLeft = center < sw / 2
+                                      ? OverlayLayout.edgeMargin
+                                      : sw - w - OverlayLayout.edgeMargin;
+                                  _overlayCtrl.finalizePosition(
+                                      currentTop, snapLeft);
+                                } else {
+                                  _overlayCtrl.finalizePosition(
+                                      currentTop, currentLeft);
+                                }
+                              },
+                              onPanCancel: () {
+                                setState(() {
+                                  _isDragging = false;
+                                });
+                              },
+                              onTap: () {
+                                if (isTucked) {
+                                  _overlayCtrl.untuck(
+                                    sw,
+                                    OverlayLayout.pillW,
+                                    OverlayLayout.expandedW,
+                                    OverlayLayout.edgeMargin,
+                                  );
+                                } else {
+                                  if (!isExpanded) {
+                                    _onOpenDashboard();
+                                  }
+                                }
+                              },
+                              onLongPress: (isExpanded || isTucked)
+                                  ? null
+                                  : _onExpandPanel,
+                              child: isExpanded
+                                  ? FpsOverlayDetailsPanel(
+                                      onCollapse: _onCollapse,
+                                      onHide: widget.onHide,
+                                      onOpenDashboard: _onOpenDashboard,
+                                      onClear: _onClearData,
+                                      gridMode: gridMode,
+                                      onToggleGrid: _onToggleGrid,
+                                    )
+                                  : isTucked
+                                      ? FpsOverlayTuckedHandle(
+                                          tuckedLeft: tuckedLeft)
+                                      : const FpsOverlayPillBadge(),
+                            ),
                           ),
                         ),
-                      ),
-                    Positioned(
-                      top: currentTop,
-                      left: currentLeft,
-                      child: RepaintBoundary(
-                        child: GestureDetector(
-                        onPanStart: (_) {
-                          setState(() {
-                            _isDragging = true;
-                          });
-                        },
-                        onPanUpdate: (d) {
-                          if (isTucked) {
-                            final double currentX = d.globalPosition.dx;
-                            const double pullThreshold = 45.0;
-
-                            bool shouldUntuck = false;
-                            if (tuckedLeft) {
-                              if (currentX > pullThreshold) {
-                                shouldUntuck = true;
-                              }
-                            } else {
-                              if (currentX < sw - pullThreshold) {
-                                shouldUntuck = true;
-                              }
-                            }
-
-                            if (shouldUntuck) {
-                              _overlayCtrl.untuck(
-                                sw,
-                                OverlayLayout.pillW,
-                                OverlayLayout.expandedW,
-                                OverlayLayout.edgeMargin,
-                                dragX: currentX,
-                              );
-                            } else {
-                              final double nextTop = (currentTop + d.delta.dy).clamp(
-                                pad.top + OverlayLayout.edgeMargin,
-                                sh - pad.bottom - 48.0 - OverlayLayout.edgeMargin,
-                              );
-                              _overlayCtrl.updatePosition(nextTop, currentLeft);
-                            }
-                            return;
-                          }
-
-                          final double nextTop = (currentTop + d.delta.dy).clamp(
-                            pad.top + OverlayLayout.edgeMargin,
-                            sh - pad.bottom - h - OverlayLayout.edgeMargin,
-                          );
-                          final minLeftDrag = -w * 0.5;
-                          final maxLeftDrag = sw - w * 0.5;
-                          final double nextLeft =
-                              (currentLeft + d.delta.dx).clamp(minLeftDrag, maxLeftDrag);
-
-                          _overlayCtrl.updatePosition(nextTop, nextLeft);
-                        },
-                        onPanEnd: (details) {
-                          setState(() {
-                            _isDragging = false;
-                          });
-                          if (isTucked) {
-                            _overlayCtrl.finalizePosition(currentTop, currentLeft);
-                            return;
-                          }
-
-                          if (widget.alwaysHideToEdge) {
-                            final isLeft = (currentLeft + w / 2) < sw / 2;
-                            _overlayCtrl.tuck(isLeft, sw, 18.0);
-                          } else if (currentLeft < -w * 0.25) {
-                            _overlayCtrl.tuck(true, sw, 18.0);
-                          } else if (currentLeft + w > sw + w * 0.25) {
-                            _overlayCtrl.tuck(false, sw, 18.0);
-                          } else if (widget.enableSnapToEdge) {
-                            final center = currentLeft + w / 2;
-                            final double snapLeft = center < sw / 2
-                                ? OverlayLayout.edgeMargin
-                                : sw - w - OverlayLayout.edgeMargin;
-                            _overlayCtrl.finalizePosition(currentTop, snapLeft);
-                          } else {
-                            _overlayCtrl.finalizePosition(currentTop, currentLeft);
-                          }
-                        },
-                        onPanCancel: () {
-                          setState(() {
-                            _isDragging = false;
-                          });
-                        },
-                        onTap: () {
-                          if (isTucked) {
-                            _overlayCtrl.untuck(
-                              sw,
-                              OverlayLayout.pillW,
-                              OverlayLayout.expandedW,
-                              OverlayLayout.edgeMargin,
-                            );
-                          } else {
-                            if (!isExpanded) {
-                              _onOpenDashboard();
-                            }
-                          }
-                        },
-                        onLongPress: (isExpanded || isTucked) ? null : _onExpandPanel,
-                        child: isExpanded
-                            ? FpsOverlayDetailsPanel(
-                                onCollapse: _onCollapse,
-                                onHide: widget.onHide,
-                                onOpenDashboard: _onOpenDashboard,
-                                onClear: _onClearData,
-                                gridMode: gridMode,
-                                onToggleGrid: _onToggleGrid,
-                              )
-                            : isTucked
-                                ? FpsOverlayTuckedHandle(tuckedLeft: tuckedLeft)
-                                : const FpsOverlayPillBadge(),
-                        ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               );
             },
-            ),
-          ],
-        );
-      },
+          ),
+      ],
     );
   }
 }

@@ -84,6 +84,35 @@ class FpsController {
 
   void clearScreen(String screen) => fpsHistoryMap.remove(screen);
 
+  void renameSession(String oldScreen, String newScreen) {
+    if (oldScreen == newScreen) return;
+    final oldBase =
+        oldScreen.contains('#') ? oldScreen.split('#').first : oldScreen;
+    final newBase =
+        newScreen.contains('#') ? newScreen.split('#').first : newScreen;
+
+    final keysToMigrate = fpsHistoryMap.keys.where((k) {
+      if (k == newScreen) return false;
+      if (k == oldScreen) return true;
+      if (oldBase == newBase) {
+        final kBase = k.contains('#') ? k.split('#').first : k;
+        return kBase == newBase;
+      }
+      return false;
+    }).toList();
+
+    for (final k in keysToMigrate) {
+      final samples = fpsHistoryMap.remove(k);
+      if (samples != null && samples.isNotEmpty) {
+        final target = fpsHistoryMap.putIfAbsent(newScreen, () => <double>[]);
+        target.addAll(samples);
+        if (target.length > _maxHistory) {
+          target.removeRange(0, target.length - _maxHistory);
+        }
+      }
+    }
+  }
+
   void clearAll() {
     fpsHistoryMap = {};
     jankFrameCount = 0;

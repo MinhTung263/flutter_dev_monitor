@@ -59,15 +59,31 @@ class RouteLogController {
 
   void renameSession(String oldScreen, String newScreen) {
     if (oldScreen == newScreen) return;
+    final oldBase =
+        oldScreen.contains('#') ? oldScreen.split('#').first : oldScreen;
+    final newBase =
+        newScreen.contains('#') ? newScreen.split('#').first : newScreen;
 
-    if (_pushTimes.containsKey(oldScreen)) {
-      _pushTimes[newScreen] = _pushTimes.remove(oldScreen)!;
+    bool matchesOld(String? r) {
+      if (r == null) return false;
+      if (r == oldScreen) return true;
+      if (oldBase == newBase) {
+        final rBase = r.contains('#') ? r.split('#').first : r;
+        return rBase == newBase;
+      }
+      return false;
+    }
+
+    for (final k in _pushTimes.keys.toList()) {
+      if (matchesOld(k) && k != newScreen) {
+        _pushTimes[newScreen] = _pushTimes.remove(k)!;
+      }
     }
 
     for (int i = 0; i < _logs.length; i++) {
       final log = _logs[i];
-      final newRoute = log.route == oldScreen ? newScreen : log.route;
-      final newFrom = log.from == oldScreen ? newScreen : log.from;
+      final newRoute = matchesOld(log.route) ? newScreen : log.route;
+      final newFrom = matchesOld(log.from) ? newScreen : log.from;
       if (newRoute != log.route || newFrom != log.from) {
         _logs[i] = RouteLogItem(
           id: log.id,

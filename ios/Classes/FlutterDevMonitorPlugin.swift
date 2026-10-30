@@ -4,6 +4,8 @@ import UIKit
 public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
     private var lastDiskUsedCheckTime: Double = 0
     private var cachedAppDiskUsed: Double = 0.0
+    private var isScanningDisk: Bool = false
+    private let diskLock = NSLock()
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
@@ -76,10 +78,25 @@ public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
             : 0.0
 
         let now = Date().timeIntervalSince1970
-        if now - lastDiskUsedCheckTime > 300 {
-            let homePath = NSHomeDirectory()
-            cachedAppDiskUsed = getDirectorySize(url: URL(fileURLWithPath: homePath))
+        var shouldScan = false
+        diskLock.lock()
+        if !isScanningDisk && (now - lastDiskUsedCheckTime > 300 || lastDiskUsedCheckTime == 0) {
+            isScanningDisk = true
             lastDiskUsedCheckTime = now
+            shouldScan = true
+        }
+        let currentCachedDisk = cachedAppDiskUsed
+        diskLock.unlock()
+
+        var appDiskUsed = currentCachedDisk
+        if shouldScan {
+            let homePath = NSHomeDirectory()
+            let computed = getDirectorySize(url: URL(fileURLWithPath: homePath))
+            diskLock.lock()
+            cachedAppDiskUsed = computed
+            appDiskUsed = computed
+            isScanningDisk = false
+            diskLock.unlock()
         }
 
         var diskTotal: Double = 0.0
@@ -96,7 +113,7 @@ public class FlutterDevMonitorPlugin: NSObject, FlutterPlugin {
         return [
             "ramUsed": ramUsed,
             "ramTotal": ramTotal,
-            "appDiskUsed": cachedAppDiskUsed,
+            "appDiskUsed": appDiskUsed,
             "diskTotal": diskTotal,
             "diskFree": diskFree
         ]

@@ -21,27 +21,33 @@ class FpsOverlayPillBadge extends StatelessWidget {
                 : (Platform.isIOS ? 'iPhone' : 'Android');
             final parts = rawModel.split(' • ');
             final deviceName = parts.first;
-            final osVersion = parts.length > 1 ? parts.last : '';
+            final osVersion = parts.length > 1
+                ? parts.last
+                    .replaceAll('iOS ', '')
+                    .replaceAll('Android ', '')
+                    .trim()
+                : '';
 
             final fps = ctrl.currentFps;
             final isIdle = ctrl.isIdle;
             final memMb = ctrl.currentRam;
             final totalRamMb = ctrl.totalRam;
-            final apiCount = ctrl.currentPhaseApiCount;
+            final initCount = ctrl.initApiCount;
+            final actionCount = ctrl.refreshApiCount;
             final jankCount = ctrl.jankFrameCount;
             final bigJankCount = ctrl.bigJankFrameCount;
             final pingMs = ctrl.currentPingMs;
             final jank = !isIdle && fps < 50 && fps > 0;
             final fpsColor = isIdle
-                ? MonitorColors.overlayFps.withValues(alpha: 0.75)
-                : (jank ? MonitorColors.overlayAlert : MonitorColors.overlayFps);
+                ? const Color(0xFF34D399).withValues(alpha: 0.85)
+                : (jank ? const Color(0xFFF87171) : const Color(0xFF34D399));
             final pingColor = pingMs == null
-                ? Colors.white24
+                ? Colors.white38
                 : pingMs < 50
-                    ? MonitorColors.overlayFps
+                    ? const Color(0xFF34D399)
                     : pingMs < 150
-                        ? MonitorColors.overlayBuild
-                        : MonitorColors.overlayAlert;
+                        ? const Color(0xFFFBBF24)
+                        : const Color(0xFFF87171);
 
             final apiErr = ctrl.globalApiErrorCount;
             final flutterErr = ctrl.flutterErrorCount;
@@ -52,21 +58,28 @@ class FpsOverlayPillBadge extends StatelessWidget {
             final hasSlow = slowApi > 0;
             final showAlert = (hasError || hasSlow) && !ctrl.alertsDismissed;
             final alertColor = hasError
-                ? MonitorColors.overlayAlert
-                : MonitorColors.overlayBuild;
+                ? const Color(0xFFF87171)
+                : const Color(0xFFFBBF24);
 
             const TextStyle lblStyle = TextStyle(
-              fontSize: 6.5,
-              fontWeight: FontWeight.bold,
+              fontSize: 6.2,
+              fontWeight: FontWeight.w700,
               fontFamily: MonitorTextStyle.monoFontFamily,
-              height: 1.1,
+              height: 1.05,
             );
             const TextStyle valStyle = TextStyle(
-              fontSize: 8.5,
-              fontWeight: FontWeight.w800,
+              fontSize: 7.8,
+              fontWeight: FontWeight.w900,
               fontFamily: MonitorTextStyle.monoFontFamily,
-              height: 1.1,
+              height: 1.05,
             );
+
+            final Color jankBadgeColor = bigJankCount > 0
+                ? const Color(0xFFF87171)
+                : const Color(0xFFFBBF24);
+            final Color borderGlow = showAlert
+                ? alertColor
+                : const Color(0xFF38BDF8);
 
             return Stack(
               clipBehavior: Clip.none,
@@ -74,182 +87,321 @@ class FpsOverlayPillBadge extends StatelessWidget {
                 Container(
                   width: OverlayLayout.pillW,
                   height: OverlayLayout.pillH,
-                  alignment: Alignment.centerLeft,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                   decoration: BoxDecoration(
-                    color: MonitorColors.overlayBg,
-                    borderRadius: BorderRadius.circular(7),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xF50B1120),
+                        Color(0xF50F172A),
+                        Color(0xF5070B14),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(9),
                     border: Border.all(
-                        color: showAlert
-                            ? alertColor.withValues(alpha: 0.65)
-                            : fpsColor.withValues(alpha: 0.45),
-                        width: 0.8),
+                      color: borderGlow.withValues(alpha: showAlert ? 0.70 : 0.42),
+                      width: 0.9,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                          color: showAlert
-                              ? alertColor.withValues(alpha: 0.25)
-                              : fpsColor.withValues(alpha: 0.15),
-                          blurRadius: 5),
+                        color: borderGlow.withValues(alpha: showAlert ? 0.28 : 0.16),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
                     ],
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── ROW 1: DEVICE NAME & OS VERSION ──────────────
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            WidgetSpan(
-                              alignment: PlaceholderAlignment.middle,
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 2.0),
-                                child: Icon(
-                                  Icons.smartphone_rounded,
-                                  size: 8.0,
-                                  color: Colors.white.withValues(alpha: 0.50),
-                                ),
-                              ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Row(
+                      children: [
+                        // Futuristic left neon telemetry rail
+                        Container(
+                          width: 2.5,
+                          height: double.infinity,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                fpsColor,
+                                const Color(0xFF38BDF8),
+                                showAlert ? alertColor : const Color(0xFFA855F7),
+                              ],
                             ),
-                            TextSpan(
-                              text: deviceName,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.85),
-                                fontSize: 7.5,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: MonitorTextStyle.monoFontFamily,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (osVersion.isNotEmpty) ...[
-                        const SizedBox(height: 0.5),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 10.0),
-                          child: Text(
-                            osVersion,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.45),
-                              fontSize: 6.2,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: MonitorTextStyle.monoFontFamily,
-                              height: 1.0,
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(5.5, 3, 6, 3),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.max,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // ── ROW 1: CYBER DEVICE HEADER ─────────────
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.memory_rounded,
+                                      size: 7.5,
+                                      color: const Color(0xFF38BDF8)
+                                          .withValues(alpha: 0.85),
+                                    ),
+                                    const SizedBox(width: 2.5),
+                                    Expanded(
+                                      child: Text(
+                                        deviceName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.white
+                                              .withValues(alpha: 0.90),
+                                          fontSize: 6.6,
+                                          fontWeight: FontWeight.w800,
+                                          fontFamily:
+                                              MonitorTextStyle.monoFontFamily,
+                                          height: 1.0,
+                                        ),
+                                      ),
+                                    ),
+                                    if (osVersion.isNotEmpty) ...[
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        osVersion,
+                                        style: TextStyle(
+                                          color: const Color(0xFF38BDF8)
+                                              .withValues(alpha: 0.70),
+                                          fontSize: 5.8,
+                                          fontWeight: FontWeight.w700,
+                                          fontFamily:
+                                              MonitorTextStyle.monoFontFamily,
+                                          height: 1.0,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+
+                                // ── ROW 2: NEON FPS + JANK PILL ────────────
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        width: 4.5,
+                                        height: 4.5,
+                                        decoration: BoxDecoration(
+                                          color: fpsColor,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: fpsColor.withValues(
+                                                  alpha: 0.6),
+                                              blurRadius: 3,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        isIdle
+                                            ? fps.toStringAsFixed(0)
+                                            : fps.toStringAsFixed(1),
+                                        style: TextStyle(
+                                          color: fpsColor,
+                                          fontSize: 9.8,
+                                          fontWeight: FontWeight.w900,
+                                          fontFamily:
+                                              MonitorTextStyle.monoFontFamily,
+                                          height: 1.0,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        isIdle
+                                            ? LocaleKeys.overlayIdleLabel.tr
+                                            : LocaleKeys.overlayFpsLabel.tr,
+                                        style: TextStyle(
+                                          color:
+                                              fpsColor.withValues(alpha: 0.70),
+                                          fontSize: 6.2,
+                                          fontWeight: FontWeight.w700,
+                                          fontFamily:
+                                              MonitorTextStyle.monoFontFamily,
+                                          height: 1.0,
+                                        ),
+                                      ),
+                                      if (jankCount > 0) ...[
+                                        const SizedBox(width: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 3.5, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: jankBadgeColor.withValues(
+                                                alpha: 0.16),
+                                            borderRadius:
+                                                BorderRadius.circular(3),
+                                            border: Border.all(
+                                              color: jankBadgeColor.withValues(
+                                                  alpha: 0.50),
+                                              width: 0.5,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Jank $jankCount',
+                                            style: TextStyle(
+                                              color: jankBadgeColor,
+                                              fontSize: 6.2,
+                                              fontWeight: FontWeight.w800,
+                                              fontFamily: MonitorTextStyle
+                                                  .monoFontFamily,
+                                              height: 1.0,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+
+                                // ── ROW 3: API HUD CAPSULES (MỞ vs THAO TÁC)
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'API ',
+                                        style: lblStyle.copyWith(
+                                          color: const Color(0xFF38BDF8),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 3, vertical: 0.8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFB923C)
+                                              .withValues(alpha: 0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(2.5),
+                                          border: Border.all(
+                                            color: const Color(0xFFFB923C)
+                                                .withValues(alpha: 0.40),
+                                            width: 0.4,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'Mở:',
+                                              style: lblStyle.copyWith(
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.78),
+                                              ),
+                                            ),
+                                            Text(
+                                              '$initCount',
+                                              style: valStyle.copyWith(
+                                                color: const Color(0xFFFB923C),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 2.5),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 3, vertical: 0.8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF34D399)
+                                              .withValues(
+                                                  alpha: actionCount > 0
+                                                      ? 0.16
+                                                      : 0.07),
+                                          borderRadius:
+                                              BorderRadius.circular(2.5),
+                                          border: Border.all(
+                                            color: const Color(0xFF34D399)
+                                                .withValues(
+                                                    alpha: actionCount > 0
+                                                        ? 0.45
+                                                        : 0.22),
+                                            width: 0.4,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'Thao tác:',
+                                              style: lblStyle.copyWith(
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.78),
+                                              ),
+                                            ),
+                                            Text(
+                                              '$actionCount',
+                                              style: valStyle.copyWith(
+                                                color: actionCount > 0
+                                                    ? const Color(0xFF34D399)
+                                                    : Colors.white.withValues(
+                                                        alpha: 0.50),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // ── ROW 4: RAM & NET PING ──────────────────
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'RAM ',
+                                        style: lblStyle.copyWith(
+                                          color: const Color(0xFFF472B6),
+                                        ),
+                                      ),
+                                      Text(
+                                        totalRamMb > 0
+                                            ? '${memMb.toStringAsFixed(0)}M/${(totalRamMb / 1024.0).toStringAsFixed(0)}G'
+                                            : '${memMb.toStringAsFixed(0)}M',
+                                        style: valStyle.copyWith(
+                                          color: const Color(0xFFF472B6),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'NET ',
+                                        style:
+                                            lblStyle.copyWith(color: pingColor),
+                                      ),
+                                      Text(
+                                        pingMs == null ? '--' : '${pingMs}ms',
+                                        style:
+                                            valStyle.copyWith(color: pingColor),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
                       ],
-                      const SizedBox(height: 1.0),
-                      // ── ROW 2: FPS + JANK ────────────────────────────
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Container(
-                            width: 4,
-                            height: 4,
-                            margin: const EdgeInsets.only(bottom: 1.5),
-                            decoration: BoxDecoration(
-                                color: fpsColor, shape: BoxShape.circle),
-                          ),
-                          const SizedBox(width: 3.5),
-                          Text(
-                            isIdle
-                                ? '${fps.toStringAsFixed(0)} •'
-                                : fps.toStringAsFixed(1),
-                            style: TextStyle(
-                              color: fpsColor,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: MonitorTextStyle.monoFontFamily,
-                              height: 1.0,
-                            ),
-                          ),
-                          const SizedBox(width: 1.5),
-                          Text(
-                            isIdle
-                                ? LocaleKeys.overlayIdleLabel.tr
-                                : LocaleKeys.overlayFpsLabel.tr,
-                            style: TextStyle(
-                              color: fpsColor.withValues(alpha: 0.6),
-                              fontSize: 7,
-                              fontFamily: MonitorTextStyle.monoFontFamily,
-                              height: 1.0,
-                            ),
-                          ),
-                          if (jankCount > 0) ...[
-                            const SizedBox(width: 3.5),
-                            Text(
-                              bigJankCount > 0
-                                  ? '⚡$jankCount(!$bigJankCount)'
-                                  : '⚡$jankCount',
-                              style: TextStyle(
-                                color: bigJankCount > 0
-                                    ? MonitorColors.overlayAlert
-                                    : MonitorColors.overlayGpu,
-                                fontSize: 7.5,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: MonitorTextStyle.monoFontFamily,
-                                height: 1.0,
-                              ),
-                            ),
-                          ],
-                        ],
-                        ),
-                      ),
-                      const SizedBox(height: 1.0),
-                      // ── ROW 3: API + MEM (Grouped together) ─────────
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(LocaleKeys.overlayApiLabel.tr,
-                              style: lblStyle.copyWith(
-                                  color: MonitorColors.overlayApi)),
-                          Text('$apiCount',
-                              style: valStyle.copyWith(
-                                  color: MonitorColors.overlayApi)),
-                          const SizedBox(width: 5),
-                          Text('RAM ',
-                              style: lblStyle.copyWith(
-                                  color: MonitorColors.overlayMem)),
-                          Text(
-                            totalRamMb > 0
-                                ? '${memMb.toStringAsFixed(0)}M/${(totalRamMb / 1024.0).toStringAsFixed(0)}G'
-                                : '${memMb.toStringAsFixed(0)}M',
-                            style: valStyle.copyWith(
-                                color: MonitorColors.overlayMem),
-                          ),
-                        ],
-                        ),
-                      ),
-                      const SizedBox(height: 1.0),
-                      // ── ROW 4: NET PING ──────────────────────────────
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(LocaleKeys.overlayNetLabel.tr,
-                              style: lblStyle.copyWith(color: pingColor)),
-                          Text(pingMs == null ? '--' : '${pingMs}ms',
-                              style: valStyle.copyWith(color: pingColor)),
-                        ],
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 if (showAlert)

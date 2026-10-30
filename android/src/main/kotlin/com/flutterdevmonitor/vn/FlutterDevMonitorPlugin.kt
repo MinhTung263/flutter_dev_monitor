@@ -177,9 +177,10 @@ class FlutterDevMonitorPlugin : FlutterPlugin, MethodCallHandler {
 
     private fun getAppDiskUsedMb(): Double {
         val now = System.currentTimeMillis()
-        if (cachedAppDiskUsed > 0.0 && now - lastDiskUsedCheckTime < 60000) {
+        if (lastDiskUsedCheckTime > 0L && now - lastDiskUsedCheckTime < 60000) {
             return cachedAppDiskUsed
         }
+        lastDiskUsedCheckTime = now
 
         // 1. Android 8.0+ (API 26+) StorageStatsManager: instantaneous and 100% permission-safe
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

@@ -1,0 +1,8 @@
+.DS_Store
+.dart_tool/
+build/
+example/.dart_tool/
+example/build/
+example/ios/Pods/
+example/ios/.symlinks/
+

@@ -56,32 +56,38 @@ class MonitorResponsiveDialogWrapper extends StatelessWidget {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: Scaffold(
-                        resizeToAvoidBottomInset: false,
-                        backgroundColor: MonitorColors.pageBackground,
-                        appBar: appBar,
-                        body: child,
-                      ),
-                    ),
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: MonitorColors.dropdownBg,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.close_rounded,
-                            color: MonitorColors.primaryText,
-                            size: 16,
-                          ),
+                      child: MediaQuery.removePadding(
+                        context: context,
+                        removeTop: true,
+                        removeBottom: true,
+                        child: Scaffold(
+                          resizeToAvoidBottomInset: false,
+                          backgroundColor: MonitorColors.pageBackground,
+                          appBar: appBar,
+                          body: child,
                         ),
                       ),
                     ),
+                    if (appBar == null)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: GestureDetector(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: MonitorColors.dropdownBg,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.close_rounded,
+                              color: MonitorColors.primaryText,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

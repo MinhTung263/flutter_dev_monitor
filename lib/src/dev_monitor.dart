@@ -19,13 +19,16 @@ abstract final class DevMonitor {
   /// The HTTP interceptor for capturing Dio requests.
   static final MonitorInterceptor interceptor = MonitorInterceptor();
 
-  static final ValueNotifier<bool> _overlayEnabled = ValueNotifier(true)
+  static final ValueNotifier<bool> _overlayEnabled = ValueNotifier(false)
     ..addListener(_onOverlayChanged);
   static bool? _configuredShowOverlay;
 
   static void _onOverlayChanged() {
     MonitorController.instance.updatePingMonitoring(visible: _overlayEnabled.value);
     MonitorController.instance.updateHardwareMonitoring(visible: _overlayEnabled.value);
+    if (_overlayEnabled.value) {
+      MonitorNavigatorObserver.updateActiveRouteTitle();
+    }
   }
 
   /// Show the FpsOverlay.
@@ -90,29 +93,36 @@ abstract final class DevMonitor {
     }
     return (context, child) => ValueListenableBuilder<bool>(
           valueListenable: _overlayEnabled,
-          builder: (_, enabled, __) => FpsOverlay(
+          child: child ?? const SizedBox.shrink(),
+          builder: (_, enabled, hostChild) => FpsOverlay(
             isShowing: enabled,
             expandedByDefault: expandedByDefault,
             enableSnapToEdge: enableSnapToEdge,
             tuckedByDefault: tuckedByDefault,
             alwaysHideToEdge: alwaysHideToEdge,
             onHide: hideOverlay,
-            child: child ?? const SizedBox.shrink(),
+            child: hostChild!,
           ),
         );
   }
 
   /// Pass to [MaterialApp.builder]. Wraps the app with [FpsOverlay].
   /// Use [builder()] instead if you need to configure initial visibility.
-  static Widget appBuilder(BuildContext context, Widget? child) =>
-      ValueListenableBuilder<bool>(
-        valueListenable: _overlayEnabled,
-        builder: (_, enabled, __) => FpsOverlay(
-          isShowing: enabled,
-          onHide: hideOverlay,
-          child: child ?? const SizedBox.shrink(),
-        ),
-      );
+  static Widget appBuilder(BuildContext context, Widget? child) {
+    if (_configuredShowOverlay == null) {
+      _configuredShowOverlay = true;
+      _overlayEnabled.value = true;
+    }
+    return ValueListenableBuilder<bool>(
+      valueListenable: _overlayEnabled,
+      child: child ?? const SizedBox.shrink(),
+      builder: (_, enabled, hostChild) => FpsOverlay(
+        isShowing: enabled,
+        onHide: hideOverlay,
+        child: hostChild!,
+      ),
+    );
+  }
 
   /// Wraps [child] with an invisible [tapCount]-tap trigger that toggles
   /// the overlay. Place on any widget (app logo, version label, etc.).

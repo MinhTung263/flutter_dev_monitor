@@ -201,4 +201,35 @@ void main() {
       expect(errorLog.matchesQuery('order'), isFalse);
     });
   });
+
+  group('ApiLogItem lazy responseBodyBuilder', () {
+    test('responseBodyBuilder is only evaluated when responseBody is accessed and cached afterwards', () {
+      int buildCount = 0;
+      final item = ApiLogItem(
+        url: 'https://api.easypos.vn/api/v1/products',
+        method: 'GET',
+        statusCode: 200,
+        duration: 150,
+        screen: '/products',
+        timestamp: DateTime.now(),
+        responseBodyBuilder: () {
+          buildCount++;
+          return '{"items": [1, 2, 3]}';
+        },
+      );
+
+      // Should not evaluate on construction or matchesQuery
+      expect(buildCount, equals(0));
+      expect(item.matchesQuery('products'), isTrue);
+      expect(buildCount, equals(0));
+
+      // First access evaluates builder
+      expect(item.responseBody, equals('{"items": [1, 2, 3]}'));
+      expect(buildCount, equals(1));
+
+      // Subsequent accesses use cached result
+      expect(item.responseBody, equals('{"items": [1, 2, 3]}'));
+      expect(buildCount, equals(1));
+    });
+  });
 }

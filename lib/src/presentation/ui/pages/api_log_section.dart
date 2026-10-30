@@ -74,7 +74,7 @@ class _FilterBar extends StatelessWidget {
 
     return Container(
       color: MonitorColors.pageBackground,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
       child: Row(
         children: [
           Expanded(
@@ -157,16 +157,31 @@ class _FilterBar extends StatelessWidget {
           GestureDetector(
             onTap: onSortToggle,
             child: Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               decoration: BoxDecoration(
                 color: MonitorColors.surface,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: MonitorColors.border),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: MonitorColors.border.withValues(alpha: 0.8),
+                  width: 0.8,
+                ),
               ),
-              child: Icon(
-                oldestFirst ? Icons.south_rounded : Icons.north_rounded,
-                size: 14,
-                color: MonitorColors.primaryText,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    oldestFirst ? Icons.south_rounded : Icons.north_rounded,
+                    size: 12,
+                    color: MonitorColors.primaryText,
+                  ),
+                  const SizedBox(width: 3),
+                  LabelText(
+                    oldestFirst ? 'OLD' : 'NEW',
+                    MonitorColors.secondaryText,
+                    size: 8.5,
+                    spacing: 0.3,
+                  ),
+                ],
               ),
             ),
           ),

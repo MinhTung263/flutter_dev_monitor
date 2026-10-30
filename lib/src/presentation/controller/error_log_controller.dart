@@ -26,9 +26,16 @@ class ErrorLogController {
 
   void renameSession(String oldScreen, String newScreen) {
     if (oldScreen == newScreen) return;
+    final oldBase =
+        oldScreen.contains('#') ? oldScreen.split('#').first : oldScreen;
+    final newBase =
+        newScreen.contains('#') ? newScreen.split('#').first : newScreen;
+
     for (int i = 0; i < _errors.length; i++) {
       final err = _errors[i];
-      if (err.screen == oldScreen) {
+      final errBase =
+          err.screen.contains('#') ? err.screen.split('#').first : err.screen;
+      if (err.screen == oldScreen || (oldBase == newBase && errBase == newBase)) {
         _errors[i] = ErrorLogItem(
           id: err.id,
           message: err.message,

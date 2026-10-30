@@ -62,7 +62,6 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   void initState() {
     super.initState();
     _selectedScreen = widget.initialScreen;
-    MonitorColors.isDark = false; // Luôn khởi tạo giao diện sáng
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _ctrl.isDashboardOpen = true;
@@ -83,7 +82,22 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
   }
 
   void _onControllerUpdate() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (_selectedScreen != MonitorConstants.allScreensKey &&
+        !_ctrl.visitedScreens.contains(_selectedScreen)) {
+      final selectedBase = _selectedScreen.contains('#')
+          ? _selectedScreen.split('#').first
+          : _selectedScreen;
+      for (final s in _ctrl.visitedScreens) {
+        final sBase = s.contains('#') ? s.split('#').first : s;
+        if (sBase == selectedBase) {
+          _selectedScreen = s;
+          _ctrl.updateDashboardView(s);
+          break;
+        }
+      }
+    }
+    setState(() {});
   }
 
   void _onScreenChanged(String screen) {
@@ -125,6 +139,10 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
       filtered = logs.where((l) => l.isSlow).toList();
     } else if (_filterMode == MonitorFilterKeys.error) {
       filtered = logs.where((l) => !l.isSuccess).toList();
+    } else if (_filterMode == MonitorFilterKeys.load) {
+      filtered = logs.where((l) => l.phase == ApiLogItem.phaseInit).toList();
+    } else if (_filterMode == MonitorFilterKeys.interaction) {
+      filtered = logs.where((l) => l.phase != ApiLogItem.phaseInit).toList();
     } else if (_filterMode == MonitorFilterKeys.get) {
       filtered = logs.where((l) => l.method == MonitorFilterKeys.get).toList();
     } else if (_filterMode == MonitorFilterKeys.post) {
@@ -205,7 +223,11 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
       ],
       body: Column(
         children: [
-          MonitorMetricsBar(screen: _selectedScreen),
+          MonitorMetricsBar(
+            screen: _selectedScreen,
+            activeFilter: _filterMode,
+            onFilterChanged: (v) => setState(() => _filterMode = v),
+          ),
           _FilterBar(
             allLogs: allLogs,
             activeFilter: _filterMode,
@@ -317,131 +339,212 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
     );
   }
 
-  Widget _buildActionIcon({
+  Widget _buildHudIconButton({
     required IconData icon,
-    required int count,
     required Color color,
     required VoidCallback onPressed,
+    String? tooltip,
+    int? badgeCount,
+    bool pulse = false,
   }) {
-    final hasCount = count > 0;
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        if (hasCount) _PulseGlowRing(color: color),
-        IconButton(
-          icon: Icon(
-            icon,
-            color: hasCount ? color : MonitorColors.secondaryText,
-            size: 20,
-          ),
-          onPressed: onPressed,
-        ),
-        if (hasCount)
-          Positioned(
-            right: 4,
-            top: 4,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.3),
-                    blurRadius: 3,
-                    spreadRadius: 1,
-                  ),
+    final isDark = MonitorColors.isDark;
+    final hasBadge = badgeCount != null && badgeCount > 0;
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 34,
+            constraints: BoxConstraints(minWidth: hasBadge ? 48 : 34),
+            padding: EdgeInsets.symmetric(horizontal: hasBadge ? 8 : 0),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  color.withValues(alpha: isDark ? 0.16 : 0.10),
+                  color.withValues(alpha: isDark ? 0.06 : 0.04),
                 ],
               ),
-              constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-              child: Center(
-                child: Text(
-                  '$count',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 7.5,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: color.withValues(alpha: isDark ? 0.42 : 0.28),
+                width: 0.9,
               ),
+              boxShadow: [
+                if (pulse || hasBadge)
+                  BoxShadow(
+                    color: color.withValues(alpha: isDark ? 0.22 : 0.14),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 16.5),
+                if (hasBadge) ...[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.45),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      '$badgeCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: MonitorTextStyle.monoFontFamily,
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 
   AppBar _buildAppBar(BuildContext context, int errorCount, int flowCount) {
     final isAll = _selectedScreen == MonitorConstants.allScreensKey;
+    final isDark = MonitorColors.isDark;
     final accent = MonitorColors.metricTotal;
+    final cyanAccent =
+        isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7);
+    final flowColor = errorCount > 0
+        ? MonitorColors.statusError
+        : (isDark ? const Color(0xFF34D399) : const Color(0xFF10B981));
+    final themeColor =
+        isDark ? const Color(0xFFFBBF24) : const Color(0xFF6366F1);
 
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isLargeScreen = screenWidth > 640;
+    final int totalEvents = errorCount + flowCount;
 
     return AppBar(
       automaticallyImplyLeading: false,
-      leading: isLargeScreen
-          ? null
-          : IconButton(
-              icon: Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: MonitorColors.primaryText,
-                size: 18,
-              ),
-              onPressed: () => Navigator.of(context).pop(),
-              tooltip: 'Quay lại',
-            ),
-      title: InkWell(
-        onTap: () => _openScreenPicker(context),
-        borderRadius: BorderRadius.circular(20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: MonitorColors.dropdownBg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color:
-                  isAll ? accent.withValues(alpha: 0.4) : MonitorColors.border,
-              width: 0.8,
-            ),
-            boxShadow: [
-              if (isAll)
-                BoxShadow(
-                  color: accent.withValues(alpha: 0.08),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
-                ),
-            ],
+      toolbarHeight: 54,
+      titleSpacing: 0,
+      leadingWidth: 52,
+      leading: Center(
+        child: Padding(
+          padding: const EdgeInsets.only(left: 10),
+          child: _buildHudIconButton(
+            icon: isLargeScreen
+                ? Icons.close_rounded
+                : Icons.arrow_back_ios_new_rounded,
+            color: MonitorColors.primaryText.withValues(alpha: 0.85),
+            onPressed: () => Navigator.of(context).pop(),
+            tooltip: 'Đóng',
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isAll ? Icons.all_inclusive_rounded : Icons.layers_outlined,
-                size: 13,
-                color: isAll ? accent : MonitorColors.secondaryText,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 180),
-                  child: MonoText(
-                    MonitorController.formatRouteName(_selectedScreen),
-                    11,
-                    color: MonitorColors.primaryText,
-                    weight: FontWeight.bold,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+        ),
+      ),
+      title: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _openScreenPicker(context),
+            borderRadius: BorderRadius.circular(12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    cyanAccent.withValues(alpha: isDark ? 0.16 : 0.09),
+                    accent.withValues(alpha: isDark ? 0.08 : 0.04),
+                  ],
                 ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: cyanAccent.withValues(alpha: isDark ? 0.45 : 0.32),
+                  width: 0.9,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: cyanAccent.withValues(alpha: isDark ? 0.16 : 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: MonitorColors.secondaryText,
-                size: 15,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: cyanAccent.withValues(alpha: isDark ? 0.22 : 0.14),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      isAll
+                          ? Icons.all_inclusive_rounded
+                          : Icons.layers_rounded,
+                      size: 13,
+                      color: cyanAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 165),
+                      child: BodyText(
+                        MonitorController.formatRouteName(_selectedScreen),
+                        12.0,
+                        color: MonitorColors.primaryText,
+                        weight: FontWeight.w700,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: MonitorColors.surface.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(
+                        color: cyanAccent.withValues(alpha: 0.25),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.unfold_more_rounded,
+                      color: cyanAccent,
+                      size: 13,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -452,16 +555,28 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
       surfaceTintColor: Colors.transparent,
       iconTheme: IconThemeData(color: MonitorColors.secondaryText),
       bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(height: 1, color: MonitorColors.divider),
+        preferredSize: const Size.fromHeight(1.5),
+        child: Container(
+          height: 1.5,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                MonitorColors.divider.withValues(alpha: 0.2),
+                cyanAccent.withValues(alpha: 0.55),
+                accent.withValues(alpha: 0.55),
+                MonitorColors.divider.withValues(alpha: 0.2),
+              ],
+            ),
+          ),
+        ),
       ),
       actions: [
-        _buildActionIcon(
-          icon: Icons.alt_route_rounded,
-          count: errorCount + flowCount,
-          color: errorCount > 0
-              ? MonitorColors.statusError
-              : const Color(0xFF57D888),
+        _buildHudIconButton(
+          icon: Icons.hub_rounded,
+          badgeCount: totalEvents,
+          color: flowColor,
+          pulse: totalEvents > 0,
+          tooltip: 'Luồng điều hướng & Logs',
           onPressed: () => Navigator.of(context).push(
             MonitorResponsiveRoute(
               builder: (_) => const MonitorLogsPage(),
@@ -469,19 +584,20 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
             ),
           ),
         ),
-        IconButton(
-          icon: Icon(
-            MonitorColors.isDark
-                ? Icons.light_mode_outlined
-                : Icons.dark_mode_outlined,
-            color: MonitorColors.secondaryText,
-            size: 20,
-          ),
+        const SizedBox(width: 6),
+        _buildHudIconButton(
+          icon: MonitorColors.isDark
+              ? Icons.wb_sunny_rounded
+              : Icons.dark_mode_rounded,
+          color: themeColor,
+          tooltip: 'Đổi giao diện Sáng / Tối',
           onPressed: () => MonitorColors.isDark = !MonitorColors.isDark,
         ),
-        IconButton(
-          icon: Icon(Icons.restart_alt,
-              color: MonitorColors.statusError, size: 22),
+        const SizedBox(width: 6),
+        _buildHudIconButton(
+          icon: Icons.restart_alt_rounded,
+          color: MonitorColors.statusError,
+          tooltip: 'Làm mới dữ liệu đo',
           onPressed: () => _showResetConfirmDialog(
             context,
             message: LocaleKeys.resetConfirmMessage.tr,
@@ -492,6 +608,7 @@ class _MonitorDashboardPageState extends State<MonitorDashboardPage> {
             },
           ),
         ),
+        const SizedBox(width: 10),
       ],
     );
   }
@@ -582,19 +699,14 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
     final errorCount = flutterErrors.length;
     final flowCount = allLogs.length + routeLogs.length;
 
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final bool isLargeScreen = screenWidth > 640;
-
     return MonitorResponsiveDialogWrapper(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        leading: isLargeScreen
-            ? null
-            : IconButton(
-                icon: Icon(Icons.arrow_back_ios_new_rounded,
-                    color: MonitorColors.primaryText, size: 18),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded,
+              color: MonitorColors.primaryText, size: 18),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: MonoText('LOG DETAILS', 13,
             color: MonitorColors.primaryText, weight: FontWeight.bold),
         centerTitle: true,
@@ -737,64 +849,6 @@ class _MonitorLogsPageState extends State<MonitorLogsPage>
               ? const _EmptyErrorState()
               : const _ErrorFlowLogList(),
         ],
-      ),
-    );
-  }
-}
-
-class _PulseGlowRing extends StatefulWidget {
-  final Color color;
-  const _PulseGlowRing({required this.color});
-
-  @override
-  State<_PulseGlowRing> createState() => _PulseGlowRingState();
-}
-
-class _PulseGlowRingState extends State<_PulseGlowRing>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.4).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-    _opacityAnimation = Tween<double>(begin: 0.6, end: 0.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _opacityAnimation,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.color.withValues(alpha: 0.25),
-            border: Border.all(
-              color: widget.color,
-              width: 1.5,
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -25,20 +25,26 @@ class MonitorHardwareGrid extends StatelessWidget {
             (ramUsed / (ramTotal > 0 ? ramTotal : 1.0)).clamp(0.0, 1.0);
 
         final appStorage = ctrl.appDiskUsed;
-        const storageWarnCeil = 500.0;
+        const storageWarnCeil = 2048.0; // 2 GB app storage ceiling
         final storageRatio = (appStorage / storageWarnCeil).clamp(0.0, 1.0);
 
         final ramValue = ramTotal > 0
-            ? '${ramUsed.toStringAsFixed(0)} / ${ramTotal.toStringAsFixed(0)} MB'
+            ? '${ramUsed.toStringAsFixed(0)}/${ramTotal >= 1024 ? '${(ramTotal / 1024).toStringAsFixed(0)}GB' : '${ramTotal.toStringAsFixed(0)}MB'}'
             : '${ramUsed.toStringAsFixed(0)} MB';
 
         final totalDisk = ctrl.totalDisk;
         final storageValue = totalDisk > 0
-            ? '${appStorage.toStringAsFixed(1)}MB / ${totalDisk >= 1 ? '${totalDisk.toStringAsFixed(0)}GB' : '${(totalDisk * 1024).toStringAsFixed(0)}MB'}'
+            ? '${appStorage.toStringAsFixed(0)}MB/${totalDisk >= 1 ? '${totalDisk.toStringAsFixed(0)}GB' : '${(totalDisk * 1024).toStringAsFixed(0)}MB'}'
             : '${appStorage.toStringAsFixed(1)} MB';
 
+        final imgMb = ctrl.imageCacheMb;
+        final imgMaxMb = ctrl.imageCacheMaxMb > 0 ? ctrl.imageCacheMaxMb : 100.0;
+        final imgRatio = (imgMb / imgMaxMb).clamp(0.0, 1.0);
+        final imgValue =
+            '${imgMb.toStringAsFixed(1)}/${imgMaxMb.toStringAsFixed(0)}MB (${ctrl.imageCacheCount})';
+
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
           child: Row(
             children: [
               Expanded(
@@ -48,27 +54,45 @@ class MonitorHardwareGrid extends StatelessWidget {
                   label: 'RAM',
                   value: ramValue,
                   ratio: ramRatio,
-                  barColor: ramRatio > 0.8
+                  barColor: ramRatio > 0.85
                       ? MonitorColors.statusError
                       : const Color(0xFF2DD4BF),
                 ),
               ),
               Container(
                 width: 1,
-                height: 32,
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                color: MonitorColors.border,
+                height: 26,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                color: MonitorColors.divider,
               ),
               Expanded(
                 child: _HardwareStat(
                   icon: Icons.storage_outlined,
                   iconColor: const Color(0xFF818CF8),
-                  label: 'STORAGE',
+                  label: 'DISK',
                   value: storageValue,
                   ratio: storageRatio,
-                  barColor: storageRatio > 0.8
+                  barColor: storageRatio > 0.85
                       ? MonitorColors.statusError
                       : const Color(0xFF818CF8),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 26,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                color: MonitorColors.divider,
+              ),
+              Expanded(
+                child: _HardwareStat(
+                  icon: Icons.image_outlined,
+                  iconColor: const Color(0xFFF472B6),
+                  label: 'IMG',
+                  value: imgValue,
+                  ratio: imgRatio,
+                  barColor: imgRatio > 0.85
+                      ? MonitorColors.statusError
+                      : const Color(0xFFF472B6),
                 ),
               ),
             ],

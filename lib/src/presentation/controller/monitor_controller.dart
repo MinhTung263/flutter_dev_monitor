@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 
 import '../../core/monitor_constants.dart';
 import '../../core/monitor_strings.dart';
@@ -44,7 +45,15 @@ class MonitorController extends ChangeNotifier {
   int? _currentPingMs;
   bool _disposed = false;
   bool _isReportingError = false;
-  bool _isOverlayVisible = true;
+  bool _isOverlayVisible = false;
+
+  /// Maps a base container route (e.g. '/page_builder') to its latest resolved
+  /// initial tab route so in-flight APIs during route initialization are reconciled.
+  final Map<String, String> _containerToTabRoute = {};
+
+  /// Whether either the floating overlay or the dashboard is currently active.
+  bool get isMonitoringActive => _isOverlayVisible || _isDashboardOpen;
+  bool get isOverlayVisible => _isOverlayVisible;
 
   bool _isDashboardOpen = false;
   bool get isDashboardOpen => _isDashboardOpen;
@@ -73,8 +82,17 @@ class MonitorController extends ChangeNotifier {
   static Map<String, String> customRouteNames = {};
 
   void updateCustomRouteName(String route, String title) {
+    final baseRoute = route.contains('#') ? route.split('#').first : route;
+    bool changed = false;
     if (customRouteNames[route] != title) {
       customRouteNames[route] = title;
+      changed = true;
+    }
+    if (baseRoute.isNotEmpty && customRouteNames[baseRoute] != title) {
+      customRouteNames[baseRoute] = title;
+      changed = true;
+    }
+    if (changed && isMonitoringActive) {
       notifyListeners();
     }
   }
@@ -188,27 +206,25 @@ class MonitorController extends ChangeNotifier {
 
   void logRoutePush(String route, String? from, {String routeType = 'page'}) {
     _routeLog.logPush(route, from, routeType: routeType);
-
-    notifyListeners();
+    if (isMonitoringActive) notifyListeners();
   }
 
   void logRoutePop(String route, String? to, {String routeType = 'page'}) {
     _routeLog.logPop(route, to, routeType: routeType);
-    notifyListeners();
+    if (isMonitoringActive) notifyListeners();
   }
 
   void logRouteReplace(String oldRoute, String newRoute,
       {String routeType = 'page'}) {
     _routeLog.logReplace(oldRoute, newRoute, routeType: routeType);
-
-    notifyListeners();
+    if (isMonitoringActive) notifyListeners();
   }
 
   // ── Expose ping state ────────────────────────────────────────────────
 
   int? get currentPingMs => _currentPingMs;
 
-  // ── Expose hardware state ─────────────────────────────────────────────
+  // ── Expose hardware & image cache state ───────────────────────────────
 
   double get currentRam => _hardware.currentRam;
   double get totalRam => _hardware.totalRam;
@@ -218,6 +234,53 @@ class MonitorController extends ChangeNotifier {
   Map<String, List<double>> get ramHistoryMap => _hardware.ramHistoryMap;
   List<double> get globalRamHistory => _hardware.globalRamHistory;
   String get deviceModel => _hardware.deviceModel;
+
+  /// Current number of cached images in Flutter's [ImageCache].
+  int get imageCacheCount {
+    try {
+      return PaintingBinding.instance.imageCache.currentSize;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Maximum allowed images in Flutter's [ImageCache].
+  int get imageCacheMaxCount {
+    try {
+      return PaintingBinding.instance.imageCache.maximumSize;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Current memory used by Flutter's [ImageCache] in MB.
+  double get imageCacheMb {
+    try {
+      return PaintingBinding.instance.imageCache.currentSizeBytes /
+          (1024.0 * 1024.0);
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
+  /// Maximum memory budget for Flutter's [ImageCache] in MB.
+  double get imageCacheMaxMb {
+    try {
+      return PaintingBinding.instance.imageCache.maximumSizeBytes /
+          (1024.0 * 1024.0);
+    } catch (_) {
+      return 0.0;
+    }
+  }
+
+  /// Number of live image objects currently tracked by [ImageCache].
+  int get liveImageCount {
+    try {
+      return PaintingBinding.instance.imageCache.liveImageCount;
+    } catch (_) {
+      return 0;
+    }
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -352,15 +415,38 @@ class MonitorController extends ChangeNotifier {
       _visitedScreens.add(screenName);
     }
     _apiLog.startSession(screenName);
-    notifyListeners();
+    if (isMonitoringActive) notifyListeners();
   }
 
   void renameActiveSession(String oldScreen, String newScreen) {
     if (oldScreen == newScreen) return;
 
+    final oldBase = oldScreen.contains('#') ? oldScreen.split('#').first : oldScreen;
+    final newBase = newScreen.contains('#') ? newScreen.split('#').first : newScreen;
+    if (oldBase.isNotEmpty && newBase.startsWith('$oldBase/')) {
+      _containerToTabRoute[oldBase] = newScreen;
+    } else if (oldBase == newBase && _containerToTabRoute.isNotEmpty) {
+      for (final entry in _containerToTabRoute.entries.toList()) {
+        final mappedBase = entry.value.contains('#')
+            ? entry.value.split('#').first
+            : entry.value;
+        if (mappedBase == newBase) {
+          _containerToTabRoute[entry.key] = newScreen;
+        }
+      }
+    }
+
     final idx = _visitedScreens.indexOf(oldScreen);
     if (idx >= 0) {
       _visitedScreens[idx] = newScreen;
+    } else if (newScreen.isNotEmpty &&
+        newScreen != MonitorConstants.dashboardRoute &&
+        newScreen != MonitorConstants.unknownRoute) {
+      _visitedScreens.removeWhere((s) {
+        final sBase = s.contains('#') ? s.split('#').first : s;
+        return sBase == oldBase || sBase == newBase;
+      });
+      _visitedScreens.add(newScreen);
     }
 
     // Deduplicate the list to ensure all items are unique
@@ -370,7 +456,9 @@ class MonitorController extends ChangeNotifier {
     _apiLog.renameSession(oldScreen, newScreen);
     _routeLog.renameSession(oldScreen, newScreen);
     _errorLog.renameSession(oldScreen, newScreen);
-    notifyListeners();
+    _fps.renameSession(oldScreen, newScreen);
+    _hardware.renameSession(oldScreen, newScreen);
+    if (isMonitoringActive) notifyListeners();
   }
 
   void setActivePopup(String popupName) => _apiLog.activePopup = popupName;
@@ -379,34 +467,46 @@ class MonitorController extends ChangeNotifier {
     if (_apiLog.activePopup == popupName) _apiLog.activePopup = null;
   }
 
-  // ── Log management ────────────────────────────────────────────────────
+  /// Notifies the API tracker that the user touched the screen, so subsequent
+  /// APIs on the current visit are classified under INTERACTION (`ACTION`).
+  void onUserPointerDown() {
+    final contentRoute = MonitorNavigatorObserver.currentContentRoute;
+    final target = contentRoute.isNotEmpty
+        ? contentRoute
+        : MonitorNavigatorObserver.currentRoute;
+    _apiLog.onUserPointerDown(target);
+  }
 
-  void addLog(ApiLogItem item) {
-    String screen = item.screen;
+  /// Classifies an outgoing API request at `onRequest` time so chained `LOAD`
+  /// requests vs `INTERACTION` requests are tracked accurately.
+  ({String phase, int cycle, String screen}) onApiRequestStart(
+    String rawScreen,
+  ) {
+    final resolved = _resolveScreenAndPopup(rawScreen);
+    return _apiLog.onRequestStart(
+      resolved.screen,
+      isPopupActive: resolved.isPopupActive,
+    );
+  }
+
+  ({String screen, String popupSuffix, bool isPopupActive})
+      _resolveScreenAndPopup(String rawScreen) {
+    String screen = rawScreen;
     String popupSuffix = '';
 
     final currentRoute = MonitorNavigatorObserver.currentRoute;
     final currentContent = MonitorNavigatorObserver.currentContentRoute;
 
-    // Reconcile item.screen with the canonical (possibly renamed) session name.
-    // The session may have been renamed with a "#Title" suffix AFTER the API
-    // request was created (e.g. /PRODDETAIL → /PRODDETAIL#Tạo sản phẩm mới).
-    //
-    // IMPORTANT: Only override when currentContent is the SAME base route as
-    // item.screen (e.g. item.screen = "home/invoice", currentContent =
-    // "home/invoice#Hóa đơn"). This prevents APIs captured on tab A from
-    // being wrongly attributed to tab B when the response arrives later
-    // (after the user has already switched tabs).
     final String screenBase =
         screen.contains('#') ? screen.split('#')[0] : screen;
     final String contentBase = currentContent.contains('#')
         ? currentContent.split('#')[0]
         : currentContent;
-    // Only allow override when the bases are identical — NOT just a prefix match.
-    // A stale item.screen = "home" must NOT be overridden by currentContent =
-    // "home/invoice" (different tab), even though "home/invoice".startsWith("home").
+
     if (contentBase == screenBase && currentContent.isNotEmpty) {
       screen = currentContent;
+    } else if (_containerToTabRoute.containsKey(screenBase)) {
+      screen = _containerToTabRoute[screenBase]!;
     }
 
     final isPopupActive = _apiLog.isPopupRoute(screen) ||
@@ -417,20 +517,42 @@ class MonitorController extends ChangeNotifier {
     if (isPopupActive) {
       screen = currentContent;
       final activePopupName =
-          _apiLog.isPopupRoute(item.screen) ? item.screen : currentRoute;
+          _apiLog.isPopupRoute(rawScreen) ? rawScreen : currentRoute;
       final cleanPopup = activePopupName.contains('#')
           ? activePopupName.split('#')[1]
           : activePopupName;
       popupSuffix = ' -> $cleanPopup';
     }
 
+    return (
+      screen: screen,
+      popupSuffix: popupSuffix,
+      isPopupActive: isPopupActive,
+    );
+  }
+
+  // ── Log management ────────────────────────────────────────────────────
+
+  void addLog(
+    ApiLogItem item, {
+    String? preassignedPhase,
+    int? preassignedCycle,
+  }) {
+    final resolved = _resolveScreenAndPopup(item.screen);
+
     if (!item.isSuccess || item.isSlow) {
       _alertsDismissed = false;
     }
 
-    _apiLog.addLog(item, screen, popupSuffix);
+    _apiLog.addLog(
+      item,
+      resolved.screen,
+      resolved.popupSuffix,
+      preassignedPhase: preassignedPhase,
+      preassignedCycle: preassignedCycle,
+    );
 
-    notifyListeners();
+    if (isMonitoringActive) notifyListeners();
   }
 
   void updateDashboardView(String screen) {
@@ -445,6 +567,9 @@ class MonitorController extends ChangeNotifier {
 
   void clearAll() {
     skipTimingFrames = 3;
+    customRouteNames.clear();
+    MonitorNavigatorObserver.clearResolvedTitles();
+    _containerToTabRoute.clear();
     _apiLog.clearAll();
     _fps.clearAll();
     _hardware.clearAll();
