@@ -1,3 +1,9 @@
+## 2.9.1
+
+* **No more UI freeze on route changes**: The navigator observer now prefilters widgets by type before dynamically probing tab indices (`currentIndex` / `selectedIndex` / ...). Probing every widget in the tree threw up to four `NoSuchMethodError`s per element on each route change, freezing the UI for several seconds on low-end POS devices while the overlay was visible.
+* **Correct cURL export for form-data**: `FormData` requests now export as `--form 'key=value'` parts (files as `--form 'key=@"filename"'`), keep repeated keys (e.g. `ids[]`, multiple files) in order and drop the stale `multipart/form-data; boundary=...` header. `application/x-www-form-urlencoded` bodies export as `--data-urlencode` fields, and single quotes are shell-escaped. Pasting into Postman now fills form-data instead of a raw body.
+* **Lighter logging while hidden**: When neither the overlay nor the dashboard is visible (e.g. production builds), request bodies are encoded lazily, only the 20 most recent requests keep their bodies (older ones keep URL, method, status, timing and headers) and fewer screens/logs are tracked. Opening the overlay or dashboard restores full logging.
+
 ## 2.9.0
 
 * **Futuristic Cyber-HUD Floating Overlay & Expanded Telemetry Cockpit**:
