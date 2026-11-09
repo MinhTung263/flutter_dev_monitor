@@ -26,7 +26,16 @@ class MonitorInterceptor extends Interceptor {
         ...options.queryParameters,
       };
       options.extra['query_params'] = _flattenMap(mergedQuery);
-      options.extra['req_body'] = _encodeBody(options.data);
+      if (isActive) {
+        options.extra['req_body'] = _encodeBody(options.data);
+      } else {
+        // DevMonitor đang ẩn (bản prod/staging): KHÔNG jsonEncode body ngay trên
+        // luồng UI cho mọi request (request lớn như đồng bộ đơn tốn hàng chục
+        // ms) — chỉ mã hoá khi có người mở xem log.
+        final data = options.data;
+        options.extra['req_body_builder'] =
+            data == null ? null : () => _encodeBody(data);
+      }
 
       final explicitScreen =
           options.extra['_dev_screen_origin'] ?? options.extra['screen'];
@@ -105,6 +114,8 @@ class MonitorInterceptor extends Interceptor {
         requestHeaders:
             options.extra['req_headers'] as Map<String, String>? ?? {},
         requestBody: options.extra['req_body'] as String?,
+        requestBodyBuilder:
+            options.extra['req_body_builder'] as String? Function()?,
         responseHeaders: responseHeaders,
         responseBody: responseBody,
         responseBodyBuilder: responseBodyBuilder,
@@ -117,7 +128,8 @@ class MonitorInterceptor extends Interceptor {
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   int _estimateBytes(Response response) {
-    final cl = int.tryParse(response.headers.value('content-length') ?? '') ?? 0;
+    final cl =
+        int.tryParse(response.headers.value('content-length') ?? '') ?? 0;
     if (cl > 0) return cl;
     final data = response.data;
     if (data is String) return data.length;
@@ -147,20 +159,29 @@ class MonitorInterceptor extends Interceptor {
     try {
       if (data is FormData) {
         final map = <String, dynamic>{};
+        // Danh sách ĐẦY ĐỦ theo thứ tự gửi: FormData cho phép trùng khoá (gửi
+        // nhiều file cùng tên `files`, mảng `ids[]`...) mà `@fields` (Map) chỉ
+        // giữ được 1 — cURL cần đủ từng phần.
+        final entries = <Map<String, dynamic>>[];
         for (final entry in data.fields) {
           map[entry.key] = entry.value;
+          entries.add({'key': entry.key, 'value': entry.value});
         }
         for (final entry in data.files) {
           final file = entry.value;
-          map[entry.key] = {
+          final meta = <String, dynamic>{
             'filename': file.filename,
             'length': file.length,
-            if (file.contentType != null) 'contentType': file.contentType.toString(),
+            if (file.contentType != null)
+              'contentType': file.contentType.toString(),
           };
+          map[entry.key] = meta;
+          entries.add({'key': entry.key, 'file': meta});
         }
         return jsonEncode({
           '@type': 'FormData',
           '@fields': map,
+          '@entries': entries,
         });
       }
       if (data is Uint8List) {
@@ -186,7 +207,8 @@ class MonitorInterceptor extends Interceptor {
     int newlineCount = 0;
     int truncateIndex = trace.length;
     for (int i = 0; i < trace.length; i++) {
-      if (trace.codeUnitAt(i) == 10) { // '\n'
+      if (trace.codeUnitAt(i) == 10) {
+        // '\n'
         newlineCount++;
         if (newlineCount == 15) {
           truncateIndex = i;

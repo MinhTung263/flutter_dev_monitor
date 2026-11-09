@@ -1,3 +1,59 @@
+import 'dart:collection';
+
+/// Nội dung body request/response của một log — dùng CHUNG giữa các bản sao
+/// [ApiLogItem.copyWith] (gộp log trùng) để giải phóng một lần là áp dụng cho
+/// mọi bản sao. Body chỉ mã hoá thành chuỗi khi có người đọc.
+class _LogBodies {
+  _LogBodies({
+    String? request,
+    String? Function()? requestBuilder,
+    String? response,
+    String? Function()? responseBuilder,
+  })  : _request = request,
+        _requestBuilder = requestBuilder,
+        _response = response,
+        _responseBuilder = responseBuilder;
+
+  String? _request;
+  String? Function()? _requestBuilder;
+  String? _response;
+  String? Function()? _responseBuilder;
+  bool released = false;
+
+  bool get hasContent =>
+      _request != null ||
+      _requestBuilder != null ||
+      _response != null ||
+      _responseBuilder != null;
+
+  String? get request {
+    final b = _requestBuilder;
+    if (_request == null && b != null) {
+      _request = b();
+      _requestBuilder = null;
+    }
+    return _request;
+  }
+
+  String? get response {
+    final b = _responseBuilder;
+    if (_response == null && b != null) {
+      _response = b();
+      _responseBuilder = null;
+    }
+    return _response;
+  }
+
+  /// Bỏ nội dung (và tham chiếu tới dữ liệu gốc của request/response) để GC
+  /// thu hồi RAM.
+  void release() {
+    if (!hasContent) return;
+    _request = _response = ApiLogItem.releasedBodyNote;
+    _requestBuilder = _responseBuilder = null;
+    released = true;
+  }
+}
+
 /// Represents a single captured API request and response log.
 class ApiLogItem {
   static int _nextId = 1;
@@ -52,30 +108,65 @@ class ApiLogItem {
   /// Flat map of the request headers sent.
   final Map<String, String> requestHeaders;
 
-  /// Body content of the request, if any.
-  final String? requestBody;
+  /// Body content of the request, if any (lazily encoded on first read).
+  String? get requestBody => _bodies.request;
 
   /// Flat map of the response headers received.
   final Map<String, String> responseHeaders;
 
-  String? _cachedResponseBody;
-  final String? Function()? _responseBodyBuilder;
+  final _LogBodies _bodies;
 
   /// Body content of the response, if any (lazily encoded on first read).
-  String? get responseBody {
-    if (_cachedResponseBody != null) return _cachedResponseBody;
-    final builder = _responseBodyBuilder;
-    if (builder != null) {
-      _cachedResponseBody = builder();
-    }
-    return _cachedResponseBody;
-  }
+  String? get responseBody => _bodies.response;
+
+  /// Body đã được giải phóng để tiết kiệm RAM (xem [bodyRetentionLimit]).
+  bool get isBodyReleased => _bodies.released;
 
   /// The total size of the response payload in bytes.
   int get responseBytes {
     if (_responseBytes > 0) return _responseBytes;
-    if (_cachedResponseBody != null) return _cachedResponseBody!.length;
+    final cached = _bodies._response;
+    if (cached != null && !_bodies.released) return cached.length;
     return 0;
+  }
+
+  /// Nội dung hiển thị thay cho body đã giải phóng.
+  static const String releasedBodyNote =
+      '[Đã giải phóng để tiết kiệm RAM: khi DevMonitor đang ẩn chỉ giữ nội dung '
+      'của các request gần nhất]';
+
+  /// Số log gần nhất còn giữ body; 0 = giữ tất cả. DevMonitor đặt giá trị nhỏ
+  /// khi overlay/dashboard đang ẩn (bản prod/staging): giữ body của mọi request
+  /// nghĩa là giữ nguyên dữ liệu response đã parse (danh sách sản phẩm, bảng
+  /// giá...) trong RAM — tăng áp lực GC, dễ hết RAM trên máy POS yếu.
+  static int get bodyRetentionLimit => _bodyRetentionLimit;
+  static int _bodyRetentionLimit = 0;
+  static set bodyRetentionLimit(int value) {
+    _bodyRetentionLimit = value < 0 ? 0 : value;
+    _trimRetained();
+  }
+
+  static final Queue<_LogBodies> _retained = Queue<_LogBodies>();
+
+  static void _retain(_LogBodies bodies) {
+    if (!bodies.hasContent) return;
+    _retained.addLast(bodies);
+    _trimRetained();
+  }
+
+  static void _trimRetained() {
+    final limit = _bodyRetentionLimit;
+    if (limit == 0) {
+      // Giữ tất cả: hàng đợi chỉ cần đủ để cắt khi chuyển sang chế độ ẩn —
+      // tránh hàng đợi phình vô hạn khi DevMonitor mở lâu.
+      while (_retained.length > 2000) {
+        _retained.removeFirst();
+      }
+      return;
+    }
+    while (_retained.length > limit) {
+      _retained.removeFirst().release();
+    }
   }
 
   static final RegExp _statusCodeRegExp = RegExp(r'^[1-5][0-9]{2}$');
@@ -96,14 +187,41 @@ class ApiLogItem {
     this.refreshCycle = 0,
     this.queryParams = const {},
     this.requestHeaders = const {},
-    this.requestBody,
+    String? requestBody,
+    String? Function()? requestBodyBuilder,
     this.responseHeaders = const {},
     String? responseBody,
     String? Function()? responseBodyBuilder,
   })  : id = id ?? _nextId++,
         _responseBytes = responseBytes,
-        _cachedResponseBody = responseBody,
-        _responseBodyBuilder = responseBodyBuilder;
+        _bodies = _LogBodies(
+          request: requestBody,
+          requestBuilder: requestBody == null ? requestBodyBuilder : null,
+          response: responseBody,
+          responseBuilder: responseBody == null ? responseBodyBuilder : null,
+        ) {
+    _retain(_bodies);
+  }
+
+  ApiLogItem._copy({
+    required this.id,
+    required this.url,
+    required this.method,
+    required this.statusCode,
+    required this.duration,
+    required this.screen,
+    required this.timestamp,
+    required int responseBytes,
+    required this.callerName,
+    required this.phase,
+    required this.callCount,
+    required this.refreshCycle,
+    required this.queryParams,
+    required this.requestHeaders,
+    required this.responseHeaders,
+    required _LogBodies bodies,
+  })  : _responseBytes = responseBytes,
+        _bodies = bodies;
 
   /// Whether the request completed successfully (status 200-299).
   bool get isSuccess => statusCode >= 200 && statusCode < 300;
@@ -150,7 +268,21 @@ class ApiLogItem {
     Map<String, String>? responseHeaders,
     String? responseBody,
   }) {
-    return ApiLogItem(
+    // Dùng CHUNG body với bản gốc (không mã hoá lại, giải phóng một lần là
+    // áp dụng cho mọi bản sao); chỉ tạo body mới khi truyền body khác vào.
+    final _LogBodies bodies;
+    if (requestBody == null && responseBody == null) {
+      bodies = _bodies;
+    } else {
+      bodies = _LogBodies(
+        request: requestBody ?? _bodies._request,
+        requestBuilder: requestBody == null ? _bodies._requestBuilder : null,
+        response: responseBody ?? _bodies._response,
+        responseBuilder: responseBody == null ? _bodies._responseBuilder : null,
+      );
+      _retain(bodies);
+    }
+    return ApiLogItem._copy(
       id: id ?? this.id,
       url: url,
       method: method,
@@ -165,10 +297,8 @@ class ApiLogItem {
       refreshCycle: refreshCycle ?? this.refreshCycle,
       queryParams: queryParams ?? this.queryParams,
       requestHeaders: requestHeaders ?? this.requestHeaders,
-      requestBody: requestBody ?? this.requestBody,
       responseHeaders: responseHeaders ?? this.responseHeaders,
-      responseBody: responseBody ?? _cachedResponseBody,
-      responseBodyBuilder: responseBody != null ? null : _responseBodyBuilder,
+      bodies: bodies,
     );
   }
 

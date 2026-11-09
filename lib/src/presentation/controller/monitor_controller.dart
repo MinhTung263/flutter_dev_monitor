@@ -21,6 +21,20 @@ import 'route_log_controller.dart';
 class MonitorController extends ChangeNotifier {
   MonitorController._() {
     _init();
+    _applyRetentionPolicy();
+  }
+
+  /// Số request gần nhất còn giữ nội dung body khi DevMonitor đang ẩn.
+  static const int hiddenBodyRetention = 20;
+
+  /// DevMonitor ẩn (bản prod/staging) thì vẫn ghi log nhưng gọn: chỉ giữ body
+  /// của [hiddenBodyRetention] request gần nhất và ít màn/log hơn — giữ body
+  /// của mọi request là giữ nguyên dữ liệu response đã parse trong RAM. Mở
+  /// overlay/dashboard thì ghi đầy đủ như cũ.
+  void _applyRetentionPolicy() {
+    final active = isMonitoringActive;
+    ApiLogItem.bodyRetentionLimit = active ? 0 : hiddenBodyRetention;
+    _apiLog.compact = !active;
   }
 
   static MonitorController? _instance;
@@ -646,6 +660,7 @@ class MonitorController extends ChangeNotifier {
     if (visible != null) {
       _isOverlayVisible = visible;
     }
+    _applyRetentionPolicy();
     final shouldMonitor = _isDashboardOpen || _isOverlayVisible;
     if (shouldMonitor) {
       _startHardwareMonitoring();

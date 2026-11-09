@@ -2,8 +2,12 @@ import '../../core/monitor_constants.dart';
 import '../../domain/api_log_item.dart';
 
 class ApiLogController {
-  static const int _maxTrackedScreens = 100;
-  static const int _maxLogsPerScreen = 100;
+  /// Chế độ gọn (DevMonitor đang ẩn — bản prod/staging): giữ ít màn/log hơn
+  /// cho nhẹ RAM. Đặt bởi MonitorController theo `isMonitoringActive`.
+  bool compact = false;
+
+  int get _maxTrackedScreens => compact ? 20 : 100;
+  int get _maxLogsPerScreen => compact ? 30 : 100;
 
   final Map<String, List<ApiLogItem>> initLogsMap = {};
   final Map<String, List<ApiLogItem>> refreshLogsMap = {};

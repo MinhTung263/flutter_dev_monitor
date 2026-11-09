@@ -1630,29 +1630,113 @@ String _fmtParams(Map<String, String> p) =>
 String _fmtHeaders(Map<String, String> h) =>
     h.entries.map((e) => '${e.key}: ${e.value}').join('\n');
 
-String _buildCurl(ApiLogItem log) {
-  final sb = StringBuffer('curl -X ${log.method}');
+String _buildCurl(ApiLogItem log) => buildCurlCommand(
+      method: log.method,
+      url: log.url,
+      headers: log.requestHeaders,
+      body: log.requestBody,
+    );
 
-  // URL (already full URI from options.uri.toString())
-  sb.write(" \\\n  '${log.url}'");
+/// Lệnh cURL dán thẳng vào terminal / Postman (Import > Raw text) được.
+///
+/// - Body `FormData` -> từng phần `--form 'key=value'`, file -> `--form
+///   'key=@"tên-file"'` (Postman hiện thành trường kiểu File để chọn lại file).
+///   Trước đây FormData bị ghi thành chuỗi JSON trong `-d` nên Postman coi là
+///   body raw.
+/// - Body `application/x-www-form-urlencoded` (Map) -> `--data-urlencode
+///   'key=value'` từng trường thay vì JSON.
+/// - Bỏ header `Content-Type: multipart/form-data; boundary=...` khi gửi
+///   FormData: boundary cũ không khớp body mới — cURL/Postman tự sinh.
+/// - Giá trị chứa dấu `'` được thoát đúng chuẩn shell.
+@visibleForTesting
+String buildCurlCommand({
+  required String method,
+  required String url,
+  required Map<String, String> headers,
+  String? body,
+}) {
+  String q(String v) => "'${v.replaceAll("'", r"'\''")}'";
 
-  // Request headers
-  for (final e in log.requestHeaders.entries) {
-    sb.write(" \\\n  -H '${e.key}: ${e.value}'");
+  final sb = StringBuffer('curl -X $method');
+  sb.write(' \\\n  ${q(url)}');
+
+  final decoded = _decodeJsonOrNull(body);
+  final isFormData = decoded is Map && decoded['@type'] == 'FormData';
+  final contentType = headers.entries
+      .firstWhere(
+        (e) => e.key.toLowerCase() == 'content-type',
+        orElse: () => const MapEntry('', ''),
+      )
+      .value
+      .toLowerCase();
+  final isUrlEncoded =
+      contentType.contains('application/x-www-form-urlencoded');
+
+  for (final e in headers.entries) {
+    // cURL / Postman tự sinh Content-Type kèm boundary mới cho multipart.
+    if (isFormData && e.key.toLowerCase() == 'content-type') continue;
+    sb.write(' \\\n  -H ${q('${e.key}: ${e.value}')}');
   }
 
-  // Body — compact JSON for readability in terminal
-  if (log.requestBody != null && log.requestBody!.isNotEmpty) {
-    String body = log.requestBody!;
-    try {
-      body = jsonEncode(jsonDecode(body));
-    } catch (_) {
-      body = body.replaceAll('\n', ' ').replaceAll(RegExp(r' {2,}'), ' ');
+  if (body == null || body.isEmpty) return sb.toString();
+
+  if (isFormData) {
+    final entries = decoded['@entries'];
+    final parts = <MapEntry<String, dynamic>>[
+      if (entries is List)
+        for (final item in entries)
+          if (item is Map)
+            MapEntry(
+              '${item['key']}',
+              item.containsKey('file') ? item['file'] : '${item['value']}',
+            )
+          else if (decoded['@fields'] is Map)
+            for (final e in (decoded['@fields'] as Map).entries)
+              MapEntry('${e.key}', e.value is Map ? e.value : '${e.value}'),
+    ];
+    for (final part in parts) {
+      final value = part.value;
+      if (value is Map) {
+        // File: chỉ biết tên file, không có nội dung -> chọn lại file khi gửi.
+        final name = '${value['filename'] ?? 'file'}'.replaceAll('"', '');
+        final type = value['contentType'];
+        sb.write(' \\\n  --form ${q('${part.key}=@"$name"'
+            '${type != null ? ';type=$type' : ''}')}');
+      } else {
+        sb.write(' \\\n  --form ${q('${part.key}=$value')}');
+      }
     }
-    sb.write(" \\\n  -d '$body'");
+    return sb.toString();
   }
 
+  if (isUrlEncoded && decoded is Map) {
+    for (final e in decoded.entries) {
+      final value = e.value is String ? e.value as String : jsonEncode(e.value);
+      sb.write(' \\\n  --data-urlencode ${q('${e.key}=$value')}');
+    }
+    return sb.toString();
+  }
+
+  // Body thường — JSON gọn một dòng cho dễ đọc.
+  String data = body;
+  if (decoded != null) {
+    data = jsonEncode(decoded);
+  } else {
+    data = body.replaceAll('\n', ' ').replaceAll(RegExp(r' {2,}'), ' ');
+  }
+  sb.write(' \\\n  -d ${q(data)}');
   return sb.toString();
+}
+
+Object? _decodeJsonOrNull(String? raw) {
+  if (raw == null) return null;
+  final t = raw.trim();
+  if (!(t.startsWith('{') || t.startsWith('['))) return null;
+  try {
+    return jsonDecode(t);
+  } catch (_) {
+    return null;
+  }
 }
 
 // ─── Quick Params Strip (shown above Response so params are always visible) ──

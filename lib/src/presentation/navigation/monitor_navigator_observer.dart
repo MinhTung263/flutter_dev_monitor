@@ -139,6 +139,31 @@ class MonitorNavigatorObserver extends NavigatorObserver {
   /// BottomNavigationBar item label (`'Đơn hàng'`) or stolen across tabs.
   static final Map<String, String> _confirmedAppBarTitles = {};
 
+  /// Kiểu widget -> có thể là thanh tab/điều hướng hay không (nhớ theo kiểu).
+  static final Map<Type, bool> _tabBarTypeCache = <Type, bool>{};
+
+  /// Lọc nhanh TRƯỚC khi thử đọc động `currentIndex`/`selectedIndex`/...: đọc
+  /// thuộc tính không tồn tại ném `NoSuchMethodError` — trước đây mỗi widget
+  /// trong cây ném tới 4 ngoại lệ mỗi lần chuyển màn (đo trên máy POS yếu: cả
+  /// cây ~4s, UI đứng). Chỉ widget điều hướng chuẩn hoặc có tên kiểu gợi ý thanh
+  /// tab mới đáng thử; kết quả nhớ theo `runtimeType` nên mỗi kiểu xét 1 lần.
+  static bool _mayBeTabBar(Widget widget) {
+    if (widget is BottomNavigationBar ||
+        widget is NavigationBar ||
+        widget is NavigationRail ||
+        widget is TabBar ||
+        widget is CupertinoTabBar) {
+      return true;
+    }
+    return _tabBarTypeCache.putIfAbsent(widget.runtimeType, () {
+      final name = widget.runtimeType.toString().toLowerCase();
+      return name.contains('tab') ||
+          name.contains('nav') ||
+          name.contains('bottombar') ||
+          name.contains('menubar');
+    });
+  }
+
   static int? _extractTabIndex(dynamic w) {
     try {
       final dynamic idx = w.currentIndex;
@@ -1134,7 +1159,7 @@ class MonitorNavigatorObserver extends NavigatorObserver {
         }
       }
 
-      if (foundBottomBarWidget == null) {
+      if (foundBottomBarWidget == null && _mayBeTabBar(widget)) {
         try {
           final dynamic w = widget;
           final int? index = _extractTabIndex(w);
